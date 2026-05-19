@@ -255,56 +255,98 @@ export const deleteOrder = async (req, res) => {
   }
 };
 
-export const bulkDeleteCancelledOrders = async (req, res) => {
+// Delete all pending orders for specific date
+export const bulkDeletePendingOrders = async (req, res) => {
   try {
     const { date } = req.body;
-    const startDate = new Date(date);
-    const endDate = new Date(date);
-    startDate.setUTCHours(0, 0, 0, 0);
-    endDate.setUTCHours(23, 59, 59, 999);
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' });
+    }
     
-    const result = await Order.deleteMany({ 
-      status: 'Cancelled',
-      createdAt: { $gte: startDate, $lte: endDate }
-    });
-    res.json({ message: `${result.deletedCount} cancelled orders deleted` });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Bulk delete all pending orders
-export const bulkDeletePendingOrders =  async (req, res) => {
- try {
-    const { date } = req.body;
     const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(date);
-    startDate.setUTCHours(0, 0, 0, 0);
-    endDate.setUTCHours(23, 59, 59, 999);
+    endDate.setHours(23, 59, 59, 999);
     
     const result = await Order.deleteMany({ 
       status: 'Pending',
       createdAt: { $gte: startDate, $lte: endDate }
     });
-    res.json({ message: `${result.deletedCount} pending orders deleted` });
+    
+    res.json({ message: `${result.deletedCount} pending orders deleted`, count: result.deletedCount });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
 
-export const deleteAllOrders = async (req, res) => {
+// Delete all cancelled orders for specific date
+export const bulkDeleteCancelledOrders = async (req, res) => {
   try {
     const { date } = req.body;
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' });
+    }
+    
     const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(date);
-    startDate.setUTCHours(0, 0, 0, 0);
-    endDate.setUTCHours(23, 59, 59, 999);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const result = await Order.deleteMany({ 
+      status: 'Cancelled',
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+    
+    res.json({ message: `${result.deletedCount} cancelled orders deleted`, count: result.deletedCount });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Delete all orders for specific date (all statuses)
+export const deleteAllOrdersByDate = async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' });
+    }
+    
+    const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(date);
+    endDate.setHours(23, 59, 59, 999);
     
     const result = await Order.deleteMany({ 
       createdAt: { $gte: startDate, $lte: endDate }
     });
-    res.json({ message: `${result.deletedCount} orders deleted` });
+    
+    res.json({ message: `${result.deletedCount} orders deleted`, count: result.deletedCount });
   } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ DELETE SINGLE ORDER - By order ID (not date)
+export const deleteSingleOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = await Order.findById(orderId);
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    if (order.status !== 'Cancelled' && order.status !== 'Pending') {
+      return res.status(400).json({ message: 'Only cancelled or pending orders can be deleted' });
+    }
+    
+    await order.deleteOne();
+    res.json({ message: 'Order deleted successfully' });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
