@@ -1,11 +1,13 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useSelector } from "react-redux";
+import { useEffect, useState } from "react";
+
 import ConsumerPage from "./pages/ConsumerPage";
 import StaffPage from "./pages/StaffPage";
 import AdminPage from "./pages/AdminPage";
 import AdminProductsPage from "./pages/AdminProductsPage";
-import AdminCategoriesPage from "./pages/AdminCategoriesPage"; // 👈 new import
+import AdminCategoriesPage from "./pages/AdminCategoriesPage";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
@@ -19,14 +21,41 @@ import InsightsPage from "./pages/InsightsPage";
 function App() {
   const { user } = useSelector((state) => state.auth);
 
+  // Detect PWA mode
+  const [isPWA, setIsPWA] = useState(false);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone;
+
+    setIsPWA(standalone);
+  }, []);
+
   return (
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
-      <Toaster />
+      <Toaster position="top-right" />
+
       <Routes>
-        <Route path="/" element={<ConsumerPage />} />
+
+        {/* ROOT ROUTE */}
+        <Route
+          path="/"
+          element={
+            isPWA ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <ConsumerPage />
+            )
+          }
+        />
+
+        {/* LOGIN */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* STAFF */}
         <Route
           path="/staff"
           element={
@@ -37,6 +66,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ADMIN DASHBOARD */}
         <Route
           path="/admin"
           element={
@@ -47,6 +78,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* PRODUCTS */}
         <Route
           path="/admin/products"
           element={
@@ -57,7 +90,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* 👇 new categories route */}
+
+        {/* CATEGORIES */}
         <Route
           path="/admin/categories"
           element={
@@ -68,7 +102,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        // Inside Routes, add:
+
+        {/* STOCK REFILL */}
         <Route
           path="/admin/stock-refill"
           element={
@@ -79,6 +114,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* SALES REPORT */}
         <Route
           path="/admin/sales-report"
           element={
@@ -89,6 +126,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ORDERS */}
         <Route
           path="/admin/orders"
           element={
@@ -99,6 +138,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* STAFF MANAGEMENT */}
         <Route
           path="/admin/staff"
           element={
@@ -109,6 +150,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ALERTS */}
         <Route
           path="/admin/alerts"
           element={
@@ -119,7 +162,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        import InsightsPage from './pages/InsightsPage';
+
+        {/* INSIGHTS */}
         <Route
           path="/admin/insights"
           element={
@@ -130,6 +174,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
       </Routes>
     </BrowserRouter>
   );
