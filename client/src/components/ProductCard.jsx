@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { addToCart } from '../redux/slices/cartSlice';
 import toast from 'react-hot-toast';
@@ -6,21 +7,41 @@ import {
   FiShoppingCart,
   FiAlertCircle,
   FiCheck,
+  FiPlus,
+  FiMinus,
 } from 'react-icons/fi';
 
 export default function ProductCard({ product }) {
   const dispatch = useDispatch();
+  const [quantity, setQuantity] = useState(1);
 
   // Use availableStock if provided by backend, otherwise calculate from stock - reservedStock
   const availableStock = product.availableStock ?? (product.stock - (product.reservedStock || 0));
+
+  const increment = () => {
+    if (quantity < availableStock) {
+      setQuantity(quantity + 1);
+    }
+  };
+
+  const decrement = () => {
+    if (quantity > 1) {
+      setQuantity(quantity - 1);
+    }
+  };
 
   const handleAdd = () => {
     if (availableStock <= 0) {
       toast.error('Out of stock');
       return;
     }
-    dispatch(addToCart({ product, quantity: 1 }));
-    toast.success(`${product.name} added to cart`);
+    if (quantity > availableStock) {
+      toast.error(`Only ${availableStock} units available`);
+      return;
+    }
+    dispatch(addToCart({ product, quantity }));
+    toast.success(`${quantity} × ${product.name} added to cart`);
+    setQuantity(1); // Reset quantity after adding
   };
 
   const isLowStock = availableStock > 0 && availableStock <= product.lowStockThreshold;
@@ -77,21 +98,44 @@ export default function ProductCard({ product }) {
           <p className="mt-1 text-xs font-medium text-slate-400 uppercase tracking-wider">{product.categoryId.name}</p>
         )}
 
-        {/* Available Stock Display */}
-        <div className="mt-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400">Available Stock</p>
-            <p className={`font-bold text-sm ${isLowStock ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>
-              {availableStock} units
-            </p>
+        {/* Quantity Selector */}
+        {availableStock > 0 && (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={decrement}
+                disabled={quantity <= 1}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                  quantity > 1
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                <FiMinus className="text-sm" />
+              </button>
+              <span className="w-8 text-center font-semibold text-slate-800 dark:text-white">
+                {quantity}
+              </span>
+              <button
+                onClick={increment}
+                disabled={quantity >= availableStock}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                  quantity < availableStock
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                <FiPlus className="text-sm" />
+              </button>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500">Total</p>
+              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                ₹{product.price * quantity}
+              </p>
+            </div>
           </div>
-          <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-            <div
-              className={`h-full rounded-full ${availableStock <= 0 ? 'bg-red-500' : isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
-              style={{ width: `${Math.min((availableStock / 20) * 100, 100)}%` }}
-            ></div>
-          </div>
-        </div>
+        )}
 
         {/* Add to Cart Button */}
         <button
@@ -104,7 +148,7 @@ export default function ProductCard({ product }) {
           }`}
         >
           <FiShoppingCart className="text-base" />
-          {availableStock > 0 ? 'Add to Cart' : 'Unavailable'}
+          {availableStock > 0 ? `Add ${quantity}` : 'Unavailable'}
         </button>
       </div>
     </motion.div>
