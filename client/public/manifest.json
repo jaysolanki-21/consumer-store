@@ -1,0 +1,16 @@
+{
+  "name": "APC Consumer Store",
+  "short_name": "APC Store",
+  "description": "Real-time consumer store for hostel students",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
