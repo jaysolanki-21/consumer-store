@@ -17,10 +17,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:5000',
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:5000',
+        changeOrigin: true
+      },
       '/socket.io': {
-        target: 'http://localhost:5000',
-        ws: true
+        target: process.env.VITE_SOCKET_URL || 'http://localhost:5000',
+        ws: true,
+        changeOrigin: true
       }
     }
   }
