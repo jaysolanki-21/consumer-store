@@ -18,7 +18,21 @@ import {
   FiTrendingUp,
   FiGrid,
   FiChevronRight,
+  FiHome,
+  FiTag,
+  FiCoffee,
+  FiSmartphone,
+  FiBook,
+  FiHeart,
 } from 'react-icons/fi';
+
+// Icon mapping for categories
+const categoryIcons = {
+  'Food & Beverages': FiCoffee,
+  'Electronics': FiSmartphone,
+  'Stationery': FiBook,
+  'Default': FiTag,
+};
 
 export default function ConsumerPage() {
   const dispatch = useDispatch();
@@ -186,228 +200,188 @@ export default function ConsumerPage() {
     return grouped;
   }, [products, categories, selectedCategory, search]);
 
+  // Get icon for category
+  const getCategoryIcon = (categoryName) => {
+    const Icon = categoryIcons[categoryName] || categoryIcons.Default;
+    return <Icon className="w-4 h-4" />;
+  };
+
   return (
-    <div className="min-h-screen bg-[#f4f7fb] dark:bg-[#020617] overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+      
+      {/* Modern Navbar */}
+      <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Logo - Mobile Optimized */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-2"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg">
+                <FiZap className="text-white text-xl" />
+              </div>
+              <div className="hidden xs:block">
+                <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent">
+                  APC Store
+                </h1>
+                <p className="text-[10px] uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-semibold">
+                  Campus Store
+                </p>
+              </div>
+            </motion.div>
 
-      {/* Background Effects */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-500/10 blur-3xl rounded-full" />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-cyan-500/10 blur-3xl rounded-full" />
-      </div>
-
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 border-b border-white/20 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto h-20 px-4 flex items-center justify-between gap-4">
-
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-500 flex items-center justify-center shadow-xl shadow-indigo-500/30">
-              <FiZap className="text-white text-2xl" />
+            {/* Roll Number Input - Responsive */}
+            <div className="flex-1 max-w-xs md:max-w-md relative">
+              <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+              <input
+                id="session-roll-input"
+                type="text"
+                placeholder="Roll Number"
+                value={rollNumber}
+                onChange={(e) => handleRollNumberChange(e.target.value)}
+                className="w-full h-10 md:h-11 rounded-xl pl-9 pr-3 bg-gray-100 dark:bg-gray-800 border-0 focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium transition-all"
+              />
             </div>
 
-            <div className="hidden sm:block">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                APC STORE
-              </h1>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-indigo-500 font-bold">
-                Smart Campus Store
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Roll Number */}
-          <div className="flex-1 max-w-md relative">
-            <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-
-            <input
-              id="session-roll-input"
-              type="text"
-              placeholder="Enter Roll Number"
-              value={rollNumber}
-              onChange={(e) =>
-                handleRollNumberChange(e.target.value)
-              }
-              className="w-full h-12 rounded-2xl pl-11 pr-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-semibold shadow-lg"
-            />
+            {/* Cart Button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              onClick={() => setShowCart(true)}
+              className="relative h-10 md:h-11 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+            >
+              <FiShoppingCart className="text-base" />
+              <span className="hidden sm:inline text-sm">Cart</span>
+              {cartCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 border-2 border-white dark:border-gray-900 text-[10px] flex items-center justify-center font-bold"
+                >
+                  {cartCount}
+                </motion.span>
+              )}
+            </motion.button>
           </div>
-
-          {/* Cart */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: 1.03 }}
-            onClick={() => setShowCart(true)}
-            className="relative h-12 px-5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 dark:from-indigo-600 dark:to-cyan-500 text-white font-bold flex items-center gap-2 shadow-xl"
-          >
-            <FiShoppingCart className="text-lg" />
-            <span className="hidden sm:block">
-              Checkout
-            </span>
-
-            {cartCount > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 border-2 border-white dark:border-slate-900 text-[11px] flex items-center justify-center font-black"
-              >
-                {cartCount}
-              </motion.span>
-            )}
-          </motion.button>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-
-        {/* Hero */}
-        {/* <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-500 p-8 md:p-12 text-white shadow-2xl mb-10"
-        >
-           <div className="absolute right-0 top-0 w-72 h-72 bg-white/10 rounded-full blur-3xl" />
-
-          <div className="relative z-10 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md mb-5 text-sm font-bold">
-              <FiTrendingUp />
-              Real-Time Inventory
-            </div>
-
-            <h1 className="text-4xl md:text-6xl font-black leading-tight">
-              Smart Ordering
-              <br />
-              For Students
-            </h1>
-
-            <p className="mt-5 text-indigo-100 text-base md:text-lg">
-              Fast campus shopping experience with
-              real-time stock updates, instant checkout,
-              and modern UI.
-            </p>
-          </div> 
-        </motion.div> */}
-
-        {/* Search */}
+      <main className="container mx-auto px-4 py-6 pb-24">
+        {/* Search Bar - Enhanced */}
         <div className="relative max-w-2xl mx-auto mb-8">
-          <FiSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 text-xl" />
-
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
           <input
             type="text"
             placeholder="Search products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-16 rounded-[1.5rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 pl-14 pr-5 text-base font-semibold outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-xl"
+            className="w-full h-12 md:h-14 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 pl-12 pr-5 text-base font-medium outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
           />
         </div>
 
-        {/* Categories */}
-        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-12">
-          <button
-            onClick={() => setSelectedCategory('')}
-            className={`px-6 h-12 rounded-2xl font-bold whitespace-nowrap transition-all ${
-              !selectedCategory
-                ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/30'
-                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <FiGrid />
-              All Products
-            </div>
-          </button>
-
-          {categories.map((cat) => (
+        {/* Categories - Horizontal Scroll with Better Mobile UX */}
+        <div className="mb-8 overflow-x-auto pb-3 scrollbar-hide">
+          <div className="flex gap-2 min-w-max">
             <button
-              key={cat._id}
-              onClick={() =>
-                setSelectedCategory(cat._id)
-              }
-              className={`px-6 h-12 rounded-2xl font-bold whitespace-nowrap transition-all ${
-                selectedCategory === cat._id
-                  ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/30'
-                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800'
+              onClick={() => setSelectedCategory('')}
+              className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+                !selectedCategory
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
-              <div className="flex items-center gap-2">
-                {cat.name}
-
-                <span className="text-xs px-2 py-1 rounded-lg bg-black/10 dark:bg-white/10">
-                  {categoryCounts[cat._id] || 0}
-                </span>
-              </div>
+              <FiGrid className="w-4 h-4" />
+              All
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                !selectedCategory 
+                  ? 'bg-white/20 text-white' 
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+              }`}>
+                {products.length}
+              </span>
             </button>
-          ))}
+
+            {categories.map((cat) => {
+              const Icon = getCategoryIcon(cat.name);
+              const count = categoryCounts[cat._id] || 0;
+              return (
+                <button
+                  key={cat._id}
+                  onClick={() => setSelectedCategory(cat._id)}
+                  className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+                    selectedCategory === cat._id
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {Icon}
+                  <span className="hidden xs:inline">{cat.name}</span>
+                  <span className="xs:hidden">{cat.name.substring(0, 8)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    selectedCategory === cat._id 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Loading */}
+        {/* Loading State */}
         {isLoading ? (
-          <div className="py-40 flex flex-col items-center">
-            <div className="w-14 h-14 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-
-            <p className="mt-4 text-sm font-bold text-slate-500">
-              Loading inventory...
-            </p>
+          <div className="py-20 flex flex-col items-center">
+            <div className="w-12 h-12 border-3 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
+            <p className="mt-4 text-sm font-medium text-gray-500">Loading products...</p>
           </div>
         ) : (
           <>
-            {!selectedCategory &&
-            !search &&
-            productsByCategory ? (
-              <div className="space-y-16">
-                {Object.values(productsByCategory).map(
-                  ({ category, products: catProducts }) => (
-                    <section key={category._id}>
-                      <div className="flex items-center justify-between mb-8">
+            {/* Category Group View */}
+            {!selectedCategory && !search && productsByCategory ? (
+              <div className="space-y-12">
+                {Object.values(productsByCategory).map(({ category, products: catProducts }) => (
+                  <section key={category._id}>
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                          {getCategoryIcon(category.name)}
+                        </div>
                         <div>
-                          <h2 className="text-3xl font-black text-slate-900 dark:text-white">
+                          <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                             {category.name}
                           </h2>
-
-                          <p className="text-sm font-semibold text-indigo-500 mt-1">
-                            Featured Collection
+                          <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                            {catProducts.length} items available
                           </p>
                         </div>
-
-                        <button className="flex items-center gap-2 text-sm font-bold text-indigo-600">
-                          View All
-                          <FiChevronRight />
-                        </button>
                       </div>
+                      {/* View All removed as requested */}
+                    </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                        {catProducts.map((product) => (
-                          <ProductCard
-                            key={product._id}
-                            product={product}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  )
-                )}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                      {catProducts.map((product) => (
+                        <ProductCard key={product._id} product={product} />
+                      ))}
+                    </div>
+                  </section>
+                ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              /* Filtered Products Grid */
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
                     <motion.div
                       key={product._id}
                       layout
-                      initial={{
-                        opacity: 0,
-                        scale: 0.9,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        scale: 1,
-                      }}
-                      exit={{
-                        opacity: 0,
-                        scale: 0.9,
-                      }}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.2 }}
                     >
                       <ProductCard product={product} />
                     </motion.div>
@@ -418,27 +392,20 @@ export default function ConsumerPage() {
           </>
         )}
 
-        {/* Empty */}
+        {/* Empty State */}
         {!isLoading && filteredProducts.length === 0 && (
-          <div className="py-32 text-center">
-            <div className="w-24 h-24 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 mx-auto flex items-center justify-center shadow-xl mb-6">
-              <FiPackage className="text-5xl text-slate-300" />
+          <div className="py-16 text-center">
+            <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mx-auto flex items-center justify-center mb-4">
+              <FiPackage className="text-3xl text-gray-400" />
             </div>
-
-            <h2 className="text-2xl font-black">
-              No Products Found
-            </h2>
-
-            <p className="text-slate-500 mt-2">
-              Try another keyword or category.
-            </p>
-
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">No Products Found</h3>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Try adjusting your search or category</p>
             <button
               onClick={() => {
                 setSearch('');
                 setSelectedCategory('');
               }}
-              className="mt-6 px-6 h-12 rounded-2xl bg-indigo-600 text-white font-bold shadow-xl"
+              className="mt-5 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all"
             >
               Reset Filters
             </button>
@@ -454,83 +421,96 @@ export default function ConsumerPage() {
         isProcessing={isOrderConfirming}
       />
 
-      {/* Roll Warning */}
+      {/* Roll Number Warning - Perfectly Centered */}
       <AnimatePresence>
-        {!rollNumber && (
+        {!rollNumber && rollNumber !== undefined && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{
+              type: "spring",
+              stiffness: 500,
+              damping: 30,
+            }}
+            className="fixed inset-x-0 bottom-6 z-50 flex justify-center items-center px-4"
           >
-            <div className="rounded-3xl bg-slate-900 text-white p-4 shadow-2xl flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                  <FiAlertCircle className="text-amber-400 text-xl" />
-                </div>
+            <div className="w-full max-w-md">
+              <div className="rounded-2xl bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-xl text-white p-4 shadow-2xl border border-gray-700/50">
+                <div className="flex items-center gap-3">
+                  
+                  {/* Icon */}
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <FiAlertCircle className="text-amber-400 text-xl" />
+                  </div>
 
-                <div>
-                  <p className="font-bold text-sm">
-                    Roll Number Required
-                  </p>
+                  {/* Text */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm">
+                      Roll Number Required
+                    </p>
 
-                  <p className="text-xs text-slate-400">
-                    Enter your roll number before checkout
-                  </p>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Please enter your roll number before checkout
+                    </p>
+                  </div>
+
+                  {/* Button */}
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById(
+                        'session-roll-input'
+                      );
+
+                      input?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                      });
+
+                      setTimeout(() => {
+                        input?.focus();
+                      }, 400);
+                    }}
+                    className="h-10 px-4 rounded-xl bg-white text-gray-900 text-xs font-bold hover:bg-gray-100 transition-all duration-200 active:scale-95 whitespace-nowrap"
+                  >
+                    Enter Now
+                  </button>
                 </div>
               </div>
-
-              <button
-                onClick={() => {
-                  window.scrollTo({
-                    top: 0,
-                    behavior: 'smooth',
-                  });
-
-                  setTimeout(() => {
-                    document
-                      .getElementById(
-                        'session-roll-input'
-                      )
-                      ?.focus();
-                  }, 500);
-                }}
-                className="h-10 px-4 rounded-xl bg-white text-slate-900 text-xs font-black"
-              >
-                FIX
-              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <style jsx>{`
-        .no-scrollbar::-webkit-scrollbar {
+        .scrollbar-hide::-webkit-scrollbar {
           display: none;
         }
-
-        .no-scrollbar {
+        .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
-
+        
         @keyframes shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-
-          25% {
-            transform: translateX(-5px);
-          }
-
-          75% {
-            transform: translateX(5px);
-          }
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
         }
-
+        
         .animate-shake {
           animation: shake 0.2s ease-in-out 0s 2;
+        }
+        
+        @media (min-width: 480px) {
+          .xs\\:block {
+            display: block;
+          }
+          .xs\\:inline {
+            display: inline;
+          }
+          .xs\\:hidden {
+            display: none;
+          }
         }
       `}</style>
     </div>
