@@ -53,7 +53,7 @@ export default function StaffPage() {
     fetchOrders();
   }, [filterDate]);
 
-  // ✅ Socket notifications
+  // ✅ सॉकेट नोटिफिकेशन: नया ऑर्डर आते ही तुरंत आज की तारीख पर स्विच करके रीयल-टाइम डिस्प्ले करेगा
   useEffect(() => {
     if (!socket) return;
 
@@ -73,17 +73,25 @@ export default function StaffPage() {
         },
       });
 
+      // 1. डेटाबेस से नए ऑर्डर्स तुरंत फेच करें
+      fetchOrders();
+      
+      // 2. फ़िल्टर डेट को ऑटोमैटिक आज पर सेट करें ताकि नया ऑर्डर तुरंत स्क्रीन पर दिखे
+      setFilterDate(getTodayLocal());
+    };
+
+    const handleOrderUpdates = () => {
       fetchOrders();
     };
 
     socket.on('newOrder', handleNewOrder);
-    socket.on('orderConfirmed', fetchOrders);
-    socket.on('orderCancelled', fetchOrders);
+    socket.on('orderConfirmed', handleOrderUpdates);
+    socket.on('orderCancelled', handleOrderUpdates);
 
     return () => {
       socket.off('newOrder', handleNewOrder);
-      socket.off('orderConfirmed', fetchOrders);
-      socket.off('orderCancelled', fetchOrders);
+      socket.off('orderConfirmed', handleOrderUpdates);
+      socket.off('orderCancelled', handleOrderUpdates);
     };
   }, [socket]);
 
@@ -134,9 +142,15 @@ export default function StaffPage() {
     }
   };
 
+  // ✅ टाइमजोन फिक्स: ऑर्डर्स को लोकल टाइम के YYYY-MM-DD फॉर्मेट में फ़िल्टर कर रहे हैं
   const dateFilteredOrders = orders.filter((order) => {
-    const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
-    return orderDate === filterDate;
+    const orderDateObj = new Date(order.createdAt);
+    const year = orderDateObj.getFullYear();
+    const month = String(orderDateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(orderDateObj.getDate()).padStart(2, '0');
+    const orderLocalDate = `${year}-${month}-${day}`;
+    
+    return orderLocalDate === filterDate;
   });
 
   const filteredOrders = dateFilteredOrders.filter(
@@ -145,18 +159,18 @@ export default function StaffPage() {
       o._id.toLowerCase().includes(filter.toLowerCase())
   );
 
-  // ✅ Status counts
+  // Status counts
   const pendingOrders = filteredOrders.filter((o) => o.status === 'Pending');
   const confirmedOrders = filteredOrders.filter((o) => o.status === 'Confirmed');
   const cancelledOrders = filteredOrders.filter((o) => o.status === 'Cancelled');
 
-  // ✅ CORRECT REVENUE LOGIC - Only confirmed orders count
+  // CORRECT REVENUE LOGIC - Only confirmed orders count
   const totalRevenue = confirmedOrders.reduce(
     (acc, order) => acc + order.totalAmount,
     0
   );
 
-  // ✅ Active orders (Pending + Confirmed) - excluding cancelled
+  // Active orders (Pending + Confirmed) - excluding cancelled
   const activeOrdersCount = pendingOrders.length + confirmedOrders.length;
 
   return (
@@ -187,7 +201,7 @@ export default function StaffPage() {
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
               max={getTodayLocal()}
-              className="bg-transparent outline-none text-sm font-medium"
+              className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
             />
             <button
               onClick={goNextDay}
@@ -207,7 +221,7 @@ export default function StaffPage() {
             Showing orders for:{' '}
           </span>
           <span className="text-sm font-semibold text-gray-800 dark:text-white">
-            {new Date(filterDate).toLocaleDateString('en-IN', {
+            {new Date(filterDate + 'T00:00:00').toLocaleDateString('en-IN', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
@@ -297,7 +311,7 @@ export default function StaffPage() {
               placeholder="Search by Roll Number or Order ID..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="w-full h-12 pl-12 pr-4 rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
+              className="w-full h-12 pl-12 pr-4 rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium dark:text-white"
             />
           </div>
 
@@ -306,7 +320,7 @@ export default function StaffPage() {
               onClick={() => setActiveTab('pending')}
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'pending'
-                  ? 'bg-white dark:bg-slate-700 shadow text-indigo-600'
+                  ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400'
                   : 'text-gray-500'
               }`}
             >
@@ -316,7 +330,7 @@ export default function StaffPage() {
               onClick={() => setActiveTab('confirmed')}
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'confirmed'
-                  ? 'bg-white dark:bg-slate-700 shadow text-indigo-600'
+                  ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400'
                   : 'text-gray-500'
               }`}
             >
@@ -341,14 +355,14 @@ export default function StaffPage() {
               {/* Order Header */}
               <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 font-mono text-xs font-semibold flex items-center gap-1">
+                  <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-semibold flex items-center gap-1">
                     <FiHash className="text-sm" /> #{order._id.slice(-6)}
                   </div>
-                  <div className="px-3 py-1 rounded-xl bg-gray-100 dark:bg-slate-800 text-sm font-medium flex items-center gap-2">
+                  <div className="px-3 py-1 rounded-xl bg-gray-100 dark:bg-slate-800 text-sm font-medium flex items-center gap-2 dark:text-gray-300">
                     <FiUser className="text-sm" />
                     {order.rollNumber}
                   </div>
-                  <div className="text-sm text-gray-500 flex items-center gap-1 font-medium">
+                  <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
                     <FiClock className="text-sm" />
                     {new Date(order.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -388,11 +402,11 @@ export default function StaffPage() {
                             {item.productId?.name || 'Unknown'}
                           </td>
                           <td className="py-4 text-center">
-                            <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold">
+                            <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold dark:text-gray-200">
                               {item.quantity}
                             </span>
                           </td>
-                          <td className="py-4 text-right text-gray-500 font-medium">₹{item.price}</td>
+                          <td className="py-4 text-right text-gray-500 dark:text-gray-400 font-medium">₹{item.price}</td>
                           <td className="py-4 text-right font-semibold text-gray-800 dark:text-gray-200">
                             ₹{item.quantity * item.price}
                           </td>
@@ -405,8 +419,8 @@ export default function StaffPage() {
                 {/* Footer */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Total Bill Amount</p>
-                    <h2 className="text-3xl font-bold text-indigo-600 mt-1">₹{order.totalAmount}</h2>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Bill Amount</p>
+                    <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">₹{order.totalAmount}</h2>
                   </div>
 
                   {order.status === 'Pending' && (
@@ -419,7 +433,6 @@ export default function StaffPage() {
                         <FiCheckCircle />
                         {confirmingId === order._id ? 'Confirming...' : 'Confirm Delivery'}
                       </button>
-                     
                     </div>
                   )}
                 </div>
@@ -437,8 +450,8 @@ export default function StaffPage() {
             <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">
               No Orders Found
             </h2>
-            <p className="text-gray-500 font-medium">
-              No orders found for {new Date(filterDate).toLocaleDateString()}
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
+              No orders found for {new Date(filterDate + 'T00:00:00').toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
         )}
