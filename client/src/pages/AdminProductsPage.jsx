@@ -102,9 +102,23 @@ export default function AdminProductsPage() {
 
   // Convert URL to File blob
   const urlToFile = async (url, filename = "image.jpg") => {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new File([blob], filename, { type: blob.type });
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const blob = await response.blob();
+      // Get file extension from URL or response headers
+      let extension = "jpg";
+      const contentType = response.headers.get("content-type");
+      if (contentType) {
+        if (contentType.includes("png")) extension = "png";
+        else if (contentType.includes("webp")) extension = "webp";
+        else if (contentType.includes("gif")) extension = "gif";
+        else if (contentType.includes("jpeg")) extension = "jpg";
+      }
+      return new File([blob], `${Date.now()}.${extension}`, { type: blob.type });
+    } catch (err) {
+      throw new Error("Failed to fetch image from URL");
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -124,22 +138,27 @@ export default function AdminProductsPage() {
       if (imageMethod === "file" && imageFile) {
         formData.append("image", imageFile);
       } else if (imageMethod === "url" && imageUrl) {
-        // Validate URL
-        const urlPattern = /^(https?:\/\/.*\.(jpg|jpeg|png|webp|gif|svg))$/i;
-        if (!urlPattern.test(imageUrl)) {
-          toast.error("Please enter a valid image URL (jpg, png, webp, etc.)");
+        // Validate URL exists and is reachable
+        if (!imageUrl.trim()) {
+          toast.error("Please enter an image URL");
           setLoading(false);
           return;
         }
+        
         setFetchingImage(true);
-        const file = await urlToFile(imageUrl, `${Date.now()}.jpg`);
-        formData.append("image", file);
+        try {
+          const file = await urlToFile(imageUrl);
+          formData.append("image", file);
+        } catch (err) {
+          toast.error("Failed to load image from URL. Please check if the URL is valid and accessible.");
+          setLoading(false);
+          setFetchingImage(false);
+          return;
+        }
         setFetchingImage(false);
       }
     } catch (err) {
-      toast.error(
-        "Failed to load image from URL. Please try a direct image link.",
-      );
+      toast.error("Failed to process image. Please try again.");
       setLoading(false);
       setFetchingImage(false);
       return;
@@ -542,7 +561,7 @@ export default function AdminProductsPage() {
                   {imageMethod === "url" && (
                     <input
                       type="text"
-                      placeholder="Enter image URL (https://...)"
+                      placeholder="Enter image URL (any valid image URL)"
                       value={imageUrl}
                       onChange={handleImageUrlChange}
                       className="w-full rounded-2xl border px-4 py-3"
@@ -557,14 +576,17 @@ export default function AdminProductsPage() {
                         src={imagePreview}
                         alt="Preview"
                         className="w-36 h-36 rounded-xl object-cover border"
-                        onError={() => setImagePreview("")}
+                        onError={() => {
+                          setImagePreview("");
+                          toast.error("Invalid image URL or image cannot be loaded");
+                        }}
                       />
                     </div>
                   )}
                   <p className="text-sm text-slate-500 mt-3">
                     {imageMethod === "file"
                       ? "Upload high-quality product image"
-                      : "Enter a direct image URL (JPEG, PNG, WEBP)"}
+                      : "Enter any valid image URL (supports JPG, PNG, WEBP, GIF, etc.)"}
                   </p>
                 </div>
               </div>
@@ -647,32 +669,35 @@ export default function AdminProductsPage() {
                     src={p.image || "https://via.placeholder.com/60"}
                     alt={p.name}
                     className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                    onError={(e) => {
+                      e.target.src = "https://via.placeholder.com/60";
+                    }}
                   />
                   <div>
                     <p className="font-semibold text-base text-slate-800 dark:text-white">{p.name}</p>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">ID: {p._id.slice(-6)}</p>
                   </div>
                 </div>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-sm font-medium">
                   <FiLayers className="text-xs" /> {p.categoryId?.name || "No Category"}
                 </span>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <span className="font-semibold text-base text-green-600 dark:text-green-400">₹{p.price}</span>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <span className="font-mono text-base font-medium text-slate-700 dark:text-slate-300">{p.stock}</span>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <span className="font-mono text-base font-medium text-amber-600 dark:text-amber-400">{reserved}</span>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <span className={`font-mono text-base font-semibold ${available <= 0 ? "text-red-600 dark:text-red-400" : isLowStock ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
                   {available}
                 </span>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2">
                   <button
@@ -697,7 +722,7 @@ export default function AdminProductsPage() {
                     {p.visibility ? "Visible" : "Hidden"}
                   </span>
                 </div>
-              </td>
+               </td>
               <td className="px-6 py-4">
                 <div className="flex justify-end gap-2">
                   <button
@@ -715,7 +740,7 @@ export default function AdminProductsPage() {
                     <FiTrash2 className="text-base" />
                   </button>
                 </div>
-              </td>
+               </td>
             </tr>
           );
         })}
@@ -724,7 +749,7 @@ export default function AdminProductsPage() {
             <td colSpan="8" className="text-center py-16 text-slate-500">
               <FiPackage className="mx-auto text-4xl text-slate-300 mb-3" />
               <p className="text-base">No products found</p>
-            </td>
+             </td>
           </tr>
         )}
       </tbody>
