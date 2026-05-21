@@ -282,55 +282,63 @@ export default function ConsumerPage() {
         </div>
 
         {/* Categories - Horizontal Scroll with Better Mobile UX */}
-        <div className="mb-8 overflow-x-auto pb-3 scrollbar-hide">
-          <div className="flex gap-2 min-w-max">
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-                !selectedCategory
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              <FiGrid className="w-4 h-4" />
-              All
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                !selectedCategory 
-                  ? 'bg-white/20 text-white' 
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-              }`}>
-                {products.length}
-              </span>
-            </button>
+       <div className="mb-8">
+  <div className="flex flex-wrap gap-2">
+    <button
+      onClick={() => setSelectedCategory('')}
+      className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+        !selectedCategory
+          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+      }`}
+    >
+      <FiGrid className="w-4 h-4" />
+      All
+      <span
+        className={`text-xs px-2 py-0.5 rounded-full ${
+          !selectedCategory
+            ? 'bg-white/20 text-white'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+        }`}
+      >
+        {products.length}
+      </span>
+    </button>
 
-            {categories.map((cat) => {
-              const Icon = getCategoryIcon(cat.name);
-              const count = categoryCounts[cat._id] || 0;
-              return (
-                <button
-                  key={cat._id}
-                  onClick={() => setSelectedCategory(cat._id)}
-                  className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-                    selectedCategory === cat._id
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {Icon}
-                  <span className="hidden xs:inline">{cat.name}</span>
-                  <span className="xs:hidden">{cat.name.substring(0, 8)}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    selectedCategory === cat._id 
-                      ? 'bg-white/20 text-white' 
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+    {categories.map((cat) => {
+      const Icon = getCategoryIcon(cat.name);
+      const count = categoryCounts[cat._id] || 0;
+
+      return (
+        <button
+          key={cat._id}
+          onClick={() => setSelectedCategory(cat._id)}
+          className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+            selectedCategory === cat._id
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+        >
+          {Icon}
+          <span className="hidden xs:inline">{cat.name}</span>
+          <span className="xs:hidden">
+            {cat.name.substring(0, 8)}
+          </span>
+
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full ${
+              selectedCategory === cat._id
+                ? 'bg-white/20 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+            }`}
+          >
+            {count}
+          </span>
+        </button>
+      );
+    })}
+  </div>
+</div>
 
         {/* Loading State */}
         {isLoading ? (
