@@ -234,7 +234,7 @@ export default function StaffPage() {
         </div>
       </div>
 
-      Stats Cards
+      {/* Stats Cards */}
       {/* <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         {/* Pending Orders Card */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
