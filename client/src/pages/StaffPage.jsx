@@ -234,8 +234,8 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+      Stats Cards
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         {/* Pending Orders Card */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
@@ -299,7 +299,7 @@ export default function StaffPage() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Search + Tabs */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
