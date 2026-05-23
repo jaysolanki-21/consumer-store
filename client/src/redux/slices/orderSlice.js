@@ -27,16 +27,16 @@ const orderSlice = createSlice({
       }
     },
     cancelOrder: (state, action) => {
-      const index = state.orders.findIndex(o => o._id === action.payload._id);
-      if (index !== -1) {
-        if (state.orders[index].status === 'Pending' && action.payload.status === 'Cancelled') {
-          state.pendingCount--;
-        }
-        state.orders[index] = action.payload;
+    const index = state.orders.findIndex(o => o._id === action.payload._id);
+    if (index !== -1) {
+      if (state.orders[index].status === 'Pending' && action.payload.status === 'Cancelled') {
+        state.pendingCount--;
       }
+      state.orders[index] = action.payload;
     }
+  }
   }
 });
 
-export const { setOrders, addNewOrder, updateOrder, cancelOrder } = orderSlice.actions;
+export const { setOrders, addNewOrder, updateOrder } = orderSlice.actions;
 export default orderSlice.reducer;
