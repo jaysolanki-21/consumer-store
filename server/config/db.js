@@ -4,7 +4,7 @@ const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
       tls: true,
-      tlsAllowInvalidCertificates: false, // set to true only for testing
+      tlsAllowInvalidCertificates: false, 
       retryWrites: true,
       w: 'majority'
     });

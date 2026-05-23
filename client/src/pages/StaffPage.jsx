@@ -53,7 +53,6 @@ export default function StaffPage() {
     fetchOrders();
   }, [filterDate]);
 
-  // ✅ सॉकेट नोटिफिकेशन: नया ऑर्डर आते ही तुरंत आज की तारीख पर स्विच करके रीयल-टाइम डिस्प्ले करेगा
   useEffect(() => {
     if (!socket) return;
 
@@ -73,10 +72,8 @@ export default function StaffPage() {
         },
       });
 
-      // 1. डेटाबेस से नए ऑर्डर्स तुरंत फेच करें
       fetchOrders();
       
-      // 2. फ़िल्टर डेट को ऑटोमैटिक आज पर सेट करें ताकि नया ऑर्डर तुरंत स्क्रीन पर दिखे
       setFilterDate(getTodayLocal());
     };
 
@@ -142,7 +139,6 @@ export default function StaffPage() {
     }
   };
 
-  // ✅ टाइमजोन फिक्स: ऑर्डर्स को लोकल टाइम के YYYY-MM-DD फॉर्मेट में फ़िल्टर कर रहे हैं
   const dateFilteredOrders = orders.filter((order) => {
     const orderDateObj = new Date(order.createdAt);
     const year = orderDateObj.getFullYear();
@@ -159,18 +155,15 @@ export default function StaffPage() {
       o._id.toLowerCase().includes(filter.toLowerCase())
   );
 
-  // Status counts
   const pendingOrders = filteredOrders.filter((o) => o.status === 'Pending');
   const confirmedOrders = filteredOrders.filter((o) => o.status === 'Confirmed');
   const cancelledOrders = filteredOrders.filter((o) => o.status === 'Cancelled');
 
-  // CORRECT REVENUE LOGIC - Only confirmed orders count
   const totalRevenue = confirmedOrders.reduce(
     (acc, order) => acc + order.totalAmount,
     0
   );
 
-  // Active orders (Pending + Confirmed) - excluding cancelled
   const activeOrdersCount = pendingOrders.length + confirmedOrders.length;
 
   return (

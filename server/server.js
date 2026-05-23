@@ -23,7 +23,6 @@ connectDB();
 const app = express();
 const httpServer = createServer(app);
 
-// ✅ Socket.IO with production CORS
 const io = new Server(httpServer, {
   cors: {
     origin: process.env.CLIENT_URL,

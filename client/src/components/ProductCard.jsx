@@ -15,7 +15,6 @@ export default function ProductCard({ product }) {
   const dispatch = useDispatch();
   const [quantity, setQuantity] = useState(1);
 
-  // Use availableStock if provided by backend, otherwise calculate from stock - reservedStock
   const availableStock = product.availableStock ?? (product.stock - (product.reservedStock || 0));
 
   const increment = () => {
@@ -41,7 +40,7 @@ export default function ProductCard({ product }) {
     }
     dispatch(addToCart({ product, quantity }));
     toast.success(`${quantity} × ${product.name} added to cart`);
-    setQuantity(1); // Reset quantity after adding
+    setQuantity(1);
   };
 
   const isLowStock = availableStock > 0 && availableStock <= product.lowStockThreshold;
