@@ -176,11 +176,13 @@ export const cancelOrder = async (req, res) => {
     order.confirmedBy = req.user._id;
     await order.save();
 
+    // ✅ FIX: Populate before emitting
+    const populatedOrder = await Order.findById(order._id).populate('items.productId');
     const io = req.app.get('io');
-    io.emit('orderCancelled', order);
+    io.emit('orderCancelled', populatedOrder);
     io.emit('stockUpdated');
 
-    res.json({ message: 'Order cancelled', order });
+    res.json({ message: 'Order cancelled', order: populatedOrder });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -202,7 +204,7 @@ export const revertOrder = async (req, res) => {
         await Product.findByIdAndUpdate(item.productId, {
           $inc: {
             stock: +item.quantity,
-            reservedStock: +item.quantity    // re‑reserve
+            reservedStock: +item.quantity
           }
         });
       }
@@ -228,11 +230,13 @@ export const revertOrder = async (req, res) => {
     order.confirmedBy = null;
     await order.save();
 
+    // ✅ FIX: Populate before emitting
+    const populatedOrder = await Order.findById(order._id).populate('items.productId');
     const io = req.app.get('io');
-    io.emit('orderReverted', order);
+    io.emit('orderReverted', populatedOrder);
     io.emit('stockUpdated');
 
-    res.json({ message: 'Order reverted to Pending', order });
+    res.json({ message: 'Order reverted to Pending', order: populatedOrder });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -240,7 +244,6 @@ export const revertOrder = async (req, res) => {
 };
 
 // Delete single order (only cancelled or pending)
-
 export const deleteOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);

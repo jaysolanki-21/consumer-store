@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { setOrders } from '../redux/slices/orderSlice';
+import { setOrders, addNewOrder, updateOrder } from '../redux/slices/orderSlice'; // ✅ Updated import
 import api from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 
@@ -56,8 +56,12 @@ export default function StaffPage() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewOrder = () => {
-      console.log('🛒 New order received via socket');
+    // ✅ UPDATED: Directly add new order to Redux without API call
+    const handleNewOrder = (newOrder) => {
+      console.log('🛒 New order received via socket', newOrder);
+      
+      // ✅ Direct Redux update - NO extra API call
+      dispatch(addNewOrder(newOrder));
       
       toast.success('🛒 New Order Received!', {
         duration: 5000,
@@ -71,26 +75,41 @@ export default function StaffPage() {
           borderRadius: '12px',
         },
       });
-
-      fetchOrders();
-      
-      setFilterDate(getTodayLocal());
     };
 
-    const handleOrderUpdates = () => {
-      fetchOrders();
+    // ✅ UPDATED: Update existing order when confirmed
+    const handleOrderConfirmed = (updatedOrder) => {
+      console.log('✅ Order confirmed via socket', updatedOrder);
+      dispatch(updateOrder(updatedOrder));
+      
+      toast.success(`Order #${updatedOrder._id.slice(-6)} confirmed!`, {
+        duration: 3000,
+        position: 'top-right',
+        icon: '✅',
+      });
+    };
+
+    // ✅ UPDATED: Update existing order when cancelled
+    const handleOrderCancelled = (cancelledOrder) => {
+      console.log('❌ Order cancelled via socket', cancelledOrder);
+      dispatch(updateOrder(cancelledOrder));
+      
+      toast.error(`Order #${cancelledOrder._id.slice(-6)} cancelled`, {
+        duration: 3000,
+        position: 'top-right',
+      });
     };
 
     socket.on('newOrder', handleNewOrder);
-    socket.on('orderConfirmed', handleOrderUpdates);
-    socket.on('orderCancelled', handleOrderUpdates);
+    socket.on('orderConfirmed', handleOrderConfirmed);
+    socket.on('orderCancelled', handleOrderCancelled);
 
     return () => {
       socket.off('newOrder', handleNewOrder);
-      socket.off('orderConfirmed', handleOrderUpdates);
-      socket.off('orderCancelled', handleOrderUpdates);
+      socket.off('orderConfirmed', handleOrderConfirmed);
+      socket.off('orderCancelled', handleOrderCancelled);
     };
-  }, [socket]);
+  }, [socket, dispatch]);
 
   const fetchOrders = async () => {
     try {
@@ -108,8 +127,8 @@ export default function StaffPage() {
     setConfirmingId(orderId);
     try {
       await api.put(`/orders/${orderId}/confirm`);
+      // ✅ No need to call fetchOrders() - socket will update via orderConfirmed event
       toast.success(`Order #${orderId.slice(-6)} confirmed`);
-      fetchOrders();
     } catch (error) {
       toast.error('Failed to confirm order');
     } finally {
@@ -121,8 +140,8 @@ export default function StaffPage() {
     if (!window.confirm('Are you sure you want to cancel this order?')) return;
     try {
       await api.put(`/orders/${orderId}/cancel`);
+      // ✅ No need to call fetchOrders() - socket will update via orderCancelled event
       toast.success('Order cancelled successfully');
-      fetchOrders();
     } catch (error) {
       toast.error('Failed to cancel order');
     }
@@ -228,7 +247,6 @@ export default function StaffPage() {
       </div>
 
       {/* Stats Cards */}
-      {/* 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
@@ -290,7 +308,7 @@ export default function StaffPage() {
           </div>
         </div>
       </div>
-      */}
+
       {/* Search + Tabs */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
