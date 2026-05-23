@@ -228,8 +228,8 @@ export default function StaffPage() {
       </div>
 
       {/* Stats Cards */}
+      {/* 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        {/* Pending Orders Card */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
           <div className="relative z-10">
@@ -245,7 +245,6 @@ export default function StaffPage() {
           </div>
         </div>
 
-        {/* Completed Orders Card */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
           <div className="relative z-10">
@@ -261,7 +260,6 @@ export default function StaffPage() {
           </div>
         </div>
 
-        {/* Revenue Card - ONLY CONFIRMED ORDERS */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
           <div className="relative z-10">
@@ -277,7 +275,6 @@ export default function StaffPage() {
           </div>
         </div>
 
-        {/* Total Active Orders Card - Only Pending + Confirmed */}
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
           <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
           <div className="relative z-10">
@@ -293,7 +290,7 @@ export default function StaffPage() {
           </div>
         </div>
       </div>
-
+      */}
       {/* Search + Tabs */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

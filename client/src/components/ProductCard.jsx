@@ -129,7 +129,7 @@ export default function ProductCard({ product }) {
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-500">Total</p>
-              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+              <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                 ₹{product.price * quantity}
               </p>
             </div>
