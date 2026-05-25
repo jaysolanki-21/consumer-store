@@ -21,6 +21,7 @@ import {
   FiCoffee,
   FiSmartphone,
   FiBook,
+  FiLogOut,
 } from 'react-icons/fi';
 
 // Icon mapping for categories
@@ -45,7 +46,7 @@ function ConsumerPageContent() {
   const [search, setSearch] = useState('');
   const [showCart, setShowCart] = useState(false);
   const [rollNumber, setRollNumber] = useState(() => {
-    // Load from localStorage first
+    // Load from localStorage only for session, will be cleared after order
     const saved = localStorage.getItem('consumer_roll_number');
     return saved || savedRollNumber || '';
   });
@@ -57,15 +58,21 @@ function ConsumerPageContent() {
     if (rollNumber) {
       localStorage.setItem('consumer_roll_number', rollNumber);
       dispatch(setCustomerInfo({ rollNumber: rollNumber }));
+    } else {
+      // Clear from localStorage if roll number is empty
+      localStorage.removeItem('consumer_roll_number');
+      dispatch(setCustomerInfo({ rollNumber: '' }));
     }
   }, [rollNumber, dispatch]);
 
   // Join socket room for real-time updates
   useEffect(() => {
-    socket.emit('joinConsumerRoom', rollNumber);
-    return () => {
-      socket.emit('leaveConsumerRoom', rollNumber);
-    };
+    if (rollNumber) {
+      socket.emit('joinConsumerRoom', rollNumber);
+      return () => {
+        socket.emit('leaveConsumerRoom', rollNumber);
+      };
+    }
   }, [rollNumber]);
 
   useEffect(() => {
@@ -121,6 +128,14 @@ function ConsumerPageContent() {
     setRollNumber(formatted);
   };
 
+  // ✅ Clear roll number after order
+  const clearRollNumber = () => {
+    setRollNumber('');
+    localStorage.removeItem('consumer_roll_number');
+    dispatch(setCustomerInfo({ rollNumber: '' }));
+    // toast.success('Session cleared successfully');
+  };
+
   const handlePlaceOrder = async () => {
     if (!rollNumber) {
       toast.error('Please enter Roll Number');
@@ -149,15 +164,35 @@ function ConsumerPageContent() {
         items: orderItems,
       });
 
-      toast.success('Order placed successfully! 🎉');
+      toast.success('Order placed successfully! 🎉', {
+        duration: 3000,
+      });
+      
       dispatch(clearCart());
       setShowCart(false);
+      
+      // ✅ Clear roll number after successful order
+      setTimeout(() => {
+        clearRollNumber();
+      }, 2000); // Delay to show success message first
+      
     } catch (err) {
       console.error('Order error:', err);
       toast.error(err.response?.data?.message || 'Order failed');
     } finally {
       setIsOrderConfirming(false);
     }
+  };
+
+  // ✅ Manual logout function
+  const handleLogout = () => {
+    if (cartItems.length > 0) {
+      toast.error('Please clear cart before logging out', {
+        icon: '⚠️',
+      });
+      return;
+    }
+    clearRollNumber();
   };
 
   const categoryCounts = useMemo(() => {
@@ -228,34 +263,51 @@ function ConsumerPageContent() {
                 value={rollNumber}
                 onChange={(e) => handleRollNumberChange(e.target.value)}
                 className="w-full h-10 md:h-11 rounded-xl pl-9 pr-3 bg-gray-100 dark:bg-gray-800 border-0 focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium transition-all"
+                disabled={isOrderConfirming}
               />
             </div>
 
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              whileHover={{ scale: 1.02 }}
-              onClick={() => {
-                if (!rollNumber) {
-                  toast.error('Please enter roll number first');
-                  document.getElementById('session-roll-input')?.focus();
-                  return;
-                }
-                setShowCart(true);
-              }}
-              className="relative h-10 md:h-11 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
-            >
-              <FiShoppingCart className="text-base" />
-              <span className="hidden sm:inline text-sm">Cart</span>
-              {cartCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 border-2 border-white dark:border-gray-900 text-[10px] flex items-center justify-center font-bold"
+            <div className="flex items-center gap-2">
+              {/* Logout Button - Shows only when roll number exists */}
+              {rollNumber && (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={handleLogout}
+                  className="h-10 md:h-11 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold flex items-center gap-1 transition-all"
+                  title="Clear Session"
                 >
-                  {cartCount}
-                </motion.span>
+                  <FiLogOut className="text-base" />
+                  <span className="hidden sm:inline text-sm">Logout</span>
+                </motion.button>
               )}
-            </motion.button>
+              
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                onClick={() => {
+                  if (!rollNumber) {
+                    toast.error('Please enter roll number first');
+                    document.getElementById('session-roll-input')?.focus();
+                    return;
+                  }
+                  setShowCart(true);
+                }}
+                className="relative h-10 md:h-11 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+              >
+                <FiShoppingCart className="text-base" />
+                <span className="hidden sm:inline text-sm">Cart</span>
+                {cartCount > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 border-2 border-white dark:border-gray-900 text-[10px] flex items-center justify-center font-bold"
+                  >
+                    {cartCount}
+                  </motion.span>
+                )}
+              </motion.button>
+            </div>
           </div>
         </div>
       </nav>
@@ -263,11 +315,20 @@ function ConsumerPageContent() {
       {/* Roll Number Status Bar */}
       {rollNumber && (
         <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 py-2 px-4">
-          <div className="container mx-auto flex items-center justify-center gap-2 text-sm">
-            <FiUser className="text-green-600 dark:text-green-400" />
-            <span className="text-green-700 dark:text-green-300 font-medium">
-              Current: <strong className="font-mono">{rollNumber}</strong>
-            </span>
+          <div className="container mx-auto flex items-center justify-between gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <FiUser className="text-green-600 dark:text-green-400" />
+              <span className="text-green-700 dark:text-green-300 font-medium">
+                Active Session: <strong className="font-mono">{rollNumber}</strong>
+              </span>
+            </div>
+            <button
+              onClick={clearRollNumber}
+              className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium flex items-center gap-1"
+            >
+              <FiLogOut className="text-xs" />
+              Clear
+            </button>
           </div>
         </div>
       )}
@@ -412,9 +473,9 @@ function ConsumerPageContent() {
         isProcessing={isOrderConfirming}
       />
 
-      {/* Roll Number Warning */}
+      {/* Roll Number Warning - Only show when no roll number AND no order in progress */}
       <AnimatePresence>
-        {!rollNumber && rollNumber !== undefined && (
+        {!rollNumber && rollNumber !== undefined && !isOrderConfirming && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
