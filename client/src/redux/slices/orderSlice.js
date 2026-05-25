@@ -21,46 +21,26 @@ const orderSlice = createSlice({
       }
     },
     
-    // ✅ Updated to match the StaffPage implementation
+    // ✅ CRITICAL FIX: Use Object.assign to preserve object reference
     updateOrder: (state, action) => {
-      // Support both formats: { id, changes } OR { _id, status, ... }
-      let orderId, updatedOrder;
+      const { id, changes } = action.payload;
       
-      if (action.payload.id && action.payload.changes) {
-        // Format: { id, changes }
-        orderId = action.payload.id;
-        const index = state.orders.findIndex(o => o._id === orderId);
-        if (index !== -1) {
-          const oldStatus = state.orders[index].status;
-          const newStatus = action.payload.changes.status;
-          
-          // Update pending count if status changed
-          if (oldStatus === 'Pending' && newStatus !== 'Pending') {
-            state.pendingCount -= 1;
-          } else if (oldStatus !== 'Pending' && newStatus === 'Pending') {
-            state.pendingCount += 1;
-          }
-          
-          // Merge changes
-          state.orders[index] = { ...state.orders[index], ...action.payload.changes };
+      const index = state.orders.findIndex((o) => o._id === id);
+      
+      if (index !== -1) {
+        const oldStatus = state.orders[index].status;
+        const newStatus = changes.status;
+        
+        // Update pending count if status changed
+        if (oldStatus === 'Pending' && newStatus !== 'Pending') {
+          state.pendingCount -= 1;
+        } else if (oldStatus !== 'Pending' && newStatus === 'Pending') {
+          state.pendingCount += 1;
         }
-      } else {
-        // Format: full order object { _id, status, ... }
-        orderId = action.payload._id;
-        const index = state.orders.findIndex(o => o._id === orderId);
-        if (index !== -1) {
-          const oldStatus = state.orders[index].status;
-          const newStatus = action.payload.status;
-          
-          // Update pending count if status changed
-          if (oldStatus === 'Pending' && newStatus !== 'Pending') {
-            state.pendingCount -= 1;
-          } else if (oldStatus !== 'Pending' && newStatus === 'Pending') {
-            state.pendingCount += 1;
-          }
-          
-          state.orders[index] = action.payload;
-        }
+        
+        // ✅ CRITICAL: Object.assign preserves object reference
+        // This prevents Framer Motion from re-animating
+        Object.assign(state.orders[index], changes);
       }
     },
     
@@ -70,34 +50,30 @@ const orderSlice = createSlice({
         const oldStatus = state.orders[index].status;
         const newStatus = action.payload.status;
         
-        // Update pending count if status changed
         if (oldStatus === 'Pending' && newStatus === 'Cancelled') {
           state.pendingCount -= 1;
         }
         
-        state.orders[index] = action.payload;
+        Object.assign(state.orders[index], { status: newStatus });
       }
     },
     
-    // ✅ Helper action to update only status (more efficient)
     updateOrderStatus: (state, action) => {
       const { id, status } = action.payload;
       const index = state.orders.findIndex(o => o._id === id);
       if (index !== -1) {
         const oldStatus = state.orders[index].status;
         
-        // Update pending count
         if (oldStatus === 'Pending' && status !== 'Pending') {
           state.pendingCount -= 1;
         } else if (oldStatus !== 'Pending' && status === 'Pending') {
           state.pendingCount += 1;
         }
         
-        state.orders[index].status = status;
+        Object.assign(state.orders[index], { status });
       }
     },
     
-    // ✅ Remove order (if needed)
     removeOrder: (state, action) => {
       const orderId = action.payload;
       const index = state.orders.findIndex(o => o._id === orderId);
@@ -109,7 +85,6 @@ const orderSlice = createSlice({
       }
     },
     
-    // ✅ Clear all orders (for logout, etc.)
     clearOrders: (state) => {
       state.orders = [];
       state.pendingCount = 0;
@@ -117,7 +92,6 @@ const orderSlice = createSlice({
   }
 });
 
-// Export all actions
 export const { 
   setOrders, 
   addNewOrder, 

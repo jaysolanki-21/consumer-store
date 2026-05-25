@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -38,7 +38,16 @@ function ConsumerPageContent() {
   const cartItems = useSelector((state) => state.cart.items);
   const savedRollNumber = useSelector((state) => state.cart.rollNumber || '');
 
-  const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  // Performance: useMemo for cart calculations
+  const cartCount = useMemo(
+    () => cartItems.reduce((acc, item) => acc + item.quantity, 0),
+    [cartItems]
+  );
+
+  const cartTotal = useMemo(
+    () => cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0),
+    [cartItems]
+  );
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -46,12 +55,19 @@ function ConsumerPageContent() {
   const [search, setSearch] = useState('');
   const [showCart, setShowCart] = useState(false);
   const [rollNumber, setRollNumber] = useState(() => {
-    // Load from localStorage only for session, will be cleared after order
     const saved = localStorage.getItem('consumer_roll_number');
     return saved || savedRollNumber || '';
   });
   const [isOrderConfirming, setIsOrderConfirming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Prevent background scroll when cart is open
+  useEffect(() => {
+    document.body.style.overflow = showCart ? 'hidden' : 'auto';
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [showCart]);
 
   // Save roll number to localStorage whenever it changes
   useEffect(() => {
@@ -59,7 +75,6 @@ function ConsumerPageContent() {
       localStorage.setItem('consumer_roll_number', rollNumber);
       dispatch(setCustomerInfo({ rollNumber: rollNumber }));
     } else {
-      // Clear from localStorage if roll number is empty
       localStorage.removeItem('consumer_roll_number');
       dispatch(setCustomerInfo({ rollNumber: '' }));
     }
@@ -75,6 +90,7 @@ function ConsumerPageContent() {
     }
   }, [rollNumber]);
 
+  // Fetch products and categories
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -88,28 +104,32 @@ function ConsumerPageContent() {
     };
     fetchData();
 
-    socket.on('stockUpdated', fetchProducts);
+    // Fix memory leak in sockets
+    const handleStockUpdate = () => {
+      fetchProducts();
+    };
+
+    socket.on('stockUpdated', handleStockUpdate);
 
     return () => {
-      socket.off('stockUpdated', fetchProducts);
+      socket.off('stockUpdated', handleStockUpdate);
     };
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const { data } = await api.get('/products');
       setProducts(data.filter((p) => p.visibility === true));
     } catch (err) {
       console.error('Failed to load products');
-      // Use dummy data if API fails
       setProducts([
         { _id: '1', name: 'Sample Product', price: 100, categoryId: { _id: 'cat1', name: 'Food & Beverages' }, stock: 10, visibility: true },
         { _id: '2', name: 'Another Product', price: 200, categoryId: { _id: 'cat2', name: 'Stationery' }, stock: 20, visibility: true },
       ]);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const { data } = await api.get('/categories');
       setCategories(data);
@@ -121,28 +141,29 @@ function ConsumerPageContent() {
         { _id: 'cat3', name: 'Electronics' },
       ]);
     }
-  };
+  }, []);
 
   const handleRollNumberChange = (val) => {
     const formatted = val.trim().toUpperCase();
     setRollNumber(formatted);
   };
 
-  // ✅ Clear roll number after order
   const clearRollNumber = () => {
     setRollNumber('');
     localStorage.removeItem('consumer_roll_number');
     dispatch(setCustomerInfo({ rollNumber: '' }));
-    // toast.success('Session cleared successfully');
   };
 
-  const handlePlaceOrder = async () => {
+  // Updated handlePlaceOrder to accept cash and changeAmount from CartDrawer
+  const handlePlaceOrder = async (cash, changeAmount) => {
     if (!rollNumber) {
       toast.error('Please enter Roll Number');
       const input = document.getElementById('session-roll-input');
       input?.focus();
       input?.classList.add('animate-shake');
-      setTimeout(() => input?.classList.remove('animate-shake'), 500);
+      setTimeout(() => {
+        input?.classList.remove('animate-shake');
+      }, 500);
       return;
     }
 
@@ -151,40 +172,48 @@ function ConsumerPageContent() {
       return;
     }
 
+    if (isNaN(cash) || cash < cartTotal) {
+      toast.error(`Please enter amount of ₹${cartTotal.toFixed(2)} or more`);
+      return;
+    }
+
     try {
       setIsOrderConfirming(true);
+
       const orderItems = cartItems.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
         price: item.price,
       }));
 
-      const response = await api.post('/orders', {
+      await api.post('/orders', {
         rollNumber,
         items: orderItems,
+        amountReceived: cash,
+        changeGiven: changeAmount,
       });
 
-      toast.success('Order placed successfully! 🎉', {
-        duration: 3000,
-      });
-      
+      toast.success(
+        `Order placed successfully! Change: ₹${changeAmount.toFixed(2)} 🎉`,
+        {
+          duration: 4000,
+        }
+      );
+
       dispatch(clearCart());
       setShowCart(false);
-      
-      // ✅ Clear roll number after successful order
+
       setTimeout(() => {
         clearRollNumber();
-      }, 2000); // Delay to show success message first
-      
+      }, 1500);
     } catch (err) {
-      console.error('Order error:', err);
+      console.error(err);
       toast.error(err.response?.data?.message || 'Order failed');
     } finally {
       setIsOrderConfirming(false);
     }
   };
 
-  // ✅ Manual logout function
   const handleLogout = () => {
     if (cartItems.length > 0) {
       toast.error('Please clear cart before logging out', {
@@ -204,11 +233,12 @@ function ConsumerPageContent() {
     return counts;
   }, [products]);
 
+  // Fix: Add null checks for product name
   const filteredProducts = useMemo(() => {
     return products.filter(
       (p) =>
-        p.name.toLowerCase().includes(search.toLowerCase()) &&
-        (!selectedCategory || p.categoryId?._id === selectedCategory)
+        p.name?.toLowerCase().includes(search.toLowerCase()) &&
+        (!selectedCategory || String(p.categoryId?._id) === String(selectedCategory))
     );
   }, [products, search, selectedCategory]);
 
@@ -224,9 +254,9 @@ function ConsumerPageContent() {
     return grouped;
   }, [products, categories, selectedCategory, search]);
 
+  // Fix: Return component, not JSX
   const getCategoryIcon = (categoryName) => {
-    const Icon = categoryIcons[categoryName] || categoryIcons.Default;
-    return <Icon className="w-4 h-4" />;
+    return categoryIcons[categoryName] || categoryIcons.Default;
   };
 
   return (
@@ -268,7 +298,6 @@ function ConsumerPageContent() {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Logout Button - Shows only when roll number exists */}
               {rollNumber && (
                 <motion.button
                   whileTap={{ scale: 0.95 }}
@@ -376,7 +405,7 @@ function ConsumerPageContent() {
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
-                  {Icon}
+                  <Icon className="w-4 h-4" />
                   <span className="hidden xs:inline">{cat.name}</span>
                   <span className="xs:hidden">{cat.name.substring(0, 8)}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCategory === cat._id ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
@@ -403,7 +432,10 @@ function ConsumerPageContent() {
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                          {getCategoryIcon(category.name)}
+                          {(() => {
+                            const Icon = getCategoryIcon(category.name);
+                            return <Icon className="w-4 h-4" />;
+                          })()}
                         </div>
                         <div>
                           <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
@@ -465,7 +497,7 @@ function ConsumerPageContent() {
         )}
       </main>
 
-      {/* Cart Drawer */}
+      {/* Cart Drawer - REMOVED all cash-related props since CartDrawer manages its own state */}
       <CartDrawer
         open={showCart}
         onClose={() => setShowCart(false)}
@@ -473,7 +505,7 @@ function ConsumerPageContent() {
         isProcessing={isOrderConfirming}
       />
 
-      {/* Roll Number Warning - Only show when no roll number AND no order in progress */}
+      {/* Roll Number Warning */}
       <AnimatePresence>
         {!rollNumber && rollNumber !== undefined && !isOrderConfirming && (
           <motion.div
