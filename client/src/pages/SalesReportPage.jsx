@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../services/api";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FiCalendar,
   FiDollarSign,
@@ -12,6 +13,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiDownload,
+  FiRefreshCw,
 } from "react-icons/fi";
 import { FaRupeeSign } from "react-icons/fa";
 import jsPDF from "jspdf";
@@ -37,35 +39,49 @@ export default function SalesReportPage() {
     productWise: [],
   });
   const [confirmedOrders, setConfirmedOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  
+  // ✅ TWO SEPARATE LOADING STATES
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  // Initial load
   useEffect(() => {
-    fetchSalesReport();
+    fetchSalesReport(false);
     fetchConfirmedOrders();
   }, [selectedDate]);
 
+  // ✅ Socket events with SILENT refresh (no loading spinner)
   useEffect(() => {
     const handleOrderChange = () => {
-      fetchSalesReport();
-      fetchConfirmedOrders();
+      // Silent background refresh - NO loading spinner
+      fetchSalesReport(true);
+      fetchConfirmedOrdersSilent();
     };
 
     socket.on("orderConfirmed", handleOrderChange);
     socket.on("orderCancelled", handleOrderChange);
     socket.on("newOrder", handleOrderChange);
+    socket.on("stockUpdated", () => fetchSalesReport(true));
 
     return () => {
       socket.off("orderConfirmed", handleOrderChange);
       socket.off("orderCancelled", handleOrderChange);
       socket.off("newOrder", handleOrderChange);
+      socket.off("stockUpdated", () => fetchSalesReport(true));
     };
   }, [selectedDate]);
 
-  const fetchSalesReport = async () => {
-    setLoading(true);
+  // ✅ UPDATED: fetchSalesReport with silent mode
+  const fetchSalesReport = async (silent = false) => {
     try {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setInitialLoading(true);
+      }
+
       const { data } = await api.get(
         `/orders/sales-report?date=${selectedDate}`
       );
@@ -79,10 +95,15 @@ export default function SalesReportPage() {
         productWise: [],
       });
     } finally {
-      setLoading(false);
+      if (silent) {
+        setRefreshing(false);
+      } else {
+        setInitialLoading(false);
+      }
     }
   };
 
+  // ✅ UPDATED: fetchConfirmedOrders with loading state only on initial/filter change
   const fetchConfirmedOrders = async () => {
     setLoadingOrders(true);
     try {
@@ -100,6 +121,24 @@ export default function SalesReportPage() {
       toast.error("Failed to load confirmed orders");
     } finally {
       setLoadingOrders(false);
+    }
+  };
+
+  // ✅ SILENT version for socket updates (keeps existing data while loading)
+  const fetchConfirmedOrdersSilent = async () => {
+    try {
+      const { data } = await api.get("/orders");
+      const startDate = new Date(`${selectedDate}T00:00:00.000+05:30`);
+      const endDate = new Date(`${selectedDate}T23:59:59.999+05:30`);
+      const filtered = data.filter(
+        (order) =>
+          order.status === "Confirmed" &&
+          new Date(order.createdAt) >= startDate &&
+          new Date(order.createdAt) <= endDate
+      );
+      setConfirmedOrders(filtered);
+    } catch (err) {
+      console.error("Silent refresh failed:", err);
     }
   };
 
@@ -157,7 +196,7 @@ export default function SalesReportPage() {
       const contentW = pageW - margin * 2;
 
       // ── Header bar ──
-      doc.setFillColor(79, 70, 229); // indigo-600
+      doc.setFillColor(79, 70, 229);
       doc.rect(0, 0, pageW, 28, "F");
 
       doc.setTextColor(255, 255, 255);
@@ -177,25 +216,12 @@ export default function SalesReportPage() {
 
       let y = 36;
 
-      // ── Summary cards (3 columns) ──
+      // ── Summary cards ──
       const cardW = (contentW - 8) / 3;
       const cards = [
-        {
-          label: "Report Date",
-          value: formatDate(selectedDate),
-          color: [79, 70, 229],
-          small: true,
-        },
-        {
-          label: "Total Income",
-          value: `Rs. ${(salesData.totalIncome || 0).toLocaleString("en-IN")}`,
-          color: [16, 185, 129],
-        },
-        {
-          label: "Confirmed Orders",
-          value: String(salesData.totalOrders || 0),
-          color: [124, 58, 237],
-        },
+        { label: "Report Date", value: formatDate(selectedDate), color: [79, 70, 229], small: true },
+        { label: "Total Income", value: `Rs. ${(salesData.totalIncome || 0).toLocaleString("en-IN")}`, color: [16, 185, 129] },
+        { label: "Confirmed Orders", value: String(salesData.totalOrders || 0), color: [124, 58, 237] },
       ];
 
       cards.forEach((card, i) => {
@@ -216,7 +242,7 @@ export default function SalesReportPage() {
 
       y += 30;
 
-      // ── Section: Product-wise Sales ──
+      // ── Product-wise Sales ──
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(31, 41, 55);
@@ -240,42 +266,18 @@ export default function SalesReportPage() {
             item.quantity,
             Number(item.revenue).toLocaleString("en-IN"),
           ]),
-          foot: [
-            [
-              "",
-              "TOTAL",
-              salesData.productWise.reduce((s, i) => s + i.quantity, 0),
-              `Rs. ${(salesData.totalIncome || 0).toLocaleString("en-IN")}`,
-            ],
-          ],
-          headStyles: {
-            fillColor: [79, 70, 229],
-            textColor: 255,
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
-          },
-          footStyles: {
-            fillColor: [238, 242, 255],
-            textColor: [31, 41, 55],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
-          },
+          foot: [["", "TOTAL", salesData.productWise.reduce((s, i) => s + i.quantity, 0), `Rs. ${(salesData.totalIncome || 0).toLocaleString("en-IN")}`]],
+          headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
+          footStyles: { fillColor: [238, 242, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
           bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: {
-            0: { cellWidth: 10, halign: "center" },
-            1: { halign: "left" },
-            2: { halign: "center" },
-            3: { halign: "right" },
-          },
+          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "left" }, 2: { halign: "center" }, 3: { halign: "right" } },
           showFoot: "lastPage",
         });
         y = doc.lastAutoTable.finalY + 8;
       }
 
-      // ── Section: Confirmed Orders ──
+      // ── Confirmed Orders ──
       if (y > pageH - 60) {
         doc.addPage();
         y = 20;
@@ -292,7 +294,6 @@ export default function SalesReportPage() {
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text("No confirmed orders for this date.", margin, y + 6);
-        y += 14;
       } else {
         autoTable(doc, {
           startY: y,
@@ -301,54 +302,17 @@ export default function SalesReportPage() {
           body: confirmedOrders.map((order, idx) => [
             idx + 1,
             `#${order._id.slice(-8)}`,
-            new Date(order.createdAt).toLocaleString("en-IN", {
-              timeZone: "Asia/Kolkata",
-              hour12: true,
-              hour: "2-digit",
-              minute: "2-digit",
-              day: "2-digit",
-              month: "short",
-            }),
+            new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }),
             order.rollNumber,
             `Rs. ${Number(order.totalAmount).toLocaleString("en-IN")}`,
             order.confirmedBy?.name || "System",
           ]),
-          foot: [
-            [
-              "",
-              "",
-              "",
-              `${confirmedOrders.length} Orders`,
-              `Rs. ${confirmedOrders
-                .reduce((s, o) => s + Number(o.totalAmount), 0)
-                .toLocaleString("en-IN")}`,
-              "",
-            ],
-          ],
-          headStyles: {
-            fillColor: [124, 58, 237],
-            textColor: 255,
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
-          },
-          footStyles: {
-            fillColor: [245, 243, 255],
-            textColor: [31, 41, 55],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
-          },
+          foot: [["", "", "", `${confirmedOrders.length} Orders`, `Rs. ${confirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString("en-IN")}`, ""]],
+          headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
+          footStyles: { fillColor: [245, 243, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
           bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: {
-            0: { cellWidth: 10, halign: "center" },
-            1: { halign: "center" },
-            2: { halign: "center" },
-            3: { halign: "center" },
-            4: { halign: "right" },
-            5: { halign: "center" },
-          },
+          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" }, 4: { halign: "right" }, 5: { halign: "center" } },
           showFoot: "lastPage",
         });
       }
@@ -364,9 +328,7 @@ export default function SalesReportPage() {
         doc.setFontSize(8);
         doc.setTextColor(107, 114, 128);
         doc.text("Consumer Store – Confidential", margin, pageH - 7);
-        doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 7, {
-          align: "right",
-        });
+        doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
       }
 
       const fileName = `Sales_Report_${selectedDate}.pdf`;
@@ -381,7 +343,24 @@ export default function SalesReportPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 relative">
+      {/* ✅ Super Smooth Refresh Indicator (Top Right Corner) */}
+      <AnimatePresence>
+        {refreshing && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-20 right-6 z-50"
+          >
+            <div className="bg-indigo-600 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Updating...
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-bold">Sales Report</h1>
 
@@ -415,7 +394,7 @@ export default function SalesReportPage() {
           {/* Download Button */}
           <button
             onClick={downloadPDF}
-            disabled={downloadingPdf || loading}
+            disabled={downloadingPdf || initialLoading}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg shadow-sm transition-all duration-200 font-medium text-sm"
             title="Download PDF report"
           >
@@ -434,7 +413,8 @@ export default function SalesReportPage() {
         </div>
       </div>
 
-      {loading ? (
+      {/* ✅ Only shows spinner on FIRST LOAD, NOT on realtime updates */}
+      {initialLoading ? (
         <div className="flex justify-center items-center h-64">
           <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
         </div>
@@ -525,7 +505,7 @@ export default function SalesReportPage() {
                       </td>
                       <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">
                         ₹{(salesData.totalIncome || 0).toLocaleString()}
-                      </td>
+                       </td>
                     </tr>
                   </tfoot>
                 )}
@@ -568,23 +548,23 @@ export default function SalesReportPage() {
                         <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                           <td className="px-6 py-4 font-mono text-sm text-gray-900 dark:text-white text-left">
                             #{order._id.slice(-8)}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 text-center">
                             {new Date(order.createdAt).toLocaleString()}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-200">
                             {order.rollNumber}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-right font-semibold text-green-600 dark:text-green-400">
                             ₹{order.totalAmount.toLocaleString()}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-center">
                             <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
                               <FiUserCheck size={12} />
                               {order.confirmedBy?.name || "System"}
                             </span>
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       ))
                     )}
                   </tbody>

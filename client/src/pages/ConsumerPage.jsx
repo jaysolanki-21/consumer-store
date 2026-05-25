@@ -7,6 +7,7 @@ import api from '../services/api';
 import socket from '../services/socket';
 import ProductCard from '../components/ProductCard';
 import CartDrawer from '../components/CartDrawer';
+import PasswordProtection from '../components/PasswordProtection';
 
 import {
   FiShoppingCart,
@@ -15,15 +16,11 @@ import {
   FiPackage,
   FiAlertCircle,
   FiZap,
-  FiTrendingUp,
   FiGrid,
-  FiChevronRight,
-  FiHome,
   FiTag,
   FiCoffee,
   FiSmartphone,
   FiBook,
-  FiHeart,
 } from 'react-icons/fi';
 
 // Icon mapping for categories
@@ -34,56 +31,74 @@ const categoryIcons = {
   'Default': FiTag,
 };
 
-export default function ConsumerPage() {
+function ConsumerPageContent() {
   const dispatch = useDispatch();
 
   const cartItems = useSelector((state) => state.cart.items);
-  const savedRollNumber = useSelector(
-    (state) => state.cart.rollNumber || ''
-  );
+  const savedRollNumber = useSelector((state) => state.cart.rollNumber || '');
 
-  const cartCount = cartItems.reduce(
-    (acc, item) => acc + item.quantity,
-    0
-  );
+  const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [search, setSearch] = useState('');
   const [showCart, setShowCart] = useState(false);
-  const [rollNumber, setRollNumber] = useState(savedRollNumber);
+  const [rollNumber, setRollNumber] = useState(() => {
+    // Load from localStorage first
+    const saved = localStorage.getItem('consumer_roll_number');
+    return saved || savedRollNumber || '';
+  });
   const [isOrderConfirming, setIsOrderConfirming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Save roll number to localStorage whenever it changes
+  useEffect(() => {
+    if (rollNumber) {
+      localStorage.setItem('consumer_roll_number', rollNumber);
+      dispatch(setCustomerInfo({ rollNumber: rollNumber }));
+    }
+  }, [rollNumber, dispatch]);
+
+  // Join socket room for real-time updates
+  useEffect(() => {
+    socket.emit('joinConsumerRoom', rollNumber);
+    return () => {
+      socket.emit('leaveConsumerRoom', rollNumber);
+    };
+  }, [rollNumber]);
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-
       try {
-        await Promise.all([
-          fetchProducts(),
-          fetchCategories(),
-        ]);
+        await Promise.all([fetchProducts(), fetchCategories()]);
+      } catch (err) {
+        console.error('Fetch error:', err);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchData();
 
     socket.on('stockUpdated', fetchProducts);
 
-    return () => socket.off('stockUpdated');
+    return () => {
+      socket.off('stockUpdated', fetchProducts);
+    };
   }, []);
 
   const fetchProducts = async () => {
     try {
       const { data } = await api.get('/products');
-
       setProducts(data.filter((p) => p.visibility === true));
     } catch (err) {
-      toast.error('Failed to load products');
+      console.error('Failed to load products');
+      // Use dummy data if API fails
+      setProducts([
+        { _id: '1', name: 'Sample Product', price: 100, categoryId: { _id: 'cat1', name: 'Food & Beverages' }, stock: 10, visibility: true },
+        { _id: '2', name: 'Another Product', price: 200, categoryId: { _id: 'cat2', name: 'Stationery' }, stock: 20, visibility: true },
+      ]);
     }
   };
 
@@ -92,63 +107,54 @@ export default function ConsumerPage() {
       const { data } = await api.get('/categories');
       setCategories(data);
     } catch (err) {
-      toast.error('Failed to load categories');
+      console.error('Failed to load categories');
+      setCategories([
+        { _id: 'cat1', name: 'Food & Beverages' },
+        { _id: 'cat2', name: 'Stationery' },
+        { _id: 'cat3', name: 'Electronics' },
+      ]);
     }
   };
 
   const handleRollNumberChange = (val) => {
     const formatted = val.trim().toUpperCase();
-
     setRollNumber(formatted);
-
-    dispatch(
-      setCustomerInfo({
-        rollNumber: formatted,
-      })
-    );
   };
 
   const handlePlaceOrder = async () => {
     if (!rollNumber) {
       toast.error('Please enter Roll Number');
-
-      const input = document.getElementById(
-        'session-roll-input'
-      );
-
+      const input = document.getElementById('session-roll-input');
       input?.focus();
       input?.classList.add('animate-shake');
+      setTimeout(() => input?.classList.remove('animate-shake'), 500);
+      return;
+    }
 
-      setTimeout(() => {
-        input?.classList.remove('animate-shake');
-      }, 500);
-
+    if (cartItems.length === 0) {
+      toast.error('Cart is empty');
       return;
     }
 
     try {
       setIsOrderConfirming(true);
-
       const orderItems = cartItems.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
         price: item.price,
       }));
 
-      await api.post('/orders', {
+      const response = await api.post('/orders', {
         rollNumber,
         items: orderItems,
       });
 
-      toast.success('Order placed successfully');
-
+      toast.success('Order placed successfully! 🎉');
       dispatch(clearCart());
-
       setShowCart(false);
     } catch (err) {
-      toast.error(
-        err.response?.data?.message || 'Order failed'
-      );
+      console.error('Order error:', err);
+      toast.error(err.response?.data?.message || 'Order failed');
     } finally {
       setIsOrderConfirming(false);
     }
@@ -156,51 +162,33 @@ export default function ConsumerPage() {
 
   const categoryCounts = useMemo(() => {
     const counts = {};
-
     products.forEach((p) => {
       const catId = p.categoryId?._id;
-
-      if (catId) {
-        counts[catId] = (counts[catId] || 0) + 1;
-      }
+      if (catId) counts[catId] = (counts[catId] || 0) + 1;
     });
-
     return counts;
   }, [products]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(
       (p) =>
-        p.name
-          .toLowerCase()
-          .includes(search.toLowerCase()) &&
-        (!selectedCategory ||
-          p.categoryId?._id === selectedCategory)
+        p.name.toLowerCase().includes(search.toLowerCase()) &&
+        (!selectedCategory || p.categoryId?._id === selectedCategory)
     );
   }, [products, search, selectedCategory]);
 
   const productsByCategory = useMemo(() => {
     if (selectedCategory || search) return null;
-
     const grouped = {};
-
     categories.forEach((cat) => {
-      const catProducts = products.filter(
-        (p) => p.categoryId?._id === cat._id
-      );
-
+      const catProducts = products.filter((p) => p.categoryId?._id === cat._id);
       if (catProducts.length) {
-        grouped[cat._id] = {
-          category: cat,
-          products: catProducts,
-        };
+        grouped[cat._id] = { category: cat, products: catProducts };
       }
     });
-
     return grouped;
   }, [products, categories, selectedCategory, search]);
 
-  // Get icon for category
   const getCategoryIcon = (categoryName) => {
     const Icon = categoryIcons[categoryName] || categoryIcons.Default;
     return <Icon className="w-4 h-4" />;
@@ -213,7 +201,6 @@ export default function ConsumerPage() {
       <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            {/* Logo - Mobile Optimized */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -232,7 +219,6 @@ export default function ConsumerPage() {
               </div>
             </motion.div>
 
-            {/* Roll Number Input - Responsive */}
             <div className="flex-1 max-w-xs md:max-w-md relative">
               <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input
@@ -245,11 +231,17 @@ export default function ConsumerPage() {
               />
             </div>
 
-            {/* Cart Button */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
-              onClick={() => setShowCart(true)}
+              onClick={() => {
+                if (!rollNumber) {
+                  toast.error('Please enter roll number first');
+                  document.getElementById('session-roll-input')?.focus();
+                  return;
+                }
+                setShowCart(true);
+              }}
               className="relative h-10 md:h-11 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
             >
               <FiShoppingCart className="text-base" />
@@ -268,8 +260,20 @@ export default function ConsumerPage() {
         </div>
       </nav>
 
+      {/* Roll Number Status Bar */}
+      {rollNumber && (
+        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 py-2 px-4">
+          <div className="container mx-auto flex items-center justify-center gap-2 text-sm">
+            <FiUser className="text-green-600 dark:text-green-400" />
+            <span className="text-green-700 dark:text-green-300 font-medium">
+              Current: <strong className="font-mono">{rollNumber}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+
       <main className="container mx-auto px-4 py-6 pb-24">
-        {/* Search Bar - Enhanced */}
+        {/* Search Bar */}
         <div className="relative max-w-2xl mx-auto mb-8">
           <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
           <input
@@ -281,64 +285,47 @@ export default function ConsumerPage() {
           />
         </div>
 
-        {/* Categories - Horizontal Scroll with Better Mobile UX */}
-       <div className="mb-8">
-  <div className="flex flex-wrap gap-2">
-    <button
-      onClick={() => setSelectedCategory('')}
-      className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-        !selectedCategory
-          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-      }`}
-    >
-      <FiGrid className="w-4 h-4" />
-      All
-      <span
-        className={`text-xs px-2 py-0.5 rounded-full ${
-          !selectedCategory
-            ? 'bg-white/20 text-white'
-            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-        }`}
-      >
-        {products.length}
-      </span>
-    </button>
-
-    {categories.map((cat) => {
-      const Icon = getCategoryIcon(cat.name);
-      const count = categoryCounts[cat._id] || 0;
-
-      return (
-        <button
-          key={cat._id}
-          onClick={() => setSelectedCategory(cat._id)}
-          className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-            selectedCategory === cat._id
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-          }`}
-        >
-          {Icon}
-          <span className="hidden xs:inline">{cat.name}</span>
-          <span className="xs:hidden">
-            {cat.name.substring(0, 8)}
-          </span>
-
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
-              selectedCategory === cat._id
-                ? 'bg-white/20 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-            }`}
-          >
-            {count}
-          </span>
-        </button>
-      );
-    })}
-  </div>
-</div>
+        {/* Categories */}
+        <div className="mb-8">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedCategory('')}
+              className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+                !selectedCategory
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              <FiGrid className="w-4 h-4" />
+              All
+              <span className={`text-xs px-2 py-0.5 rounded-full ${!selectedCategory ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                {products.length}
+              </span>
+            </button>
+            {categories.map((cat) => {
+              const Icon = getCategoryIcon(cat.name);
+              const count = categoryCounts[cat._id] || 0;
+              return (
+                <button
+                  key={cat._id}
+                  onClick={() => setSelectedCategory(cat._id)}
+                  className={`group px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
+                    selectedCategory === cat._id
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {Icon}
+                  <span className="hidden xs:inline">{cat.name}</span>
+                  <span className="xs:hidden">{cat.name.substring(0, 8)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCategory === cat._id ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Loading State */}
         {isLoading ? (
@@ -348,7 +335,6 @@ export default function ConsumerPage() {
           </div>
         ) : (
           <>
-            {/* Category Group View */}
             {!selectedCategory && !search && productsByCategory ? (
               <div className="space-y-12">
                 {Object.values(productsByCategory).map(({ category, products: catProducts }) => (
@@ -367,9 +353,7 @@ export default function ConsumerPage() {
                           </p>
                         </div>
                       </div>
-                      {/* View All removed as requested */}
                     </div>
-
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                       {catProducts.map((product) => (
                         <ProductCard key={product._id} product={product} />
@@ -379,7 +363,6 @@ export default function ConsumerPage() {
                 ))}
               </div>
             ) : (
-              /* Filtered Products Grid */
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
@@ -429,55 +412,30 @@ export default function ConsumerPage() {
         isProcessing={isOrderConfirming}
       />
 
-      {/* Roll Number Warning - Perfectly Centered */}
+      {/* Roll Number Warning */}
       <AnimatePresence>
         {!rollNumber && rollNumber !== undefined && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{
-              type: "spring",
-              stiffness: 500,
-              damping: 30,
-            }}
             className="fixed inset-x-0 bottom-6 z-50 flex justify-center items-center px-4"
           >
             <div className="w-full max-w-md">
               <div className="rounded-2xl bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-xl text-white p-4 shadow-2xl border border-gray-700/50">
                 <div className="flex items-center gap-3">
-                  
-                  {/* Icon */}
                   <div className="w-11 h-11 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
                     <FiAlertCircle className="text-amber-400 text-xl" />
                   </div>
-
-                  {/* Text */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm">
-                      Roll Number Required
-                    </p>
-
-                    <p className="text-xs text-gray-400 leading-relaxed">
-                      Please enter your roll number before checkout
-                    </p>
+                    <p className="font-bold text-sm">Roll Number Required</p>
+                    <p className="text-xs text-gray-400 leading-relaxed">Please enter your roll number before checkout</p>
                   </div>
-
-                  {/* Button */}
                   <button
                     onClick={() => {
-                      const input = document.getElementById(
-                        'session-roll-input'
-                      );
-
-                      input?.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                      });
-
-                      setTimeout(() => {
-                        input?.focus();
-                      }, 400);
+                      const input = document.getElementById('session-roll-input');
+                      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      setTimeout(() => input?.focus(), 400);
                     }}
                     className="h-10 px-4 rounded-xl bg-white text-gray-900 text-xs font-bold hover:bg-gray-100 transition-all duration-200 active:scale-95 whitespace-nowrap"
                   >
@@ -491,36 +449,21 @@ export default function ConsumerPage() {
       </AnimatePresence>
 
       <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
-        }
-        
-        .animate-shake {
-          animation: shake 0.2s ease-in-out 0s 2;
-        }
-        
-        @media (min-width: 480px) {
-          .xs\\:block {
-            display: block;
-          }
-          .xs\\:inline {
-            display: inline;
-          }
-          .xs\\:hidden {
-            display: none;
-          }
-        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
+        @media (min-width: 480px) { .xs\\:block { display: block; } .xs\\:inline { display: inline; } .xs\\:hidden { display: none; } }
       `}</style>
     </div>
+  );
+}
+
+// Main export with password protection wrapper
+export default function ConsumerPage() {
+  return (
+    <PasswordProtection pageName="APC Consumer Store">
+      <ConsumerPageContent />
+    </PasswordProtection>
   );
 }

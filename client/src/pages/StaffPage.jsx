@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { setOrders } from '../redux/slices/orderSlice';
+import { setOrders, updateOrder, addNewOrder } from '../redux/slices/orderSlice';
 import api from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 
@@ -30,10 +30,17 @@ export default function StaffPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');
   const [confirmingId, setConfirmingId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filterDate, setFilterDate] = useState(() => getTodayLocal());
 
   const socket = useSocket();
+  const ordersRef = useRef(orders);
+  
+  // Keep ref updated
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   function getTodayLocal() {
     const now = new Date();
@@ -43,21 +50,29 @@ export default function StaffPage() {
     return `${year}-${month}-${day}`;
   }
 
-  const addDays = (dateStr, days) => {
+  const addDays = useCallback((dateStr, days) => {
     const date = new Date(dateStr);
     date.setDate(date.getDate() + days);
     return date.toISOString().split('T')[0];
-  };
+  }, []);
 
+  // Initial fetch
   useEffect(() => {
     fetchOrders();
   }, [filterDate]);
 
+  // ✅ STABLE SOCKET LISTENERS - No orders dependency
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewOrder = () => {
-      console.log('🛒 New order received via socket');
+    // Use ref to avoid stale closure
+    const handleNewOrder = (newOrder) => {
+      console.log('🛒 New order received via socket', newOrder);
+      
+      // Optimistic UI - directly add to orders using ref
+      const currentOrders = ordersRef.current;
+      const updatedOrders = [newOrder, ...currentOrders];
+      dispatch(setOrders(updatedOrders));
       
       toast.success('🛒 New Order Received!', {
         duration: 5000,
@@ -71,28 +86,48 @@ export default function StaffPage() {
           borderRadius: '12px',
         },
       });
-
-      fetchOrders();
-      
-      setFilterDate(getTodayLocal());
     };
 
-    const handleOrderUpdates = () => {
-      fetchOrders();
+    const handleOrderConfirmed = (confirmedOrder) => {
+      console.log('✅ Order confirmed via socket', confirmedOrder);
+      
+      // Update existing order in state using ref
+      const currentOrders = ordersRef.current;
+      const updatedOrders = currentOrders.map((order) =>
+        order._id === confirmedOrder._id ? confirmedOrder : order
+      );
+      dispatch(setOrders(updatedOrders));
+      
+      toast.success(`Order #${confirmedOrder._id.slice(-6)} confirmed!`, {
+        duration: 3000,
+        icon: '✅',
+      });
+    };
+
+    const handleOrderCancelled = (cancelledOrder) => {
+      console.log('❌ Order cancelled via socket', cancelledOrder);
+      
+      const currentOrders = ordersRef.current;
+      const updatedOrders = currentOrders.map((order) =>
+        order._id === cancelledOrder._id ? cancelledOrder : order
+      );
+      dispatch(setOrders(updatedOrders));
+      
+      toast.error(`Order #${cancelledOrder._id.slice(-6)} cancelled`);
     };
 
     socket.on('newOrder', handleNewOrder);
-    socket.on('orderConfirmed', handleOrderUpdates);
-    socket.on('orderCancelled', handleOrderUpdates);
+    socket.on('orderConfirmed', handleOrderConfirmed);
+    socket.on('orderCancelled', handleOrderCancelled);
 
     return () => {
       socket.off('newOrder', handleNewOrder);
-      socket.off('orderConfirmed', handleOrderUpdates);
-      socket.off('orderCancelled', handleOrderUpdates);
+      socket.off('orderConfirmed', handleOrderConfirmed);
+      socket.off('orderCancelled', handleOrderCancelled);
     };
-  }, [socket]);
+  }, [socket, dispatch]); // ✅ NO orders dependency here!
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setRefreshing(true);
       const { data } = await api.get('/orders');
@@ -102,34 +137,69 @@ export default function StaffPage() {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [dispatch]);
 
-  const confirmOrder = async (orderId) => {
+  // ✅ OPTIMISTIC UI UPDATE - Instant confirmation without flicker
+  const confirmOrder = useCallback(async (orderId) => {
     setConfirmingId(orderId);
+
+    // Backup old orders for rollback
+    const previousOrders = [...ordersRef.current];
+
+    // Optimistic UI update - instantly change status to Confirmed
+    const updatedOrders = ordersRef.current.map((order) =>
+      order._id === orderId
+        ? { ...order, status: 'Confirmed' }
+        : order
+    );
+    dispatch(setOrders(updatedOrders));
+
     try {
       await api.put(`/orders/${orderId}/confirm`);
-      toast.success(`Order #${orderId.slice(-6)} confirmed`);
-      fetchOrders();
+      toast.success(`Order #${orderId.slice(-6)} confirmed`, {
+        icon: '✅',
+        duration: 2000
+      });
     } catch (error) {
+      // Rollback if API fails
+      dispatch(setOrders(previousOrders));
       toast.error('Failed to confirm order');
     } finally {
       setConfirmingId(null);
     }
-  };
+  }, [dispatch]);
 
-  const cancelOrder = async (orderId) => {
+  // ✅ OPTIMISTIC UI UPDATE for cancel
+  const cancelOrder = useCallback(async (orderId) => {
     if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    
+    setCancellingId(orderId);
+
+    // Backup old orders
+    const previousOrders = [...ordersRef.current];
+
+    // Optimistic UI update - instantly change status to Cancelled
+    const updatedOrders = ordersRef.current.map((order) =>
+      order._id === orderId
+        ? { ...order, status: 'Cancelled' }
+        : order
+    );
+    dispatch(setOrders(updatedOrders));
+
     try {
       await api.put(`/orders/${orderId}/cancel`);
       toast.success('Order cancelled successfully');
-      fetchOrders();
     } catch (error) {
+      // Rollback if API fails
+      dispatch(setOrders(previousOrders));
       toast.error('Failed to cancel order');
+    } finally {
+      setCancellingId(null);
     }
-  };
+  }, [dispatch]);
 
-  const goPrevDay = () => setFilterDate(addDays(filterDate, -1));
-  const goNextDay = () => {
+  const goPrevDay = useCallback(() => setFilterDate(addDays(filterDate, -1)), [addDays, filterDate]);
+  const goNextDay = useCallback(() => {
     const today = getTodayLocal();
     const next = addDays(filterDate, 1);
     if (next <= today) {
@@ -137,34 +207,41 @@ export default function StaffPage() {
     } else {
       toast.error('Cannot go beyond today');
     }
-  };
+  }, [addDays, filterDate]);
 
-  const dateFilteredOrders = orders.filter((order) => {
-    const orderDateObj = new Date(order.createdAt);
-    const year = orderDateObj.getFullYear();
-    const month = String(orderDateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(orderDateObj.getDate()).padStart(2, '0');
-    const orderLocalDate = `${year}-${month}-${day}`;
-    
-    return orderLocalDate === filterDate;
-  });
+  // ✅ MEMOIZED FILTERS - Prevent unnecessary recalculations
+  const dateFilteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const orderDateObj = new Date(order.createdAt);
+      const year = orderDateObj.getFullYear();
+      const month = String(orderDateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(orderDateObj.getDate()).padStart(2, '0');
+      const orderLocalDate = `${year}-${month}-${day}`;
+      return orderLocalDate === filterDate;
+    });
+  }, [orders, filterDate]);
 
-  const filteredOrders = dateFilteredOrders.filter(
-    (o) =>
-      o.rollNumber.toLowerCase().includes(filter.toLowerCase()) ||
-      o._id.toLowerCase().includes(filter.toLowerCase())
+  const filteredOrders = useMemo(() => {
+    return dateFilteredOrders.filter(
+      (o) =>
+        o.rollNumber.toLowerCase().includes(filter.toLowerCase()) ||
+        o._id.toLowerCase().includes(filter.toLowerCase())
+    );
+  }, [dateFilteredOrders, filter]);
+
+  const pendingOrders = useMemo(() => filteredOrders.filter((o) => o.status === 'Pending'), [filteredOrders]);
+  const confirmedOrders = useMemo(() => filteredOrders.filter((o) => o.status === 'Confirmed'), [filteredOrders]);
+  const cancelledOrders = useMemo(() => filteredOrders.filter((o) => o.status === 'Cancelled'), [filteredOrders]);
+
+  const totalRevenue = useMemo(() => 
+    confirmedOrders.reduce((acc, order) => acc + order.totalAmount, 0),
+    [confirmedOrders]
   );
 
-  const pendingOrders = filteredOrders.filter((o) => o.status === 'Pending');
-  const confirmedOrders = filteredOrders.filter((o) => o.status === 'Confirmed');
-  const cancelledOrders = filteredOrders.filter((o) => o.status === 'Cancelled');
-
-  const totalRevenue = confirmedOrders.reduce(
-    (acc, order) => acc + order.totalAmount,
-    0
+  const activeOrdersCount = useMemo(() => 
+    pendingOrders.length + confirmedOrders.length,
+    [pendingOrders.length, confirmedOrders.length]
   );
-
-  const activeOrdersCount = pendingOrders.length + confirmedOrders.length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] p-4 sm:p-6 font-sans antialiased">
@@ -228,69 +305,56 @@ export default function StaffPage() {
       </div>
 
       {/* Stats Cards */}
-      {/* 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-          <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-amber-100 text-sm font-medium">Pending Orders</p>
-                <p className="text-3xl font-bold mt-1">{pendingOrders.length}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiClock className="text-2xl text-white" />
-              </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-amber-100 text-xs font-medium">Pending Orders</p>
+              <p className="text-2xl font-bold mt-1">{pendingOrders.length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiClock className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-          <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-emerald-100 text-sm font-medium">Completed Orders</p>
-                <p className="text-3xl font-bold mt-1">{confirmedOrders.length}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiCheckCircle className="text-2xl text-white" />
-              </div>
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-emerald-100 text-xs font-medium">Completed Orders</p>
+              <p className="text-2xl font-bold mt-1">{confirmedOrders.length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiCheckCircle className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-          <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-indigo-100 text-sm font-medium">Revenue (Today)</p>
-                <p className="text-2xl font-bold mt-1">₹{totalRevenue.toLocaleString()}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiTrendingUp className="text-2xl text-white" />
-              </div>
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-indigo-100 text-xs font-medium">Revenue (Today)</p>
+              <p className="text-xl font-bold mt-1">₹{totalRevenue.toLocaleString()}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiTrendingUp className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-          <div className="absolute -right-8 -top-8 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-rose-100 text-sm font-medium">Active Orders</p>
-                <p className="text-3xl font-bold mt-1">{activeOrdersCount}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiShoppingBag className="text-2xl text-white" />
-              </div>
+        <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl p-4 text-white shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-rose-100 text-xs font-medium">Active Orders</p>
+              <p className="text-2xl font-bold mt-1">{activeOrdersCount}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiShoppingBag className="text-xl text-white" />
             </div>
           </div>
         </div>
       </div>
-      */}
+
       {/* Search + Tabs */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -332,14 +396,14 @@ export default function StaffPage() {
 
       {/* Orders List */}
       <div className="space-y-5">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {(activeTab === 'pending' ? pendingOrders : confirmedOrders).map((order) => (
             <motion.div
               key={order._id}
-              layout
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
               className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden"
             >
               {/* Order Header */}
