@@ -40,6 +40,8 @@ import {
   FiCalendar,
   FiChevronLeft,
   FiChevronRight,
+  FiRefreshCw,
+  FiAlertCircle,
 } from 'react-icons/fi';
 
 function getTodayLocal() {
@@ -64,13 +66,38 @@ function normalizeOrder(order) {
   };
 }
 
+function getTimeElapsed(createdAt) {
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffMs = now - created;
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  return `${diffHours}h ${diffMins % 60}m ago`;
+}
+
 // ✅ OPTIMIZED ORDER CARD - Only rerenders when order data changes
 const OrderCard = React.memo(({ order, onConfirm }) => {
   const confirmingRef = useRef(false);
   const [, forceUpdate] = useState({});
+  const [timeElapsed, setTimeElapsed] = useState(getTimeElapsed(order.createdAt));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeElapsed(getTimeElapsed(order.createdAt));
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [order.createdAt]);
 
   const handleConfirm = useCallback(async () => {
     if (confirmingRef.current) return;
+
+    const confirmed = window.confirm(
+      `Confirm order #${order._id.slice(-6)} for ${order.rollNumber}?\n\nTotal: ₹${order.totalAmount}`
+    );
+    if (!confirmed) return;
 
     confirmingRef.current = true;
     forceUpdate({});
@@ -81,7 +108,10 @@ const OrderCard = React.memo(({ order, onConfirm }) => {
       confirmingRef.current = false;
       forceUpdate({});
     }
-  }, [onConfirm, order._id]);
+  }, [onConfirm, order._id, order.rollNumber, order.totalAmount]);
+
+  const isPending = order.status === 'Pending';
+  const isExpedited = isPending && parseInt(getTimeElapsed(order.createdAt)) > 15;
 
   return (
     <motion.div
@@ -90,7 +120,11 @@ const OrderCard = React.memo(({ order, onConfirm }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -10 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden"
+      className={`bg-white dark:bg-slate-900 border rounded-3xl shadow-sm overflow-hidden transition-all ${
+        isExpedited
+          ? 'border-red-200 dark:border-red-900/50 ring-2 ring-red-100 dark:ring-red-900/30'
+          : 'border-gray-200 dark:border-slate-800'
+      }`}
     >
       {/* HEADER */}
       <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -109,6 +143,17 @@ const OrderCard = React.memo(({ order, onConfirm }) => {
             <FiClock className="text-sm" />
             {order.formattedTime}
           </div>
+
+          {isPending && (
+            <div className={`text-xs font-semibold flex items-center gap-1 px-2 py-1 rounded-lg ${
+              isExpedited
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+            }`}>
+              {isExpedited && <FiAlertCircle className="text-sm" />}
+              {timeElapsed}
+            </div>
+          )}
         </div>
 
         <div>
@@ -221,6 +266,9 @@ export default function StaffPage() {
   const [filter, setFilter] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
   const [filterDate, setFilterDate] = useState(getTodayLocal());
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [error, setError] = useState(null);
+  const retryCountRef = useRef(0);
 
   // ✅ Memoized selectors - no unnecessary rerenders
   const dateFilteredOrders = useSelector(
@@ -258,9 +306,18 @@ export default function StaffPage() {
       });
       const normalized = data.map(normalizeOrder);
       dispatch(setOrders(normalized));
+      setError(null);
+      retryCountRef.current = 0;
     } catch (error) {
       console.error(error);
-      toast.error('Failed to load orders');
+      const message = error.response?.status === 404 ? 'No orders found' : 'Failed to load orders';
+      setError(message);
+
+      // Retry logic with exponential backoff
+      if (retryCountRef.current < 3) {
+        retryCountRef.current++;
+        setTimeout(fetchOrders, Math.pow(2, retryCountRef.current) * 1000);
+      }
     } finally {
       dispatch(setLoading(false));
     }
@@ -269,6 +326,33 @@ export default function StaffPage() {
   useEffect(() => {
     fetchOrders();
   }, [filterDate, fetchOrders]);
+
+  // ✅ Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchOrders]);
+
+  // ✅ Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        fetchOrders();
+        toast.success('Orders refreshed!');
+      } else if (e.key === '/') {
+        e.preventDefault();
+        document.querySelector('input[type="text"]')?.focus();
+      } else if (e.key === 't') {
+        const tab = e.shiftKey ? 'confirmed' : 'pending';
+        setActiveTab(tab);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fetchOrders]);
 
   const confirmOrder = useCallback(async (orderId) => {
     try {
@@ -310,6 +394,26 @@ export default function StaffPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] p-4 sm:p-6">
+      {/* ERROR BANNER */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <FiAlertCircle className="text-red-600 dark:text-red-400 text-lg" />
+            <span className="text-red-700 dark:text-red-300 font-medium">{error}</span>
+          </div>
+          <button
+            onClick={fetchOrders}
+            className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+          >
+            Retry
+          </button>
+        </motion.div>
+      )}
+
       {/* HEADER */}
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 mb-8">
         <div>
@@ -321,21 +425,43 @@ export default function StaffPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-4 py-2 rounded-xl shadow-sm">
-          <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
-            <FiChevronLeft className="text-indigo-500" />
+        <div className="flex items-center gap-3">
+          {/* AUTO-REFRESH TOGGLE */}
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            title={autoRefresh ? 'Click to disable auto-refresh' : 'Click to enable auto-refresh (Ctrl+R)'}
+            className={`p-2 rounded-lg transition flex items-center gap-1 text-xs font-semibold ${
+              autoRefresh
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-400'
+            }`}
+          >
+            <motion.div
+              animate={{ rotate: autoRefresh ? 360 : 0 }}
+              transition={{ duration: 2, repeat: autoRefresh ? Infinity : 0 }}
+            >
+              <FiRefreshCw className="text-sm" />
+            </motion.div>
+            {autoRefresh ? 'Auto' : 'Manual'}
           </button>
-          <FiCalendar className="text-indigo-500" />
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            max={getTodayLocal()}
-            className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
-          />
-          <button onClick={goNextDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
-            <FiChevronRight className="text-indigo-500" />
-          </button>
+
+          {/* DATE PICKER */}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-4 py-2 rounded-xl shadow-sm">
+            <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+              <FiChevronLeft className="text-indigo-500" />
+            </button>
+            <FiCalendar className="text-indigo-500" />
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              max={getTodayLocal()}
+              className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
+            />
+            <button onClick={goNextDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+              <FiChevronRight className="text-indigo-500" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -444,7 +570,7 @@ export default function StaffPage() {
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
             <input
               type="text"
-              placeholder="Search by Roll Number or Order ID..."
+              placeholder="Search by Roll Number or Order ID (press / to focus)..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="w-full h-12 pl-12 pr-4 rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium dark:text-white"
@@ -454,6 +580,7 @@ export default function StaffPage() {
           <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-2xl">
             <button
               onClick={() => setActiveTab('pending')}
+              title="Press T to toggle"
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'pending'
                   ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400'
@@ -464,6 +591,7 @@ export default function StaffPage() {
             </button>
             <button
               onClick={() => setActiveTab('confirmed')}
+              title="Press Shift+T to toggle"
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'confirmed'
                   ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400'
@@ -474,6 +602,13 @@ export default function StaffPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* KEYBOARD SHORTCUTS HINT */}
+      <div className="mb-4 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
+        <span>💡 <kbd className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">Ctrl+R</kbd> Refresh</span>
+        <span>💡 <kbd className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">/</kbd> Search</span>
+        <span>💡 <kbd className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">T</kbd> Pending | <kbd className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded">Shift+T</kbd> Completed</span>
       </div>
 
       {/* ORDER LIST */}
