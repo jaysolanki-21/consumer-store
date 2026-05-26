@@ -1,8 +1,10 @@
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
-  orders: [],
-  pendingCount: 0
+  byId: {},
+  allIds: [],
+  loading: true,
+  lastUpdate: null,
 };
 
 const orderSlice = createSlice({
@@ -10,96 +12,83 @@ const orderSlice = createSlice({
   initialState,
   reducers: {
     setOrders: (state, action) => {
-      state.orders = action.payload;
-      state.pendingCount = action.payload.filter(o => o.status === 'Pending').length;
+      state.byId = {};
+      state.allIds = [];
+
+      action.payload.forEach(order => {
+        state.byId[order._id] = order;
+        state.allIds.push(order._id);
+      });
+
+      state.loading = false;
+      state.lastUpdate = Date.now();
     },
-    
+
     addNewOrder: (state, action) => {
-      state.orders.unshift(action.payload);
-      if (action.payload.status === 'Pending') {
-        state.pendingCount += 1;
+      const order = action.payload;
+      if (!state.byId[order._id]) {
+        state.byId[order._id] = order;
+        state.allIds.unshift(order._id);
+        state.lastUpdate = Date.now();
       }
     },
-    
-    // ✅ CRITICAL FIX: Use Object.assign to preserve object reference
+
     updateOrder: (state, action) => {
       const { id, changes } = action.payload;
-      
-      const index = state.orders.findIndex((o) => o._id === id);
-      
-      if (index !== -1) {
-        const oldStatus = state.orders[index].status;
-        const newStatus = changes.status;
-        
-        // Update pending count if status changed
-        if (oldStatus === 'Pending' && newStatus !== 'Pending') {
-          state.pendingCount -= 1;
-        } else if (oldStatus !== 'Pending' && newStatus === 'Pending') {
-          state.pendingCount += 1;
-        }
-        
-        // ✅ CRITICAL: Object.assign preserves object reference
-        // This prevents Framer Motion from re-animating
-        Object.assign(state.orders[index], changes);
+
+      if (state.byId[id]) {
+        Object.assign(state.byId[id], changes);
+        state.lastUpdate = Date.now();
       }
     },
-    
+
     cancelOrder: (state, action) => {
-      const index = state.orders.findIndex(o => o._id === action.payload._id);
-      if (index !== -1) {
-        const oldStatus = state.orders[index].status;
-        const newStatus = action.payload.status;
-        
-        if (oldStatus === 'Pending' && newStatus === 'Cancelled') {
-          state.pendingCount -= 1;
-        }
-        
-        Object.assign(state.orders[index], { status: newStatus });
+      const orderId = action.payload._id;
+      if (state.byId[orderId]) {
+        Object.assign(state.byId[orderId], { status: action.payload.status });
+        state.lastUpdate = Date.now();
       }
     },
-    
+
     updateOrderStatus: (state, action) => {
       const { id, status } = action.payload;
-      const index = state.orders.findIndex(o => o._id === id);
-      if (index !== -1) {
-        const oldStatus = state.orders[index].status;
-        
-        if (oldStatus === 'Pending' && status !== 'Pending') {
-          state.pendingCount -= 1;
-        } else if (oldStatus !== 'Pending' && status === 'Pending') {
-          state.pendingCount += 1;
-        }
-        
-        Object.assign(state.orders[index], { status });
+      if (state.byId[id]) {
+        Object.assign(state.byId[id], { status });
+        state.lastUpdate = Date.now();
       }
     },
-    
+
     removeOrder: (state, action) => {
       const orderId = action.payload;
-      const index = state.orders.findIndex(o => o._id === orderId);
-      if (index !== -1) {
-        if (state.orders[index].status === 'Pending') {
-          state.pendingCount -= 1;
-        }
-        state.orders.splice(index, 1);
+      if (state.byId[orderId]) {
+        delete state.byId[orderId];
+        state.allIds = state.allIds.filter(id => id !== orderId);
+        state.lastUpdate = Date.now();
       }
     },
-    
+
     clearOrders: (state) => {
-      state.orders = [];
-      state.pendingCount = 0;
+      state.byId = {};
+      state.allIds = [];
+      state.loading = false;
+      state.lastUpdate = Date.now();
+    },
+
+    setLoading: (state, action) => {
+      state.loading = action.payload;
     }
   }
 });
 
-export const { 
-  setOrders, 
-  addNewOrder, 
-  updateOrder, 
+export const {
+  setOrders,
+  addNewOrder,
+  updateOrder,
   cancelOrder,
   updateOrderStatus,
   removeOrder,
-  clearOrders
+  clearOrders,
+  setLoading
 } = orderSlice.actions;
 
 export default orderSlice.reducer;

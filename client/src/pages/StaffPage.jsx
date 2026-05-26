@@ -6,15 +6,24 @@ import React, {
   useMemo,
 } from 'react';
 
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-
+import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import {
   setOrders,
   updateOrder,
-  addNewOrder,
+  setLoading,
 } from '../redux/slices/orderSlice';
+
+import {
+  selectLoadingState,
+  selectFilteredOrdersByDate,
+  selectFilteredOrdersBySearch,
+  selectPendingCount,
+  selectConfirmedCount,
+  selectTotalRevenue,
+} from '../redux/selectors/orderSelectors';
 
 import api from '../services/api';
 import { useSocket } from '../hooks/useSocket';
@@ -33,10 +42,6 @@ import {
   FiChevronRight,
 } from 'react-icons/fi';
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
 function getTodayLocal() {
   const now = new Date();
   const year = now.getFullYear();
@@ -52,8 +57,6 @@ function formatTime(date) {
   });
 }
 
-// FIX 1: normalizeOrder is ONLY called once per order (on fetch / on socket new-order).
-// We never call it again on existing orders, so React.memo gets stable object references.
 function normalizeOrder(order) {
   return {
     ...order,
@@ -61,325 +64,222 @@ function normalizeOrder(order) {
   };
 }
 
-/* =========================================================
-   ORDER CARD
-   FIX 2: Wrap onConfirm in useCallback at the parent level (stable ref),
-   and use a local confirming ref so the card never re-renders just because
-   the parent's `confirmOrder` identity changed.
-========================================================= */
+// ✅ OPTIMIZED ORDER CARD - Only rerenders when order data changes
+const OrderCard = React.memo(({ order, onConfirm }) => {
+  const confirmingRef = useRef(false);
+  const [, forceUpdate] = useState({});
 
-const OrderCard = React.memo(
-  ({ order, onConfirm }) => {
-    // Use a ref for loading so button state doesn't cause the whole card to re-render
-    const [confirming, setConfirming] = useState(false);
+  const handleConfirm = useCallback(async () => {
+    if (confirmingRef.current) return;
 
-    const handleConfirm = useCallback(async () => {
-      if (confirming) return;
-      setConfirming(true);
-      try {
-        await onConfirm(order._id);
-      } finally {
-        setConfirming(false);
-      }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [confirming, onConfirm, order._id]);
+    confirmingRef.current = true;
+    forceUpdate({});
 
-    return (
-      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
-        {/* HEADER */}
-        <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-semibold flex items-center gap-1">
-              <FiHash className="text-sm" />
-              #{order._id.slice(-6)}
-            </div>
+    try {
+      await onConfirm(order._id);
+    } finally {
+      confirmingRef.current = false;
+      forceUpdate({});
+    }
+  }, [onConfirm, order._id]);
 
-            <div className="px-3 py-1 rounded-xl bg-gray-100 dark:bg-slate-800 text-sm font-medium flex items-center gap-2 dark:text-gray-300">
-              <FiUser className="text-sm" />
-              {order.rollNumber}
-            </div>
-
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
-              <FiClock className="text-sm" />
-              {order.formattedTime}
-            </div>
+  return (
+    <motion.div
+      layoutId={`order-${order._id}`}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden"
+    >
+      {/* HEADER */}
+      <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-semibold flex items-center gap-1">
+            <FiHash className="text-sm" />
+            #{order._id.slice(-6)}
           </div>
 
-          <div>
-            {order.status === 'Pending' ? (
-              <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
-                Pending
-              </span>
-            ) : (
-              <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
-                Completed
-              </span>
-            )}
+          <div className="px-3 py-1 rounded-xl bg-gray-100 dark:bg-slate-800 text-sm font-medium flex items-center gap-2 dark:text-gray-300">
+            <FiUser className="text-sm" />
+            {order.rollNumber}
+          </div>
+
+          <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+            <FiClock className="text-sm" />
+            {order.formattedTime}
           </div>
         </div>
 
-        {/* BODY */}
-        <div className="p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-xs uppercase text-gray-400 font-semibold border-b border-gray-100 dark:border-slate-800">
-                  <th className="pb-3">Product</th>
-                  <th className="pb-3 text-center">Qty</th>
-                  <th className="pb-3 text-right">Price</th>
-                  <th className="pb-3 text-right">Total</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {order.items.map((item, idx) => (
-                  <tr
-                    key={idx}
-                    className="border-b border-gray-50 dark:border-slate-800/50"
-                  >
-                    <td className="py-4 font-medium text-gray-800 dark:text-gray-200">
-                      {item.productId?.name || 'Unknown'}
-                    </td>
-
-                    <td className="py-4 text-center">
-                      <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold dark:text-gray-200">
-                        {item.quantity}
-                      </span>
-                    </td>
-
-                    <td className="py-4 text-right text-gray-500 dark:text-gray-400 font-medium">
-                      ₹{item.price}
-                    </td>
-
-                    <td className="py-4 text-right font-semibold text-gray-800 dark:text-gray-200">
-                      ₹{item.quantity * item.price}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* FOOTER */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
-            <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Total Bill Amount
-              </p>
-
-              <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-                ₹{order.totalAmount}
-              </h2>
-            </div>
-
-            {order.status === 'Pending' && (
-              <button
-                disabled={confirming}
-                onClick={handleConfirm}
-                className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm"
-              >
-                <FiCheckCircle />
-                {confirming ? 'Confirming...' : 'Confirm Delivery'}
-              </button>
-            )}
-          </div>
+        <div>
+          {order.status === 'Pending' ? (
+            <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
+              Pending
+            </span>
+          ) : (
+            <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
+              Completed
+            </span>
+          )}
         </div>
       </div>
-    );
-  },
-  // FIX 3: Custom comparator — only re-render if the fields that actually
-  // affect the UI have changed. This prevents the whole card from re-rendering
-  // when unrelated orders in the Redux store change.
-  (prev, next) =>
-    prev.order._id === next.order._id &&
-    prev.order.status === next.order.status &&
-    prev.order.totalAmount === next.order.totalAmount &&
-    prev.order.rollNumber === next.order.rollNumber &&
-    prev.onConfirm === next.onConfirm
-);
+
+      {/* BODY */}
+      <div className="p-5">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs uppercase text-gray-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                <th className="pb-3">Product</th>
+                <th className="pb-3 text-center">Qty</th>
+                <th className="pb-3 text-right">Price</th>
+                <th className="pb-3 text-right">Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {order.items.map((item, idx) => (
+                <tr
+                  key={item.productId?._id || idx}
+                  className="border-b border-gray-50 dark:border-slate-800/50"
+                >
+                  <td className="py-4 font-medium text-gray-800 dark:text-gray-200">
+                    {item.productId?.name || 'Unknown'}
+                  </td>
+                  <td className="py-4 text-center">
+                    <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold dark:text-gray-200">
+                      {item.quantity}
+                    </span>
+                  </td>
+                  <td className="py-4 text-right text-gray-500 dark:text-gray-400 font-medium">
+                    ₹{item.price}
+                  </td>
+                  <td className="py-4 text-right font-semibold text-gray-800 dark:text-gray-200">
+                    ₹{item.quantity * item.price}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* FOOTER */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Total Bill Amount
+            </p>
+            <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+              ₹{order.totalAmount}
+            </h2>
+          </div>
+
+          {order.status === 'Pending' && (
+            <button
+              disabled={confirmingRef.current}
+              onClick={handleConfirm}
+              className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm"
+            >
+              <FiCheckCircle />
+              {confirmingRef.current ? 'Confirming...' : 'Confirm Delivery'}
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.order._id === nextProps.order._id &&
+    prevProps.order.status === nextProps.order.status &&
+    prevProps.order.totalAmount === nextProps.order.totalAmount
+  );
+});
 
 OrderCard.displayName = 'OrderCard';
 
-/* =========================================================
-   MAIN COMPONENT
-========================================================= */
+// ✅ LOADING SKELETON
+const OrderSkeleton = () => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm p-5 space-y-4"
+  >
+    <div className="h-6 bg-gray-200 dark:bg-slate-800 rounded-lg w-1/3 animate-pulse" />
+    <div className="space-y-2">
+      <div className="h-4 bg-gray-200 dark:bg-slate-800 rounded w-full animate-pulse" />
+      <div className="h-4 bg-gray-200 dark:bg-slate-800 rounded w-5/6 animate-pulse" />
+    </div>
+  </motion.div>
+);
 
 export default function StaffPage() {
   const dispatch = useDispatch();
+  useSocket();
 
-  // FIX 4: Select order IDs separately from order data.
-  // The list (IDs array) only changes when orders are added/removed.
-  // Individual order objects are selected one-by-one inside OrderCard
-  // via their stable _id — but since we pass the full order here,
-  // the custom memo comparator above handles surgical updates instead.
-  const orders = useSelector((state) => state.orders.orders, shallowEqual);
-
-  const socket = useSocket();
-
-  const ordersRef = useRef([]);
-  const processedEventsRef = useRef(new Set());
-
+  const loading = useSelector(selectLoadingState);
   const [filter, setFilter] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
   const [filterDate, setFilterDate] = useState(getTodayLocal());
 
-  /* =========================================================
-     KEEP REF UPDATED
-  ========================================================= */
-
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
-
-  /* =========================================================
-     FETCH ORDERS
-     FIX 5: fetchOrders should NOT be in the dep array of the
-     filterDate effect — that causes double-fetches. Instead,
-     pass filterDate as an argument so the function itself
-     stays stable (no re-creation on filterDate change).
-  ========================================================= */
-
-  const fetchOrders = useCallback(
-    async (date) => {
-      try {
-        // Pass date as a query param so the server can filter,
-        // or keep fetching all and filter client-side (current behavior).
-        const { data } = await api.get('/orders');
-        const normalized = data.map(normalizeOrder);
-        dispatch(setOrders(normalized));
-      } catch (error) {
-        console.error(error);
-        toast.error('Failed to load orders');
-      }
-    },
-    [dispatch]
+  // ✅ Memoized selectors - no unnecessary rerenders
+  const dateFilteredOrders = useSelector(
+    selectFilteredOrdersByDate(filterDate)
   );
 
-  // FIX 6: Only filterDate is the real dependency here.
-  // fetchOrders is stable (dispatch never changes), so this
-  // effect fires exactly once per date change — no double fetch.
+  const filteredOrders = useSelector((state) =>
+    selectFilteredOrdersBySearch(filterDate, filter)(state)
+  );
+
+  const pendingCount = useSelector(selectPendingCount);
+  const confirmedCount = useSelector(selectConfirmedCount);
+  const totalRevenue = useSelector(selectTotalRevenue);
+
+  const pendingOrders = useMemo(
+    () => filteredOrders.filter((o) => o.status === 'Pending'),
+    [filteredOrders]
+  );
+
+  const confirmedOrders = useMemo(
+    () => filteredOrders.filter((o) => o.status === 'Confirmed'),
+    [filteredOrders]
+  );
+
+  const currentOrders = useMemo(
+    () => (activeTab === 'pending' ? pendingOrders : confirmedOrders),
+    [activeTab, pendingOrders, confirmedOrders]
+  );
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      dispatch(setLoading(true));
+      const { data } = await api.get('/orders', {
+        params: { date: filterDate }
+      });
+      const normalized = data.map(normalizeOrder);
+      dispatch(setOrders(normalized));
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to load orders');
+    } finally {
+      dispatch(setLoading(false));
+    }
+  }, [dispatch, filterDate]);
+
   useEffect(() => {
-    fetchOrders(filterDate);
-  }, [filterDate]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchOrders();
+  }, [filterDate, fetchOrders]);
 
-  /* =========================================================
-     SOCKETS
-  ========================================================= */
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const isProcessed = (key) => {
-      if (processedEventsRef.current.has(key)) return true;
-      processedEventsRef.current.add(key);
-      setTimeout(() => processedEventsRef.current.delete(key), 2000);
-      return false;
-    };
-
-    /* NEW ORDER */
-    const handleNewOrder = (incomingOrder) => {
-      const key = `new-${incomingOrder._id}`;
-      if (isProcessed(key)) return;
-
-      const exists = ordersRef.current.some(
-        (o) => o._id === incomingOrder._id
-      );
-      if (exists) return;
-
-      const normalized = normalizeOrder(incomingOrder);
-      dispatch(addNewOrder(normalized));
-
-      toast.success('🛒 New Order Received!', { duration: 2500 });
-    };
-
-    /* ORDER CONFIRMED
-       FIX 7: The socket confirm handler checks if the optimistic
-       update already set status to 'Confirmed'. The processedEventsRef
-       dedup window (2 s) catches the race where the socket fires
-       within 2 s of the button click.  For the case where the socket
-       arrives AFTER the 2 s window (slow network), the
-       `existing.status === 'Confirmed'` guard below prevents a
-       redundant dispatch that would cause a flicker.
-    */
-    const handleOrderConfirmed = (updatedOrder) => {
-      const key = `confirm-${updatedOrder._id}`;
-      if (isProcessed(key)) return;
-
-      const existing = ordersRef.current.find(
-        (o) => o._id === updatedOrder._id
-      );
-      if (!existing) return;
-      if (existing.status === 'Confirmed') return; // optimistic already applied
-
-      dispatch(
-        updateOrder({ id: updatedOrder._id, changes: { status: 'Confirmed' } })
-      );
-    };
-
-    /* ORDER CANCELLED */
-    const handleOrderCancelled = (updatedOrder) => {
-      const key = `cancel-${updatedOrder._id}`;
-      if (isProcessed(key)) return;
-
-      const existing = ordersRef.current.find(
-        (o) => o._id === updatedOrder._id
-      );
-      if (!existing) return;
-      if (existing.status === 'Cancelled') return;
-
-      dispatch(
-        updateOrder({ id: updatedOrder._id, changes: { status: 'Cancelled' } })
-      );
-    };
-
-    socket.on('newOrder', handleNewOrder);
-    socket.on('orderConfirmed', handleOrderConfirmed);
-    socket.on('orderCancelled', handleOrderCancelled);
-
-    return () => {
-      socket.off('newOrder', handleNewOrder);
-      socket.off('orderConfirmed', handleOrderConfirmed);
-      socket.off('orderCancelled', handleOrderCancelled);
-    };
-  }, [socket, dispatch]);
-
-  /* =========================================================
-     CONFIRM ORDER
-     FIX 8: Mark the event as processed BEFORE the optimistic
-     dispatch so the socket echo that arrives within 2 s is
-     swallowed by isProcessed() and never causes a second render.
-  ========================================================= */
-
-  const confirmOrder = useCallback(
-    async (orderId) => {
-      const existing = ordersRef.current.find((o) => o._id === orderId);
-      if (!existing) return;
-      if (existing.status === 'Confirmed') return;
-
-      // Pre-register the confirm event so the socket echo is ignored
-      const key = `confirm-${orderId}`;
-      processedEventsRef.current.add(key);
-      setTimeout(() => processedEventsRef.current.delete(key), 5000); // 5 s window for slow servers
-
-      // Optimistic update
+  const confirmOrder = useCallback(async (orderId) => {
+    try {
       dispatch(updateOrder({ id: orderId, changes: { status: 'Confirmed' } }));
-
-      try {
-        await api.put(`/orders/${orderId}/confirm`);
-      } catch (error) {
-        console.error(error);
-        // Rollback
-        processedEventsRef.current.delete(key); // allow socket to re-apply if it arrives
-        dispatch(updateOrder({ id: orderId, changes: { status: 'Pending' } }));
-        toast.error('Failed to confirm order');
-      }
-    },
-    [dispatch]
-  );
-
-  /* =========================================================
-     DATE NAVIGATION
-  ========================================================= */
+      await api.put(`/orders/${orderId}/confirm`);
+    } catch (error) {
+      console.error(error);
+      dispatch(updateOrder({ id: orderId, changes: { status: 'Pending' } }));
+      toast.error('Failed to confirm order');
+    }
+  }, [dispatch]);
 
   const addDays = useCallback((dateStr, days) => {
     const date = new Date(dateStr);
@@ -403,55 +303,10 @@ export default function StaffPage() {
     });
   }, [addDays]);
 
-  /* =========================================================
-     FILTERED ORDERS
-  ========================================================= */
-
-  const dateFilteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const d = new Date(order.createdAt);
-      const orderDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return orderDate === filterDate;
-    });
-  }, [orders, filterDate]);
-
-  const filteredOrders = useMemo(() => {
-    const q = filter.toLowerCase();
-    return dateFilteredOrders.filter(
-      (o) =>
-        o.rollNumber.toLowerCase().includes(q) ||
-        o._id.toLowerCase().includes(q)
-    );
-  }, [dateFilteredOrders, filter]);
-
-  const pendingOrders = useMemo(
-    () => filteredOrders.filter((o) => o.status === 'Pending'),
-    [filteredOrders]
-  );
-
-  const confirmedOrders = useMemo(
-    () => filteredOrders.filter((o) => o.status === 'Confirmed'),
-    [filteredOrders]
-  );
-
-  const totalRevenue = useMemo(
-    () => confirmedOrders.reduce((acc, o) => acc + o.totalAmount, 0),
-    [confirmedOrders]
-  );
-
   const activeOrdersCount = useMemo(
-    () => pendingOrders.length + confirmedOrders.length,
-    [pendingOrders, confirmedOrders]
+    () => pendingCount + confirmedCount,
+    [pendingCount, confirmedCount]
   );
-
-  const currentOrders = useMemo(
-    () => (activeTab === 'pending' ? pendingOrders : confirmedOrders),
-    [activeTab, pendingOrders, confirmedOrders]
-  );
-
-  /* =========================================================
-     UI
-  ========================================================= */
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] p-4 sm:p-6">
@@ -466,17 +321,11 @@ export default function StaffPage() {
           </p>
         </div>
 
-        {/* DATE FILTER */}
         <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-4 py-2 rounded-xl shadow-sm">
-          <button
-            onClick={goPrevDay}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition"
-          >
+          <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
             <FiChevronLeft className="text-indigo-500" />
           </button>
-
           <FiCalendar className="text-indigo-500" />
-
           <input
             type="date"
             value={filterDate}
@@ -484,11 +333,7 @@ export default function StaffPage() {
             max={getTodayLocal()}
             className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
           />
-
-          <button
-            onClick={goNextDay}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition"
-          >
+          <button onClick={goNextDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
             <FiChevronRight className="text-indigo-500" />
           </button>
         </div>
@@ -510,60 +355,86 @@ export default function StaffPage() {
             })}
           </span>
         </div>
-        <div className="text-xs text-gray-400">
-          {dateFilteredOrders.length} orders found
-        </div>
+        <div className="text-xs text-gray-400">{dateFilteredOrders.length} orders found</div>
       </div>
 
-      {/* STATS */}
+      {/* STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+        <motion.div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
           <div className="flex justify-between">
             <div>
               <p className="text-xs">Pending Orders</p>
-              <p className="text-2xl font-bold mt-1">{pendingOrders.length}</p>
+              <motion.p
+                key={pendingCount}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                className="text-2xl font-bold mt-1"
+              >
+                {pendingCount}
+              </motion.p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <FiClock className="text-xl" />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg">
+        <motion.div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg">
           <div className="flex justify-between">
             <div>
               <p className="text-xs">Completed Orders</p>
-              <p className="text-2xl font-bold mt-1">{confirmedOrders.length}</p>
+              <motion.p
+                key={confirmedCount}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                className="text-2xl font-bold mt-1"
+              >
+                {confirmedCount}
+              </motion.p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <FiCheckCircle className="text-xl" />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+        <motion.div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white shadow-lg">
           <div className="flex justify-between">
             <div>
               <p className="text-xs">Revenue</p>
-              <p className="text-xl font-bold mt-1">₹{totalRevenue.toLocaleString()}</p>
+              <motion.p
+                key={totalRevenue}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                className="text-xl font-bold mt-1"
+              >
+                ₹{totalRevenue.toLocaleString()}
+              </motion.p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <FiTrendingUp className="text-xl" />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl p-4 text-white shadow-lg">
+        <motion.div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl p-4 text-white shadow-lg">
           <div className="flex justify-between">
             <div>
               <p className="text-xs">Active Orders</p>
-              <p className="text-2xl font-bold mt-1">{activeOrdersCount}</p>
+              <motion.p
+                key={activeOrdersCount}
+                initial={{ scale: 1.2 }}
+                animate={{ scale: 1 }}
+                className="text-2xl font-bold mt-1"
+              >
+                {activeOrdersCount}
+              </motion.p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <FiShoppingBag className="text-xl" />
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* SEARCH + TABS */}
@@ -589,9 +460,8 @@ export default function StaffPage() {
                   : 'text-gray-500'
               }`}
             >
-              Pending ({pendingOrders.length})
+              Pending ({pendingCount})
             </button>
-
             <button
               onClick={() => setActiveTab('confirmed')}
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
@@ -600,7 +470,7 @@ export default function StaffPage() {
                   : 'text-gray-500'
               }`}
             >
-              Completed ({confirmedOrders.length})
+              Completed ({confirmedCount})
             </button>
           </div>
         </div>
@@ -608,16 +478,30 @@ export default function StaffPage() {
 
       {/* ORDER LIST */}
       <div className="space-y-5">
-        {currentOrders.map((order) => (
-          <OrderCard
-            key={order._id}
-            order={order}
-            onConfirm={confirmOrder}
-          />
-        ))}
+        {loading ? (
+          <>
+            <OrderSkeleton />
+            <OrderSkeleton />
+            <OrderSkeleton />
+          </>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {currentOrders.map((order) => (
+              <OrderCard
+                key={order._id}
+                order={order}
+                onConfirm={confirmOrder}
+              />
+            ))}
+          </AnimatePresence>
+        )}
 
-        {currentOrders.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 border border-dashed border-gray-300 dark:border-slate-700 rounded-3xl py-20 text-center">
+        {!loading && currentOrders.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-white dark:bg-slate-900 border border-dashed border-gray-300 dark:border-slate-700 rounded-3xl py-20 text-center"
+          >
             <div className="w-20 h-20 mx-auto rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-4xl text-gray-400 mb-5">
               <FiPackage />
             </div>
@@ -627,7 +511,7 @@ export default function StaffPage() {
             <p className="text-gray-500 dark:text-gray-400 font-medium">
               No {activeTab} orders found
             </p>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
