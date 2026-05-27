@@ -19,10 +19,14 @@ import AdminAlertsPage from "./pages/AdminAlertsPage";
 import InsightsPage from "./pages/InsightsPage";
 
 function App() {
-  const { user } = useSelector((state) => state.auth);
-
+  const { user, token } = useSelector((state) => state.auth);
+  
+  // Check authentication from Redux state (already loaded from storage)
+  const isAuthenticated = !!token && !!user;
+  
   // Detect PWA mode
   const [isPWA, setIsPWA] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const standalone =
@@ -30,34 +34,104 @@ function App() {
       window.navigator.standalone;
 
     setIsPWA(standalone);
+    setIsLoading(false);
   }, []);
+
+  // Show loading while checking PWA mode
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
-      <Toaster position="top-right" />
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 2000,
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
 
       <Routes>
-
-        {/* ROOT ROUTE */}
+        {/* ROOT ROUTE - Redirect based on auth and PWA */}
         <Route
           path="/"
           element={
-            isPWA ? (
+            isAuthenticated ? (
+              // If logged in, redirect to respective dashboard
+              user?.role === 'admin' ? (
+                <Navigate to="/admin" replace />
+              ) : user?.role === 'staff' ? (
+                <Navigate to="/staff" replace />
+              ) : (
+                <ConsumerPage />
+              )
+            ) : isPWA ? (
+              // PWA mode and not logged in -> login page
               <Navigate to="/login" replace />
             ) : (
+              // Web mode and not logged in -> consumer page
               <ConsumerPage />
             )
           }
         />
 
-        {/* LOGIN */}
-        <Route path="/login" element={<LoginPage />} />
+        {/* LOGIN PAGE - Redirect if already logged in */}
+        <Route
+          path="/login"
+          element={
+            isAuthenticated ? (
+              user?.role === 'admin' ? (
+                <Navigate to="/admin" replace />
+              ) : user?.role === 'staff' ? (
+                <Navigate to="/staff" replace />
+              ) : (
+                <LoginPage />
+              )
+            ) : (
+              <LoginPage />
+            )
+          }
+        />
 
-        {/* STAFF */}
+        {/* STAFF DASHBOARD */}
         <Route
           path="/staff"
+          element={
+            <ProtectedRoute roles={["staff"]}>
+              <Layout>
+                <StaffPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* STAFF ORDERS (same as staff page) */}
+        <Route
+          path="/staff/orders"
           element={
             <ProtectedRoute roles={["staff"]}>
               <Layout>
@@ -79,7 +153,7 @@ function App() {
           }
         />
 
-        {/* PRODUCTS */}
+        {/* ADMIN PRODUCTS */}
         <Route
           path="/admin/products"
           element={
@@ -91,7 +165,7 @@ function App() {
           }
         />
 
-        {/* CATEGORIES */}
+        {/* ADMIN CATEGORIES */}
         <Route
           path="/admin/categories"
           element={
@@ -127,7 +201,7 @@ function App() {
           }
         />
 
-        {/* ORDERS */}
+        {/* ADMIN ORDERS */}
         <Route
           path="/admin/orders"
           element={
@@ -151,7 +225,7 @@ function App() {
           }
         />
 
-        {/* ALERTS */}
+        {/* ADMIN ALERTS */}
         <Route
           path="/admin/alerts"
           element={
@@ -163,7 +237,7 @@ function App() {
           }
         />
 
-        {/* INSIGHTS */}
+        {/* INSIGHTS / ANALYTICS */}
         <Route
           path="/admin/insights"
           element={
@@ -175,6 +249,24 @@ function App() {
           }
         />
 
+        {/* CATCH ALL - 404 PAGE */}
+        <Route
+          path="*"
+          element={
+            <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] flex items-center justify-center">
+              <div className="text-center">
+                <h1 className="text-6xl font-bold text-gray-800 dark:text-white">404</h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-2">Page not found</p>
+                <a 
+                  href="/" 
+                  className="mt-4 inline-block px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                >
+                  Go Home
+                </a>
+              </div>
+            </div>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
