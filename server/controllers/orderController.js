@@ -244,13 +244,42 @@ export const revertOrder = async (req, res) => {
 export const deleteOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: 'Order not found' });
-    if (order.status !== 'Cancelled' && order.status !== 'Pending') {
-      return res.status(400).json({ message: 'Only cancelled or pending orders can be deleted' });
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
     }
+
+    if (
+      order.status !== 'Cancelled' &&
+      order.status !== 'Pending'
+    ) {
+      return res.status(400).json({
+        message: 'Only cancelled or pending orders can be deleted'
+      });
+    }
+
+    // RESTORE RESERVED STOCK IF PENDING
+    if (order.status === 'Pending') {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: {
+            reservedStock: -item.quantity
+          }
+        });
+      }
+    }
+
     await order.deleteOne();
+
+    const io = req.app.get('io');
+
+    io.emit('stockUpdated');
+    io.emit('orderDeleted', order._id);
+
     res.json({ message: 'Order deleted successfully' });
+
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -259,24 +288,68 @@ export const deleteOrder = async (req, res) => {
 export const bulkDeletePendingOrders = async (req, res) => {
   try {
     const { date } = req.body;
+
     if (!date) {
-      return res.status(400).json({ message: 'Date is required' });
+      return res.status(400).json({
+        message: 'Date is required'
+      });
     }
-    
+
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
+
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
-    
-    const result = await Order.deleteMany({ 
+
+    // 1. GET ALL PENDING ORDERS
+    const orders = await Order.find({
       status: 'Pending',
-      createdAt: { $gte: startDate, $lte: endDate }
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate
+      }
     });
-    
-    res.json({ message: `${result.deletedCount} pending orders deleted`, count: result.deletedCount });
+
+    // 2. RESTORE RESERVED STOCK
+    for (const order of orders) {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(
+          item.productId,
+          {
+            $inc: {
+              reservedStock: -item.quantity
+            }
+          }
+        );
+      }
+    }
+
+    // 3. DELETE ORDERS
+    const result = await Order.deleteMany({
+      status: 'Pending',
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    });
+
+    // 4. REALTIME UPDATE
+    const io = req.app.get('io');
+
+    io.emit('stockUpdated');
+    io.emit('ordersBulkDeleted');
+
+    res.json({
+      message: `${result.deletedCount} pending orders deleted`,
+      count: result.deletedCount
+    });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: error.message });
+
+    res.status(500).json({
+      message: error.message
+    });
   }
 };
 
@@ -333,20 +406,51 @@ export const deleteAllOrdersByDate = async (req, res) => {
 export const deleteSingleOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
+
     const order = await Order.findById(orderId);
-    
+
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      return res.status(404).json({
+        message: 'Order not found'
+      });
     }
-    
-    if (order.status !== 'Cancelled' && order.status !== 'Pending') {
-      return res.status(400).json({ message: 'Only cancelled or pending orders can be deleted' });
+
+    if (
+      order.status !== 'Cancelled' &&
+      order.status !== 'Pending'
+    ) {
+      return res.status(400).json({
+        message: 'Only cancelled or pending orders can be deleted'
+      });
     }
-    
+
+    // RESTORE RESERVED STOCK
+    if (order.status === 'Pending') {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: {
+            reservedStock: -item.quantity
+          }
+        });
+      }
+    }
+
     await order.deleteOne();
-    res.json({ message: 'Order deleted successfully' });
+
+    const io = req.app.get('io');
+
+    io.emit('stockUpdated');
+    io.emit('orderDeleted', orderId);
+
+    res.json({
+      message: 'Order deleted successfully'
+    });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: error.message
+    });
   }
 };
+

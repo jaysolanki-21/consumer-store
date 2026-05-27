@@ -166,3 +166,42 @@ export const getProductSalesAnalytics = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+export const resetReservedStockByProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    // CHECK PRODUCT
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({
+        message: 'Product not found'
+      });
+    }
+
+    // RESET RESERVED STOCK
+    product.reservedStock = 0;
+
+    await product.save();
+
+    // SOCKET EVENTS
+    const io = req.app.get('io');
+
+    io.emit('stockUpdated');
+    io.emit('productUpdated', product);
+
+    res.json({
+      message: `${product.name} reserved stock reset successfully`,
+      product
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};

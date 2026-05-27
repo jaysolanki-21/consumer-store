@@ -104,7 +104,8 @@ export default function AdminProductsPage() {
   const urlToFile = async (url, filename = "image.jpg") => {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const blob = await response.blob();
       // Get file extension from URL or response headers
       let extension = "jpg";
@@ -115,9 +116,48 @@ export default function AdminProductsPage() {
         else if (contentType.includes("gif")) extension = "gif";
         else if (contentType.includes("jpeg")) extension = "jpg";
       }
-      return new File([blob], `${Date.now()}.${extension}`, { type: blob.type });
+      return new File([blob], `${Date.now()}.${extension}`, {
+        type: blob.type,
+      });
     } catch (err) {
       throw new Error("Failed to fetch image from URL");
+    }
+  };
+
+  const handleResetReserved = async (product) => {
+    if ((product.reservedStock || 0) <= 0) {
+      toast.error("No reserved stock to reset");
+      return;
+    }
+
+    const confirmReset = window.confirm(
+      `Reset reserved stock for ${product.name}?`,
+    );
+
+    if (!confirmReset) return;
+
+    try {
+      await api.patch(`/products/reset-reserved/${product._id}`);
+
+      toast.success("Reserved stock reset successfully");
+
+      // instant realtime update
+      setProducts((prev) =>
+        prev.map((p) =>
+          p._id === product._id
+            ? {
+                ...p,
+                reservedStock: 0,
+              }
+            : p,
+        ),
+      );
+
+      fetchProducts();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message || "Failed to reset reserved stock",
+      );
     }
   };
 
@@ -144,13 +184,15 @@ export default function AdminProductsPage() {
           setLoading(false);
           return;
         }
-        
+
         setFetchingImage(true);
         try {
           const file = await urlToFile(imageUrl);
           formData.append("image", file);
         } catch (err) {
-          toast.error("Failed to load image from URL. Please check if the URL is valid and accessible.");
+          toast.error(
+            "Failed to load image from URL. Please check if the URL is valid and accessible.",
+          );
           setLoading(false);
           setFetchingImage(false);
           return;
@@ -578,7 +620,9 @@ export default function AdminProductsPage() {
                         className="w-36 h-36 rounded-xl object-cover border"
                         onError={() => {
                           setImagePreview("");
-                          toast.error("Invalid image URL or image cannot be loaded");
+                          toast.error(
+                            "Invalid image URL or image cannot be loaded",
+                          );
                         }}
                       />
                     </div>
@@ -620,142 +664,194 @@ export default function AdminProductsPage() {
 
       {/* PRODUCTS TABLE */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-  <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
-    <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 flex items-center justify-center">
-      <FiBox className="text-xl" />
-    </div>
-    <div>
-      <h2 className="text-lg font-semibold text-slate-800 dark:text-white">All Products</h2>
-      <p className="text-sm text-slate-500">Total {filteredProducts.length} products</p>
-      {(selectedCategory || search) && (
-        <p className="text-xs text-indigo-500 mt-0.5">
-          Filtered by{" "}
-          {selectedCategory
-            ? `category: ${categories.find((c) => c._id === selectedCategory)?.name}`
-            : ""}
-          {search && `, search: "${search}"`}
-        </p>
-      )}
-    </div>
-  </div>
-  
-  <div className="overflow-x-auto">
-    <table className="w-full min-w-[1100px]">
-      <thead className="bg-slate-50 dark:bg-slate-900">
-        <tr>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Product</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Category</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Price</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Stock</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Reserved</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Available</th>
-          <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Visibility</th>
-          <th className="text-right px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-        {filteredProducts.map((p) => {
-          const reserved = p.reservedStock || 0;
-          const available = (p.stock || 0) - reserved;
-          const isLowStock = available <= p.lowStockThreshold;
-          return (
-            <tr
-              key={p._id}
-              className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition duration-150"
-            >
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-4">
-                  <img
-                    src={p.image || "https://via.placeholder.com/60"}
-                    alt={p.name}
-                    className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
-                    onError={(e) => {
-                      e.target.src = "https://via.placeholder.com/60";
-                    }}
-                  />
-                  <div>
-                    <p className="font-semibold text-base text-slate-800 dark:text-white">{p.name}</p>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">ID: {p._id.slice(-6)}</p>
-                  </div>
-                </div>
-               </td>
-              <td className="px-6 py-4">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-sm font-medium">
-                  <FiLayers className="text-xs" /> {p.categoryId?.name || "No Category"}
-                </span>
-               </td>
-              <td className="px-6 py-4">
-                <span className="font-semibold text-base text-green-600 dark:text-green-400">₹{p.price}</span>
-               </td>
-              <td className="px-6 py-4">
-                <span className="font-mono text-base font-medium text-slate-700 dark:text-slate-300">{p.stock}</span>
-               </td>
-              <td className="px-6 py-4">
-                <span className="font-mono text-base font-medium text-amber-600 dark:text-amber-400">{reserved}</span>
-               </td>
-              <td className="px-6 py-4">
-                <span className={`font-mono text-base font-semibold ${available <= 0 ? "text-red-600 dark:text-red-400" : isLowStock ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
-                  {available}
-                </span>
-               </td>
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleVisibility(p)}
-                    disabled={togglingId === p._id}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
-                      p.visibility
-                        ? "bg-emerald-500"
-                        : "bg-slate-300 dark:bg-slate-600"
-                    } ${togglingId === p._id ? "opacity-60 cursor-not-allowed" : ""}`}
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 flex items-center justify-center">
+            <FiBox className="text-xl" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-white">
+              All Products
+            </h2>
+            <p className="text-sm text-slate-500">
+              Total {filteredProducts.length} products
+            </p>
+            {(selectedCategory || search) && (
+              <p className="text-xs text-indigo-500 mt-0.5">
+                Filtered by{" "}
+                {selectedCategory
+                  ? `category: ${categories.find((c) => c._id === selectedCategory)?.name}`
+                  : ""}
+                {search && `, search: "${search}"`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px]">
+            <thead className="bg-slate-50 dark:bg-slate-900">
+              <tr>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Product
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Stock
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Reserved
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Available
+                </th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Visibility
+                </th>
+                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {filteredProducts.map((p) => {
+                const reserved = p.reservedStock || 0;
+                const available = (p.stock || 0) - reserved;
+                const isLowStock = available <= p.lowStockThreshold;
+                return (
+                  <tr
+                    key={p._id}
+                    className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition duration-150"
                   >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${p.visibility ? "translate-x-6" : "translate-x-1"}`}
-                    />
-                    {togglingId === p._id && (
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={p.image || "https://via.placeholder.com/60"}
+                          alt={p.name}
+                          className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                          onError={(e) => {
+                            e.target.src = "https://via.placeholder.com/60";
+                          }}
+                        />
+                        <div>
+                          <p className="font-semibold text-base text-slate-800 dark:text-white">
+                            {p.name}
+                          </p>
+                          <p className="text-xs text-slate-400 font-mono mt-0.5">
+                            ID: {p._id.slice(-6)}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-sm font-medium">
+                        <FiLayers className="text-xs" />{" "}
+                        {p.categoryId?.name || "No Category"}
                       </span>
-                    )}
-                  </button>
-                  <span className={`text-sm font-medium ${p.visibility ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"}`}>
-                    {p.visibility ? "Visible" : "Hidden"}
-                  </span>
-                </div>
-               </td>
-              <td className="px-6 py-4">
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => handleEdit(p)}
-                    className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 flex items-center justify-center transition"
-                    title="Edit product"
-                  >
-                    <FiEdit2 className="text-base" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p._id)}
-                    className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 flex items-center justify-center transition"
-                    title="Delete product"
-                  >
-                    <FiTrash2 className="text-base" />
-                  </button>
-                </div>
-               </td>
-            </tr>
-          );
-        })}
-        {filteredProducts.length === 0 && (
-          <tr>
-            <td colSpan="8" className="text-center py-16 text-slate-500">
-              <FiPackage className="mx-auto text-4xl text-slate-300 mb-3" />
-              <p className="text-base">No products found</p>
-             </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-semibold text-base text-green-600 dark:text-green-400">
+                        ₹{p.price}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-base font-medium text-slate-700 dark:text-slate-300">
+                        {p.stock}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-mono text-base font-medium text-amber-600 dark:text-amber-400">
+                        {reserved}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`font-mono text-base font-semibold ${available <= 0 ? "text-red-600 dark:text-red-400" : isLowStock ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}
+                      >
+                        {available}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleVisibility(p)}
+                          disabled={togglingId === p._id}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ${
+                            p.visibility
+                              ? "bg-emerald-500"
+                              : "bg-slate-300 dark:bg-slate-600"
+                          } ${togglingId === p._id ? "opacity-60 cursor-not-allowed" : ""}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${p.visibility ? "translate-x-6" : "translate-x-1"}`}
+                          />
+                          {togglingId === p._id && (
+                            <span className="absolute inset-0 flex items-center justify-center">
+                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            </span>
+                          )}
+                        </button>
+                        <span
+                          className={`text-sm font-medium ${p.visibility ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"}`}
+                        >
+                          {p.visibility ? "Visible" : "Hidden"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        {/* RESET RESERVED STOCK */}
+                        <button
+                          onClick={() => handleResetReserved(p)}
+                          disabled={(p.reservedStock || 0) <= 0}
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
+                            (p.reservedStock || 0) > 0
+                              ? "bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-600"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                          }`}
+                          title="Reset Reserved Stock"
+                        >
+                          <FiTrendingUp className="text-base" />
+                        </button>
+
+                        {/* EDIT PRODUCT */}
+                        <button
+                          onClick={() => handleEdit(p)}
+                          className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 flex items-center justify-center transition"
+                          title="Edit product"
+                        >
+                          <FiEdit2 className="text-base" />
+                        </button>
+
+                        {/* DELETE PRODUCT */}
+                        <button
+                          onClick={() => handleDelete(p._id)}
+                          className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 flex items-center justify-center transition"
+                          title="Delete product"
+                        >
+                          <FiTrash2 className="text-base" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredProducts.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="text-center py-16 text-slate-500">
+                    <FiPackage className="mx-auto text-4xl text-slate-300 mb-3" />
+                    <p className="text-base">No products found</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

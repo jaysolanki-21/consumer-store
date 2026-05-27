@@ -337,15 +337,6 @@ export default function CartDrawer({
                 {/* SUMMARY */}
 
                 <div className="bg-gray-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3">
-                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Subtotal</span>
-                    <span>₹{total.toFixed(2)}</span>
-                  </div>
-
-                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Tax</span>
-                    <span>₹0.00</span>
-                  </div>
 
                   <div className="border-t border-gray-200 dark:border-slate-700 pt-3 flex justify-between items-center">
                     <span className="text-xl font-bold text-gray-900 dark:text-white">
