@@ -27,3 +27,6 @@ server/uploads
 # OS
 .DS_Store
 Thumbs.db
+
+PROJECT_ANALYSIS.md
+readme.md
