@@ -17,8 +17,29 @@ import {
   FiTag,
   FiX,
   FiRefreshCw,
+  FiFilter,
+  FiDollarSign,
+  FiClock,
 } from "react-icons/fi";
 import { FaRupeeSign } from "react-icons/fa";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  ComposedChart,
+} from "recharts";
 
 export default function InsightsPage() {
   const [viewType, setViewType] = useState("daily");
@@ -35,25 +56,37 @@ export default function InsightsPage() {
 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+  // ✅ Custom Date Range
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const today = new Date();
+    today.setDate(today.getDate() - 30);
+    return today.toISOString().split("T")[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
+  const [useCustomRange, setUseCustomRange] = useState(false);
+
   const [salesData, setSalesData] = useState([]);
   const [previousSalesData, setPreviousSalesData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
-  
+  const [chartType, setChartType] = useState("bar");
+
   // ✅ TWO LOADING STATES
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Refs for stable socket handlers
   const salesDataRef = useRef(salesData);
   const previousSalesDataRef = useRef(previousSalesData);
-  
+
   // Update refs when data changes
   useEffect(() => {
     salesDataRef.current = salesData;
   }, [salesData]);
-  
+
   useEffect(() => {
     previousSalesDataRef.current = previousSalesData;
   }, [previousSalesData]);
@@ -67,12 +100,11 @@ export default function InsightsPage() {
   // Fetch on view/date change
   useEffect(() => {
     fetchAnalytics(false);
-  }, [viewType, selectedDate, selectedMonth, selectedYear]);
+  }, [viewType, selectedDate, selectedMonth, selectedYear, customStartDate, customEndDate, useCustomRange]);
 
-  // ✅ STABLE SOCKET LISTENERS - No dependencies that change
+  // ✅ STABLE SOCKET LISTENERS
   useEffect(() => {
     const handleOrderChange = () => {
-      // Silent background refresh - NO loading spinner
       fetchAnalytics(true);
     };
 
@@ -87,7 +119,7 @@ export default function InsightsPage() {
       socket.off("newOrder", handleOrderChange);
       socket.off("stockUpdated", () => fetchAnalytics(true));
     };
-  }, []); // ✅ Empty dependency array - stable listeners
+  }, []);
 
   const fetchCategories = async () => {
     try {
@@ -107,7 +139,7 @@ export default function InsightsPage() {
     }
   };
 
-  // ✅ UPDATED: fetchAnalytics with silent mode
+  // ✅ UPDATED: fetchAnalytics with silent mode and custom range
   const fetchAnalytics = async (silent = false) => {
     try {
       if (silent) {
@@ -118,10 +150,22 @@ export default function InsightsPage() {
 
       let startDate, endDate, prevStartDate, prevEndDate;
 
-      if (viewType === "daily") {
+      if (useCustomRange) {
+        startDate = customStartDate;
+        endDate = customEndDate;
+        // Previous period same length
+        const start = new Date(customStartDate);
+        const end = new Date(customEndDate);
+        const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        const prevStart = new Date(start);
+        prevStart.setDate(prevStart.getDate() - diffDays - 1);
+        const prevEnd = new Date(end);
+        prevEnd.setDate(prevEnd.getDate() - diffDays - 1);
+        prevStartDate = prevStart.toISOString().split("T")[0];
+        prevEndDate = prevEnd.toISOString().split("T")[0];
+      } else if (viewType === "daily") {
         startDate = selectedDate;
         endDate = selectedDate;
-
         const prev = new Date(selectedDate);
         prev.setDate(prev.getDate() - 1);
         prevStartDate = prev.toISOString().split("T")[0];
@@ -131,7 +175,6 @@ export default function InsightsPage() {
         startDate = `${year}-${month}-01`;
         const lastDay = new Date(year, month, 0).getDate();
         endDate = `${year}-${month}-${lastDay}`;
-
         let prevYear = parseInt(year);
         let prevMonth = parseInt(month) - 1;
         if (prevMonth === 0) {
@@ -260,20 +303,67 @@ export default function InsightsPage() {
     });
   }, [salesData, selectedCategory, getProductCategoryId]);
 
-  const totalRevenue = useMemo(() => 
-    filteredSalesData.reduce((sum, item) => sum + item.totalRevenue, 0),
+  // ✅ Chart Data
+  const chartData = useMemo(() => {
+    return filteredSalesData.map((item) => ({
+      name: item.name,
+      quantity: item.totalQuantity,
+      revenue: item.totalRevenue,
+    }));
+  }, [filteredSalesData]);
+
+  // ✅ Category Distribution for Pie Chart
+  const categoryDistribution = useMemo(() => {
+    const dist = {};
+    filteredSalesData.forEach((item) => {
+      const catId = getProductCategoryId(item.productId);
+      const category = categories.find((c) => c._id === catId);
+      const catName = category?.name || "Uncategorized";
+      if (!dist[catName]) {
+        dist[catName] = 0;
+      }
+      dist[catName] += item.totalQuantity;
+    });
+    return Object.entries(dist).map(([name, value]) => ({ name, value }));
+  }, [filteredSalesData, categories, getProductCategoryId]);
+
+  // ✅ Colors for Pie Chart
+  const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+
+  const totalRevenue = useMemo(
+    () => filteredSalesData.reduce((sum, item) => sum + item.totalRevenue, 0),
     [filteredSalesData]
   );
 
-  const totalQuantity = useMemo(() => 
-    filteredSalesData.reduce((sum, item) => sum + item.totalQuantity, 0),
+  const totalQuantity = useMemo(
+    () => filteredSalesData.reduce((sum, item) => sum + item.totalQuantity, 0),
     [filteredSalesData]
   );
 
-  const totalProducts = useMemo(() => 
-    filteredSalesData.length,
-    [filteredSalesData]
-  );
+  const totalProducts = useMemo(() => filteredSalesData.length, [filteredSalesData]);
+
+  // ✅ Top 5 products
+  const topProducts = useMemo(() => {
+    return [...filteredSalesData]
+      .sort((a, b) => b.totalQuantity - a.totalQuantity)
+      .slice(0, 5);
+  }, [filteredSalesData]);
+
+  // ✅ Format date range display
+  const getDateRangeDisplay = () => {
+    if (useCustomRange) {
+      return `${customStartDate} to ${customEndDate}`;
+    }
+    if (viewType === "daily") {
+      return selectedDate;
+    }
+    if (viewType === "monthly") {
+      const [year, month] = selectedMonth.split("-");
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    return selectedYear.toString();
+  };
 
   return (
     <div className="space-y-6 relative">
@@ -305,21 +395,84 @@ export default function InsightsPage() {
           </p>
         </div>
 
-        <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          {["daily", "monthly", "yearly"].map((type) => (
+        <div className="flex flex-wrap gap-2">
+          <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            {["daily", "monthly", "yearly"].map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setViewType(type);
+                  setUseCustomRange(false);
+                }}
+                className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
+                  viewType === type && !useCustomRange
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "text-gray-500 hover:text-indigo-600"
+                }`}
+              >
+                {type}
+              </button>
+            ))}
             <button
-              key={type}
-              onClick={() => setViewType(type)}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
-                viewType === type
+              onClick={() => setUseCustomRange(!useCustomRange)}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize flex items-center gap-1 ${
+                useCustomRange
                   ? "bg-indigo-600 text-white shadow-md"
                   : "text-gray-500 hover:text-indigo-600"
               }`}
             >
-              {type}
+              <FiCalendar className="text-sm" />
+              Custom
             </button>
-          ))}
+          </div>
         </div>
+      </div>
+
+      {/* Custom Date Range */}
+      {useCustomRange && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">From:</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                max={customEndDate}
+                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">To:</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                min={customStartDate}
+                max={new Date().toISOString().split("T")[0]}
+                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <button
+              onClick={() => fetchAnalytics(false)}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Period Display */}
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <FiCalendar className="text-indigo-500" />
+        <span>Showing data for: <strong className="text-gray-700 dark:text-gray-300">{getDateRangeDisplay()}</strong></span>
+        {selectedCategory && (
+          <span className="flex items-center gap-1 ml-2">
+            <FiTag className="text-indigo-500" />
+            <span className="text-indigo-600 dark:text-indigo-400">{categories.find(c => c._id === selectedCategory)?.name}</span>
+          </span>
+        )}
       </div>
 
       {/* Combined Row: Select Period + Summary Cards */}
@@ -335,7 +488,7 @@ export default function InsightsPage() {
                 Select Period
               </p>
 
-              {viewType === "daily" && (
+              {!useCustomRange && viewType === "daily" && (
                 <div className="flex items-center gap-1 mt-2">
                   <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-white/10 transition">
                     <FiChevronLeft className="text-base" />
@@ -353,7 +506,7 @@ export default function InsightsPage() {
                 </div>
               )}
 
-              {viewType === "monthly" && (
+              {!useCustomRange && viewType === "monthly" && (
                 <div className="flex items-center gap-1 mt-2">
                   <button onClick={goPrevMonth} className="p-1.5 rounded-lg hover:bg-white/10 transition">
                     <FiChevronLeft className="text-base" />
@@ -371,7 +524,7 @@ export default function InsightsPage() {
                 </div>
               )}
 
-              {viewType === "yearly" && (
+              {!useCustomRange && viewType === "yearly" && (
                 <div className="flex items-center gap-1 mt-2">
                   <button onClick={goPrevYear} className="p-1.5 rounded-lg hover:bg-white/10 transition">
                     <FiChevronLeft className="text-base" />
@@ -389,11 +542,17 @@ export default function InsightsPage() {
                   </button>
                 </div>
               )}
+
+              {useCustomRange && (
+                <div className="mt-2 text-xs text-indigo-200">
+                  {customStartDate} to {customEndDate}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ✅ Only show summary cards when NOT initial loading */}
+        {/* ✅ Summary Cards */}
         {!initialLoading && filteredSalesData.length > 0 && (
           <>
             <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
@@ -466,6 +625,158 @@ export default function InsightsPage() {
           </>
         )}
       </div>
+
+      {/* Charts Section */}
+      {!initialLoading && filteredSalesData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Product Sales Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Product Sales</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setChartType("bar")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "bar"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Bar
+                </button>
+                <button
+                  onClick={() => setChartType("line")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "line"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Line
+                </button>
+                <button
+                  onClick={() => setChartType("area")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "area"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Area
+                </button>
+              </div>
+            </div>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === "bar" && (
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="quantity" fill="#4f46e5" name="Quantity Sold" />
+                    <Bar yAxisId="right" dataKey="revenue" fill="#10b981" name="Revenue (₹)" />
+                  </BarChart>
+                )}
+                {chartType === "line" && (
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Line yAxisId="left" type="monotone" dataKey="quantity" stroke="#4f46e5" name="Quantity Sold" />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" name="Revenue (₹)" />
+                  </LineChart>
+                )}
+                {chartType === "area" && (
+                  <ComposedChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Area yAxisId="left" type="monotone" dataKey="quantity" fill="#4f46e5" stroke="#4f46e5" name="Quantity Sold" />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" name="Revenue (₹)" />
+                  </ComposedChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Category Distribution Pie Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Category Distribution</h3>
+            {categoryDistribution.length > 0 ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryDistribution}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categoryDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-gray-500">
+                No category data available
+              </div>
+            )}
+          </div>
+
+          {/* Top Products */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top 5 Products</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {topProducts.map((product, index) => {
+                const prevQty = getProductPrevData(product.productId);
+                const trend = getTrend(product.totalQuantity, prevQty);
+                const trendPercent = getTrendPercent(product.totalQuantity, prevQty);
+                return (
+                  <div key={product.productId} className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-center">
+                    <div className="text-2xl font-bold text-indigo-600 mb-1">#{index + 1}</div>
+                    <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">{product.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">Sold: {product.totalQuantity}</p>
+                    <p className="text-xs text-green-600 font-semibold">₹{product.totalRevenue.toLocaleString()}</p>
+                    <div className="mt-2">
+                      {trend === "up" && (
+                        <span className="text-xs text-green-500 flex items-center justify-center gap-1">
+                          <FiTrendingUp /> +{trendPercent}%
+                        </span>
+                      )}
+                      {trend === "down" && (
+                        <span className="text-xs text-red-500 flex items-center justify-center gap-1">
+                          <FiTrendingDown /> {trendPercent}%
+                        </span>
+                      )}
+                      {trend === "neutral" && (
+                        <span className="text-xs text-gray-500">No change</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Filter */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
