@@ -29,6 +29,7 @@ import {
   FiChevronUp,
   FiPrinter,
   FiClock as FiTime,
+  FiMonitor,
 } from "react-icons/fi";
 
 // ✅ IST Date Functions
@@ -67,7 +68,7 @@ function addDays(dateStr, days) {
   return `${newYear}-${newMonth}-${newDay}`;
 }
 
-// ✅ THERMAL BILL PRINT FUNCTION - Roll Number Removed
+// ✅ THERMAL BILL PRINT FUNCTION
 const printThermalBill = (order) => {
   const billNumber = order._id.slice(-6);
   const date = new Date(order.createdAt).toLocaleDateString('en-IN', {
@@ -196,6 +197,7 @@ const printThermalBill = (order) => {
         <div class="bill-info" style="border-bottom: none; padding-bottom: 0; margin-bottom: 8px;">
           <span><strong>Time:</strong> ${time}</span>
           <span><strong>Status:</strong> ${order.status === 'Confirmed' ? 'Completed' : 'Pending'}</span>
+          ${order.counterName ? `<span><strong>Counter:</strong> ${order.counterName}</span>` : ''}
         </div>
 
         <table class="items-table">
@@ -281,10 +283,22 @@ export default function AdminOrdersPage() {
 
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterDate, setFilterDate] = useState(() => getTodayLocal());
+  const [filterCounter, setFilterCounter] = useState("all");
 
   const ordersRef = useRef([]);
   useEffect(() => {
     ordersRef.current = orders;
+  }, [orders]);
+
+  // ✅ Get unique counters from orders
+  const getUniqueCounters = useCallback(() => {
+    const counters = new Set();
+    orders.forEach(order => {
+      if (order.counterId) {
+        counters.add(order.counterId);
+      }
+    });
+    return Array.from(counters);
   }, [orders]);
 
   // ✅ Calculate order completion time
@@ -545,9 +559,10 @@ export default function AdminOrdersPage() {
     return orders.filter((order) => {
       const matchesDate = isSameISTDate(order.createdAt, filterDate);
       const matchesStatus = filterStatus === "all" ? true : order.status.toLowerCase() === filterStatus;
-      return matchesDate && matchesStatus;
+      const matchesCounter = filterCounter === "all" ? true : order.counterId === filterCounter;
+      return matchesDate && matchesStatus && matchesCounter;
     });
-  }, [orders, filterStatus, filterDate]);
+  }, [orders, filterStatus, filterDate, filterCounter]);
 
   const stats = useMemo(() => {
     return {
@@ -571,6 +586,16 @@ export default function AdminOrdersPage() {
         return <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-semibold"><FiXCircle /> Cancelled</div>;
       default: return null;
     }
+  };
+
+  // ✅ Counter name mapping
+  const getCounterName = (counterId) => {
+    const names = {
+      'counter-1': 'Counter 1',
+      'counter-2': 'Counter 2',
+      'counter-3': 'Counter 3'
+    };
+    return names[counterId] || counterId;
   };
 
   const ordersForDate = orders.filter((o) => isSameISTDate(o.createdAt, filterDate));
@@ -597,6 +622,8 @@ export default function AdminOrdersPage() {
       </div>
     );
   }
+
+  const uniqueCounters = getUniqueCounters();
 
   return (
     <div className="space-y-6">
@@ -747,6 +774,40 @@ export default function AdminOrdersPage() {
         ))}
       </div>
 
+      {/* COUNTER FILTER */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <FiMonitor className="text-indigo-500" />
+          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Counter:</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilterCounter("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+              filterCounter === "all"
+                ? "bg-indigo-600 text-white shadow-md"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            All
+          </button>
+          {uniqueCounters.map((counter) => (
+            <button
+              key={counter}
+              onClick={() => setFilterCounter(counter)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
+                filterCounter === counter
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              <FiMonitor className="text-xs" />
+              {getCounterName(counter)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ORDERS LIST */}
       {filteredOrders.length === 0 ? (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-16 text-center">
@@ -759,6 +820,7 @@ export default function AdminOrdersPage() {
           {filteredOrders.map((order) => {
             const completionTime = getCompletionTime(order);
             const isExpanded = expandedOrderId === order._id;
+            const counterName = getCounterName(order.counterId);
 
             return (
               <div
@@ -767,7 +829,7 @@ export default function AdminOrdersPage() {
                   order.status === "Pending" ? "border-yellow-300" : order.status === "Confirmed" ? "border-green-300" : "border-red-300"
                 }`}
               >
-                {/* TOP BAR - Entire clickable for expand/collapse - Roll Number Removed */}
+                {/* TOP BAR - Entire clickable for expand/collapse */}
                 <div
                   onClick={() => toggleExpand(order._id)}
                   className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
@@ -783,6 +845,13 @@ export default function AdminOrdersPage() {
                           {completionTime}
                         </div>
                       )}
+                      {/* ✅ Counter Badge */}
+                      {order.counterId && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">
+                          <FiMonitor className="text-xs" />
+                          {counterName}
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
                       <span>{new Date(order.createdAt).toLocaleString()}</span>
@@ -792,13 +861,12 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
                   
-                  {/* Price + Expand Icon - on the right side */}
+                  {/* Price + Expand Icon */}
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-sm text-slate-500">Total Amount</p>
                       <h2 className="text-3xl font-bold text-indigo-600">₹{order.totalAmount}</h2>
                     </div>
-                    {/* Expand/Collapse Icon */}
                     <div className="p-1.5 rounded-lg">
                       {isExpanded ? (
                         <FiChevronUp className="text-slate-600 dark:text-slate-400 text-2xl" />
@@ -809,7 +877,7 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
 
-                {/* EXPANDABLE DETAILS - Only visible when expanded */}
+                {/* EXPANDABLE DETAILS */}
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div
@@ -856,7 +924,7 @@ export default function AdminOrdersPage() {
                             </button>
                           )}
 
-                          {/* Reprint Button for Confirmed Orders - Inside expanded area */}
+                          {/* Reprint Button for Confirmed Orders */}
                           {order.status === "Confirmed" && (
                             <button
                               onClick={(e) => {

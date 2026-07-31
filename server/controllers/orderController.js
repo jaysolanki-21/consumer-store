@@ -3,7 +3,12 @@ import Product from '../models/Product.js';
 
 export const createOrder = async (req, res) => {
   try {
-    const { items } = req.body;
+    const { items, counterId } = req.body;
+
+    // Validate counterId
+    if (!counterId) {
+      return res.status(400).json({ message: 'Counter ID is required' });
+    }
 
     // 1. Validate availability (stock - reservedStock)
     for (const item of items) {
@@ -40,10 +45,26 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // Counter name mapping
+    const counterNames = {
+      'counter-1': 'Counter 1',
+      'counter-2': 'Counter 2',
+      'counter-3': 'Counter 3',
+      'counter-4': 'Counter 4',
+      'counter-5': 'Counter 5',
+      'counter-6': 'Counter 6',
+      'counter-7': 'Counter 7',
+      'counter-8': 'Counter 8',
+      'counter-9': 'Counter 9',
+      'counter-10': 'Counter 10'
+    };
+
     const order = await Order.create({
       items: orderItems,
       totalAmount,
-      status: 'Pending'
+      status: 'Pending',
+      counterId: counterId,
+      counterName: counterNames[counterId] || counterId
     });
 
     const populatedOrder = await Order.findById(order._id).populate('items.productId');

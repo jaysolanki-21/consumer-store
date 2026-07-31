@@ -20,236 +20,143 @@ import InsightsPage from "./pages/InsightsPage";
 
 function App() {
   const { user, token } = useSelector((state) => state.auth);
-  
-  // Check authentication from Redux state (already loaded from storage)
   const isAuthenticated = !!token && !!user;
-  
-  // Detect PWA mode
   const [isPWA, setIsPWA] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone;
-
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
     setIsPWA(standalone);
-    setIsLoading(false);
   }, []);
 
-  // Show loading while checking PWA mode
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // ✅ Check if counter user is logged in
+  const isCounterLoggedIn = !!localStorage.getItem('counterToken');
 
   return (
-    <BrowserRouter
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-          },
-          success: {
-            duration: 2000,
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 3000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-
+    <BrowserRouter>
+      <Toaster position="top-right" />
       <Routes>
-        {/* ROOT ROUTE - Redirect based on auth and PWA */}
+        {/* ✅ Root Route */}
         <Route
           path="/"
           element={
             isAuthenticated ? (
-              // If logged in, redirect to respective dashboard
               user?.role === 'admin' ? (
                 <Navigate to="/admin" replace />
               ) : user?.role === 'staff' ? (
                 <Navigate to="/staff" replace />
+              ) : isCounterLoggedIn ? (
+                <Navigate to="/consumer" replace />
               ) : (
-                <ConsumerPage />
+                <Navigate to="/login" replace />
               )
-            ) : isPWA ? (
-              // PWA mode and not logged in -> login page
+            ) : isCounterLoggedIn ? (
+              <Navigate to="/consumer" replace />
+            ) : (
               <Navigate to="/login" replace />
-            ) : (
-              // Web mode and not logged in -> consumer page
-              <ConsumerPage />
             )
           }
         />
 
-        {/* LOGIN PAGE - Redirect if already logged in */}
+        {/* ✅ Consumer Page - Protected with counter token */}
         <Route
-          path="/login"
+          path="/consumer"
           element={
-            isAuthenticated ? (
-              user?.role === 'admin' ? (
-                <Navigate to="/admin" replace />
-              ) : user?.role === 'staff' ? (
-                <Navigate to="/staff" replace />
-              ) : (
-                <LoginPage />
-              )
+            isCounterLoggedIn ? (
+              <ConsumerPage />
             ) : (
-              <LoginPage />
+              <Navigate to="/login" replace />
             )
           }
         />
 
-        {/* STAFF DASHBOARD */}
+        {/* ✅ Login Page */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* ✅ Staff Routes */}
         <Route
           path="/staff"
           element={
             <ProtectedRoute roles={["staff"]}>
-              <Layout>
-                <StaffPage />
-              </Layout>
+              <Layout><StaffPage /></Layout>
             </ProtectedRoute>
           }
         />
 
-        {/* STAFF ORDERS (same as staff page) */}
-        <Route
-          path="/staff/orders"
-          element={
-            <ProtectedRoute roles={["staff"]}>
-              <Layout>
-                <StaffPage />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* ADMIN DASHBOARD */}
+        {/* ✅ Admin Routes */}
         <Route
           path="/admin"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminPage />
-              </Layout>
+              <Layout><AdminPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* ADMIN PRODUCTS */}
         <Route
           path="/admin/products"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminProductsPage />
-              </Layout>
+              <Layout><AdminProductsPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* ADMIN CATEGORIES */}
         <Route
           path="/admin/categories"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminCategoriesPage />
-              </Layout>
+              <Layout><AdminCategoriesPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* STOCK REFILL */}
         <Route
           path="/admin/stock-refill"
           element={
             <ProtectedRoute roles={["admin", "staff"]}>
-              <Layout>
-                <StockRefillPage />
-              </Layout>
+              <Layout><StockRefillPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* SALES REPORT */}
         <Route
           path="/admin/sales-report"
           element={
             <ProtectedRoute roles={["admin", "staff"]}>
-              <Layout>
-                <SalesReportPage />
-              </Layout>
+              <Layout><SalesReportPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* ADMIN ORDERS */}
         <Route
           path="/admin/orders"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminOrdersPage />
-              </Layout>
+              <Layout><AdminOrdersPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* STAFF MANAGEMENT */}
         <Route
           path="/admin/staff"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminStaffPage />
-              </Layout>
+              <Layout><AdminStaffPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* ADMIN ALERTS */}
         <Route
           path="/admin/alerts"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <AdminAlertsPage />
-              </Layout>
+              <Layout><AdminAlertsPage /></Layout>
             </ProtectedRoute>
           }
         />
-
-        {/* INSIGHTS / ANALYTICS */}
         <Route
           path="/admin/insights"
           element={
             <ProtectedRoute roles={["admin"]}>
-              <Layout>
-                <InsightsPage />
-              </Layout>
+              <Layout><InsightsPage /></Layout>
             </ProtectedRoute>
           }
         />
 
-        {/* CATCH ALL - 404 PAGE */}
+        {/* ✅ 404 - Not Found */}
         <Route
           path="*"
           element={

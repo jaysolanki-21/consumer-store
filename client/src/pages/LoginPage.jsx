@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -38,6 +39,7 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
       const { data } = await api.post('/auth/login', {
@@ -45,28 +47,46 @@ export default function LoginPage() {
         password,
       });
 
+      console.log('🔐 Login Response:', data);
+
       // ✅ Always save credentials (remember me is always ON)
       dispatch(
         setCredentials({
           user: data,
           token: data.token,
-          rememberMe: true, // Always true
+          rememberMe: true,
         })
       );
 
       // ✅ Always save email for next time
       localStorage.setItem('savedEmail', email);
 
-      toast.success('Login successful');
+      toast.success(`Welcome ${data.name}!`);
 
+      // ✅ Handle redirect based on role
       if (data.role === 'admin') {
         navigate('/admin');
       } else if (data.role === 'staff') {
         navigate('/staff');
+      } else if (data.role === 'counter') {
+        // ✅ Save counter token separately for consumer page
+        localStorage.setItem('counterToken', data.token);
+        localStorage.setItem('counterUser', JSON.stringify(data));
+        
+        console.log('🔄 Counter user detected, counterId:', data.counterId);
+        console.log('📋 Full user data:', data);
+        
+        // ✅ Small delay to ensure localStorage is set
+        setTimeout(() => {
+          navigate('/consumer');
+        }, 100);
       } else {
+        toast.error('Unknown role. Please contact admin.');
         navigate('/');
       }
     } catch (err) {
+      console.error('❌ Login error:', err);
+      setError(err.response?.data?.message || 'Login failed');
       toast.error(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -101,11 +121,18 @@ export default function LoginPage() {
             APC Store
           </h1>
           <p className="text-gray-300 mt-2 text-sm">
-            Staff & Admin Login Portal
+            Staff, Admin & Counter Login Portal
           </p>
         </div>
 
-        {/* FORM - Without Remember Me Checkbox */}
+        {/* ERROR MESSAGE */}
+        {error && (
+          <div className="bg-red-500/20 border border-red-400/30 rounded-xl p-3 mb-4">
+            <p className="text-red-300 text-sm text-center">{error}</p>
+          </div>
+        )}
+
+        {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-5">
 
           {/* EMAIL */}

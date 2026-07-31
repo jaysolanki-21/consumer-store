@@ -39,6 +39,7 @@ import {
   FiActivity,
   FiVolume2,
   FiVolumeX,
+  FiMonitor,
 } from 'react-icons/fi';
 
 // ✅ Notification sound URL
@@ -87,7 +88,17 @@ function getOrderISTDate(order) {
   return getISTDateFromUTC(order.createdAt);
 }
 
-// ✅ Order Card Component - No rollNumber
+// ✅ Get counter name
+const getCounterName = (counterId) => {
+  const names = {
+    'counter-1': 'Counter 1',
+    'counter-2': 'Counter 2',
+    'counter-3': 'Counter 3'
+  };
+  return names[counterId] || counterId || 'N/A';
+};
+
+// ✅ Order Card Component with Counter Display
 const OrderCard = React.memo(({ order, onConfirm }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const isNewOrder = useRef(Date.now() - new Date(order.createdAt).getTime() < 5000);
@@ -101,6 +112,8 @@ const OrderCard = React.memo(({ order, onConfirm }) => {
       setIsConfirming(false);
     }
   }, [onConfirm, order._id, isConfirming]);
+
+  const counterName = getCounterName(order.counterId);
 
   return (
     <motion.div
@@ -120,6 +133,13 @@ const OrderCard = React.memo(({ order, onConfirm }) => {
               <FiClock className="text-sm" />
               {order.formattedTime}
             </div>
+            {/* ✅ Counter Badge */}
+            {order.counterId && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
+                <FiMonitor className="text-xs" />
+                {counterName}
+              </div>
+            )}
           </div>
           <div>
             {order.status === 'Pending' ? (
@@ -229,6 +249,20 @@ export default function StaffPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioElement, setAudioElement] = useState(null);
 
+  // ✅ Get unique counters from orders
+  const uniqueCounters = useMemo(() => {
+    const counters = new Set();
+    allOrders.forEach(order => {
+      if (order.counterId) {
+        counters.add(order.counterId);
+      }
+    });
+    return Array.from(counters);
+  }, [allOrders]);
+
+  // ✅ Counter filter state
+  const [filterCounter, setFilterCounter] = useState('all');
+
   // ✅ Initialize audio element
   useEffect(() => {
     const audio = new Audio(NOTIFICATION_SOUND_URL);
@@ -286,15 +320,21 @@ export default function StaffPage() {
     });
   }, [allOrders, filterDate]);
 
-  // ✅ SEARCH FILTER - Only Order ID now
+  // ✅ COUNTER FILTER
+  const counterFilteredOrders = useMemo(() => {
+    if (filterCounter === 'all') return dateFilteredOrders;
+    return dateFilteredOrders.filter(order => order.counterId === filterCounter);
+  }, [dateFilteredOrders, filterCounter]);
+
+  // ✅ SEARCH FILTER - Order ID
   const searchFilteredOrders = useMemo(() => {
-    if (!filter.trim()) return dateFilteredOrders;
+    if (!filter.trim()) return counterFilteredOrders;
     const term = filter.toLowerCase().trim();
-    return dateFilteredOrders.filter(order => 
+    return counterFilteredOrders.filter(order => 
       order._id.toLowerCase().includes(term) ||
       order._id.slice(-6).toLowerCase().includes(term)
     );
-  }, [dateFilteredOrders, filter]);
+  }, [counterFilteredOrders, filter]);
 
   const pendingOrders = useMemo(
     () => searchFilteredOrders.filter((o) => o.status === 'Pending'),
@@ -431,6 +471,16 @@ export default function StaffPage() {
     });
   }, [addDays]);
 
+  // ✅ Get counter name
+  const getCounterName = (counterId) => {
+    const names = {
+      'counter-1': 'Counter 1',
+      'counter-2': 'Counter 2',
+      'counter-3': 'Counter 3'
+    };
+    return names[counterId] || counterId;
+  };
+
   // Show loading only on first load
   if (isInitialLoad) {
     return (
@@ -482,7 +532,7 @@ export default function StaffPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Sound Toggle */}
           <button
             onClick={toggleSound}
@@ -516,6 +566,25 @@ export default function StaffPage() {
               <FiChevronRight className="text-indigo-500" />
             </button>
           </div>
+
+          {/* ✅ Counter Filter */}
+          {uniqueCounters.length > 0 && (
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
+              <FiMonitor className="text-indigo-500" />
+              <select
+                value={filterCounter}
+                onChange={(e) => setFilterCounter(e.target.value)}
+                className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
+              >
+                <option value="all">All Counters</option>
+                {uniqueCounters.map((counter) => (
+                  <option key={counter} value={counter}>
+                    {getCounterName(counter)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -532,13 +601,7 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* STATS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Pending Orders" value={pendingCount} icon={FiClock} colorGradient="bg-gradient-to-br from-amber-500 to-orange-600" />
-        <StatCard title="Completed Orders" value={confirmedCount} icon={FiCheckCircle} colorGradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
-        <StatCard title="Revenue (Today)" value={`₹${totalRevenue.toLocaleString()}`} icon={FiTrendingUp} colorGradient="bg-gradient-to-br from-indigo-500 to-purple-600" />
-        <StatCard title="Active Orders" value={activeOrdersCount} icon={FiShoppingBag} colorGradient="bg-gradient-to-br from-rose-500 to-pink-600" />
-      </div>
+   
 
       {/* SEARCH + TABS */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
