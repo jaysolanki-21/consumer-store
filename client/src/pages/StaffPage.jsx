@@ -244,6 +244,7 @@ export default function StaffPage() {
   const [filterDate, setFilterDate] = useState(getTodayLocal);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [livePulse, setLivePulse] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // ✅ SOUND OFF BY DEFAULT
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -358,8 +359,8 @@ export default function StaffPage() {
   }, [confirmedOrders]);
   const activeOrdersCount = pendingCount + confirmedCount;
 
-  // ✅ FETCH ORDERS
-  const fetchOrders = useCallback(async (retryCount = 0) => {
+  // ✅ FETCH ORDERS - INITIAL LOAD ONLY
+  const fetchOrders = useCallback(async () => {
     try {
       dispatch(setLoading(true));
       const { data } = await api.get('/orders');
@@ -368,29 +369,39 @@ export default function StaffPage() {
       setIsInitialLoad(false);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
-      if (retryCount < 3) {
-        toast.loading('Connecting to server...', { duration: 2000 });
-        setTimeout(() => fetchOrders(retryCount + 1), 3000);
-      } else {
-        toast.error('Failed to connect to server');
-        setIsInitialLoad(false);
-      }
+      toast.error('Failed to connect to server');
+      setIsInitialLoad(false);
     } finally {
       dispatch(setLoading(false));
     }
   }, [dispatch]);
 
-  // ✅ Live update handler with sound
+  // ✅ SILENT REFRESH - NO SPINNER
+  const refreshOrdersSilently = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const { data } = await api.get('/orders');
+      const normalized = data.map(normalizeOrder);
+      dispatch(setOrders(normalized));
+    } catch (error) {
+      console.error('Silent refresh failed:', error);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  }, [dispatch]);
+
+  // ✅ Live update handler with sound - NO SPINNER
   const handleLiveUpdate = useCallback(() => {
-    fetchOrders();
+    refreshOrdersSilently();  // ✅ Silent refresh - no spinner
     setLivePulse(true);
     setTimeout(() => setLivePulse(false), 1500);
-  }, [fetchOrders]);
+  }, [refreshOrdersSilently]);
 
-  // ✅ SOCKET LISTENERS
+  // ✅ SOCKET LISTENERS - No duplicate toasts
   useEffect(() => {
     fetchOrders();
 
+    // ✅ Only for new order - show toast
     const handleNewOrder = () => {
       console.log('🔔 New order received!');
       if (soundEnabled) playNotificationSound();
@@ -402,10 +413,26 @@ export default function StaffPage() {
       });
     };
 
-    const handleOrderConfirmed = () => handleLiveUpdate();
-    const handleOrderCancelled = () => handleLiveUpdate();
-    const handleOrderReverted = () => handleLiveUpdate();
-    const handleStockUpdated = () => handleLiveUpdate();
+    // ✅ Silent updates - No toast for confirmed/cancelled/reverted
+    const handleOrderConfirmed = () => {
+      console.log('✅ Order confirmed (socket)');
+      handleLiveUpdate();
+    };
+
+    const handleOrderCancelled = () => {
+      console.log('❌ Order cancelled');
+      handleLiveUpdate();
+    };
+
+    const handleOrderReverted = () => {
+      console.log('🔄 Order reverted');
+      handleLiveUpdate();
+    };
+
+    const handleStockUpdated = () => {
+      console.log('📦 Stock updated');
+      handleLiveUpdate();
+    };
 
     socket.on("newOrder", handleNewOrder);
     socket.on("orderConfirmed", handleOrderConfirmed);
@@ -422,7 +449,7 @@ export default function StaffPage() {
     };
   }, [fetchOrders, handleLiveUpdate, playNotificationSound, soundEnabled]);
 
-  // ✅ CONFIRM ORDER
+  // ✅ CONFIRM ORDER - Only toast from here
   const confirmOrder = useCallback(async (orderId) => {
     try {
       // Optimistic update - update UI immediately
@@ -431,6 +458,7 @@ export default function StaffPage() {
       // Call API to confirm
       await api.put(`/orders/${orderId}/confirm`);
 
+      // ✅ ONLY ONE TOAST - from here
       toast.success(`Order confirmed! ✅`, { duration: 2000 });
 
     } catch (error) {
@@ -506,6 +534,21 @@ export default function StaffPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0B1120] p-4 sm:p-6">
+      {/* ✅ Refresh Indicator */}
+      <AnimatePresence>
+        {isRefreshing && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 right-6 z-50 bg-indigo-600 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium"
+          >
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            Updating...
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* HEADER */}
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 mb-8">
         <div>
@@ -601,7 +644,13 @@ export default function StaffPage() {
         </div>
       </div>
 
-   
+      {/* STATS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard title="Pending Orders" value={pendingCount} icon={FiClock} colorGradient="bg-gradient-to-br from-amber-500 to-orange-600" />
+        <StatCard title="Completed Orders" value={confirmedCount} icon={FiCheckCircle} colorGradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
+        <StatCard title="Revenue (Today)" value={`₹${totalRevenue.toLocaleString()}`} icon={FiTrendingUp} colorGradient="bg-gradient-to-br from-indigo-500 to-purple-600" />
+        <StatCard title="Active Orders" value={activeOrdersCount} icon={FiShoppingBag} colorGradient="bg-gradient-to-br from-rose-500 to-pink-600" />
+      </div>
 
       {/* SEARCH + TABS */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">

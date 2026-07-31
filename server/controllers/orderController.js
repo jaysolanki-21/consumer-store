@@ -5,7 +5,6 @@ export const createOrder = async (req, res) => {
   try {
     const { items, counterId } = req.body;
 
-    // Validate counterId
     if (!counterId) {
       return res.status(400).json({ message: 'Counter ID is required' });
     }
@@ -45,7 +44,6 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Counter name mapping
     const counterNames = {
       'counter-1': 'Counter 1',
       'counter-2': 'Counter 2',
@@ -95,13 +93,28 @@ export const confirmOrder = async (req, res) => {
       return res.status(400).json({ message: 'Order already processed' });
     }
 
+    // ✅ FIX: Check reservedStock before deducting
     for (const item of order.items) {
-      await Product.findByIdAndUpdate(item.productId, {
-        $inc: {
-          stock: -item.quantity,
-          reservedStock: -item.quantity
-        }
-      });
+      const product = await Product.findById(item.productId);
+      if (!product) continue;
+      
+      // ✅ Prevent negative reservedStock
+      if (product.reservedStock < item.quantity) {
+        const actualDeduct = Math.max(0, product.reservedStock);
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: {
+            stock: -actualDeduct,
+            reservedStock: -actualDeduct
+          }
+        });
+      } else {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: {
+            stock: -item.quantity,
+            reservedStock: -item.quantity
+          }
+        });
+      }
     }
 
     order.status = 'Confirmed';
@@ -122,24 +135,20 @@ export const confirmOrder = async (req, res) => {
 
 export const getSalesReport = async (req, res) => {
   try {
-    const { date } = req.query; // Expected format: 'YYYY-MM-DD'
+    const { date } = req.query;
     if (!date) {
       return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
     }
 
-    // 1. Get current date string in Indian Standard Time (IST)
     const todayISTStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-    // 2. Compare date strings directly to prevent timezone mismatch for future dates
     if (date > todayISTStr) {
       return res.status(400).json({ message: 'Cannot fetch sales for a future date' });
     }
 
-    // 3. Create start and end intervals matching the Indian local day boundaries
     const startDate = new Date(`${date}T00:00:00.000+05:30`);
     const endDate = new Date(`${date}T23:59:59.999+05:30`);
 
-    // 4. Fetch orders within the local day timeline
     const orders = await Order.find({
       status: 'Confirmed',
       createdAt: { $gte: startDate, $lte: endDate }
@@ -178,6 +187,7 @@ export const getSalesReport = async (req, res) => {
   }
 };
 
+// ✅ FIX 1: cancelOrder with validation
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -186,10 +196,19 @@ export const cancelOrder = async (req, res) => {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
+    // ✅ FIX: Check before deducting
     for (const item of order.items) {
-      await Product.findByIdAndUpdate(item.productId, {
-        $inc: { reservedStock: -item.quantity }
-      });
+      const product = await Product.findById(item.productId);
+      if (!product) continue;
+      
+      const actualDeduct = Math.min(product.reservedStock, item.quantity);
+      if (actualDeduct > 0) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { reservedStock: -actualDeduct }
+        });
+      } else {
+        console.warn(`⚠️ Cannot deduct reserved stock for ${product.name}. Current reserved: ${product.reservedStock}`);
+      }
     }
 
     order.status = 'Cancelled';
@@ -222,7 +241,7 @@ export const revertOrder = async (req, res) => {
         await Product.findByIdAndUpdate(item.productId, {
           $inc: {
             stock: +item.quantity,
-            reservedStock: +item.quantity    // re‑reserve
+            reservedStock: +item.quantity
           }
         });
       }
@@ -259,7 +278,7 @@ export const revertOrder = async (req, res) => {
   }
 };
 
-// Delete single order (only cancelled or pending)
+// ✅ FIX 2: deleteOrder - RESTORE should ADD, not SUBTRACT
 export const deleteOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -268,93 +287,82 @@ export const deleteOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (
-      order.status !== 'Cancelled' &&
-      order.status !== 'Pending'
-    ) {
+    if (order.status !== 'Cancelled' && order.status !== 'Pending') {
       return res.status(400).json({
         message: 'Only cancelled or pending orders can be deleted'
       });
     }
 
-    // RESTORE RESERVED STOCK IF PENDING
+    // ✅ FIX: RESTORE reserved stock (ADD, not SUBTRACT)
     if (order.status === 'Pending') {
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.productId, {
-          $inc: {
-            reservedStock: -item.quantity
-          }
-        });
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
+        
+        // ✅ Restore reserved stock by subtracting (since reservedStock tracks active reservations)
+        // If order is deleted, we need to release the reservation
+        const actualRestore = Math.min(product.reservedStock, item.quantity);
+        if (actualRestore > 0) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { reservedStock: -actualRestore }
+          });
+        }
       }
     }
 
     await order.deleteOne();
 
     const io = req.app.get('io');
-
     io.emit('stockUpdated');
     io.emit('orderDeleted', order._id);
 
     res.json({ message: 'Order deleted successfully' });
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Delete all pending orders for specific date
+// ✅ FIX 3: bulkDeletePendingOrders
 export const bulkDeletePendingOrders = async (req, res) => {
   try {
     const { date } = req.body;
 
     if (!date) {
-      return res.status(400).json({
-        message: 'Date is required'
-      });
+      return res.status(400).json({ message: 'Date is required' });
     }
 
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
-
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
 
-    // 1. GET ALL PENDING ORDERS
     const orders = await Order.find({
       status: 'Pending',
-      createdAt: {
-        $gte: startDate,
-        $lte: endDate
-      }
+      createdAt: { $gte: startDate, $lte: endDate }
     });
 
-    // 2. RESTORE RESERVED STOCK
+    // ✅ FIX: Restore reserved stock safely
     for (const order of orders) {
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(
-          item.productId,
-          {
-            $inc: {
-              reservedStock: -item.quantity
-            }
-          }
-        );
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
+        
+        const actualRestore = Math.min(product.reservedStock, item.quantity);
+        if (actualRestore > 0) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { reservedStock: -actualRestore }
+          });
+        }
       }
     }
 
-    // 3. DELETE ORDERS
     const result = await Order.deleteMany({
       status: 'Pending',
-      createdAt: {
-        $gte: startDate,
-        $lte: endDate
-      }
+      createdAt: { $gte: startDate, $lte: endDate }
     });
 
-    // 4. REALTIME UPDATE
     const io = req.app.get('io');
-
     io.emit('stockUpdated');
     io.emit('ordersBulkDeleted');
 
@@ -362,13 +370,53 @@ export const bulkDeletePendingOrders = async (req, res) => {
       message: `${result.deletedCount} pending orders deleted`,
       count: result.deletedCount
     });
-
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
-    res.status(500).json({
-      message: error.message
-    });
+// ✅ FIX 4: deleteSingleOrder
+export const deleteSingleOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.status !== 'Cancelled' && order.status !== 'Pending') {
+      return res.status(400).json({
+        message: 'Only cancelled or pending orders can be deleted'
+      });
+    }
+
+    // ✅ FIX: Restore reserved stock safely
+    if (order.status === 'Pending') {
+      for (const item of order.items) {
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
+        
+        const actualRestore = Math.min(product.reservedStock, item.quantity);
+        if (actualRestore > 0) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { reservedStock: -actualRestore }
+          });
+        }
+      }
+    }
+
+    await order.deleteOne();
+
+    const io = req.app.get('io');
+    io.emit('stockUpdated');
+    io.emit('orderDeleted', orderId);
+
+    res.json({ message: 'Order deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -421,54 +469,36 @@ export const deleteAllOrdersByDate = async (req, res) => {
   }
 };
 
-// ✅ DELETE SINGLE ORDER - By order ID (not date)
-export const deleteSingleOrder = async (req, res) => {
+// ✅ Admin function to reset negative reserved stock
+export const resetReservedStock = async (req, res) => {
   try {
-    const orderId = req.params.id;
+    const productId = req.params.id;
+    const product = await Product.findById(productId);
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
 
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        message: 'Order not found'
+    // ✅ Only reset if negative
+    if (product.reservedStock < 0) {
+      product.reservedStock = 0;
+      await product.save();
+      
+      const io = req.app.get('io');
+      io.emit('stockUpdated');
+      
+      res.json({ 
+        message: 'Reserved stock reset to 0 successfully', 
+        product 
+      });
+    } else {
+      res.json({ 
+        message: 'Reserved stock is already positive', 
+        product 
       });
     }
-
-    if (
-      order.status !== 'Cancelled' &&
-      order.status !== 'Pending'
-    ) {
-      return res.status(400).json({
-        message: 'Only cancelled or pending orders can be deleted'
-      });
-    }
-
-    // RESTORE RESERVED STOCK
-    if (order.status === 'Pending') {
-      for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.productId, {
-          $inc: {
-            reservedStock: -item.quantity
-          }
-        });
-      }
-    }
-
-    await order.deleteOne();
-
-    const io = req.app.get('io');
-
-    io.emit('stockUpdated');
-    io.emit('orderDeleted', orderId);
-
-    res.json({
-      message: 'Order deleted successfully'
-    });
-
   } catch (error) {
     console.error(error);
-    res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
