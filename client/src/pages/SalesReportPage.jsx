@@ -298,21 +298,20 @@ export default function SalesReportPage() {
         autoTable(doc, {
           startY: y,
           margin: { left: margin, right: margin },
-          head: [["#", "Order ID", "Time", "Roll No.", "Amount (Rs.)", "Approved By"]],
+          head: [["#", "Order ID", "Time", "Amount (Rs.)", "Approved By"]],
           body: confirmedOrders.map((order, idx) => [
             idx + 1,
             `#${order._id.slice(-8)}`,
             new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }),
-            order.rollNumber,
             `Rs. ${Number(order.totalAmount).toLocaleString("en-IN")}`,
             order.confirmedBy?.name || "System",
           ]),
-          foot: [["", "", "", `${confirmedOrders.length} Orders`, `Rs. ${confirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString("en-IN")}`, ""]],
+          foot: [["", "", `${confirmedOrders.length} Orders`, `Rs. ${confirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString("en-IN")}`, ""]],
           headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
           footStyles: { fillColor: [245, 243, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
           bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" }, 4: { halign: "right" }, 5: { halign: "center" } },
+          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "right" }, 4: { halign: "center" } },
           showFoot: "lastPage",
         });
       }
@@ -513,7 +512,7 @@ export default function SalesReportPage() {
             </div>
           </div>
 
-          {/* Confirmed Orders Table */}
+          {/* Confirmed Orders Table - Roll Number Removed */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -531,7 +530,6 @@ export default function SalesReportPage() {
                     <tr className="text-center">
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Order ID</th>
                       <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Time</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Roll Number</th>
                       <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Amount</th>
                       <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Approved By</th>
                     </tr>
@@ -539,7 +537,7 @@ export default function SalesReportPage() {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {confirmedOrders.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
                           No confirmed orders for this date.
                         </td>
                       </tr>
@@ -551,9 +549,6 @@ export default function SalesReportPage() {
                            </td>
                           <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 text-center">
                             {new Date(order.createdAt).toLocaleString()}
-                           </td>
-                          <td className="px-6 py-4 text-center text-gray-700 dark:text-gray-200">
-                            {order.rollNumber}
                            </td>
                           <td className="px-6 py-4 text-right font-semibold text-green-600 dark:text-green-400">
                             ₹{order.totalAmount.toLocaleString()}
@@ -571,7 +566,7 @@ export default function SalesReportPage() {
                   {confirmedOrders.length > 0 && (
                     <tfoot className="bg-gray-50 dark:bg-gray-700 font-semibold">
                       <tr>
-                        <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">
+                        <td colSpan="2" className="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">
                           TOTAL:
                         </td>
                         <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">

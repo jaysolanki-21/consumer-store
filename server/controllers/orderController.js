@@ -3,7 +3,7 @@ import Product from '../models/Product.js';
 
 export const createOrder = async (req, res) => {
   try {
-    const { rollNumber, items } = req.body;
+    const { items } = req.body;
 
     // 1. Validate availability (stock - reservedStock)
     for (const item of items) {
@@ -41,7 +41,6 @@ export const createOrder = async (req, res) => {
     }
 
     const order = await Order.create({
-      rollNumber,
       items: orderItems,
       totalAmount,
       status: 'Pending'
@@ -240,7 +239,6 @@ export const revertOrder = async (req, res) => {
 };
 
 // Delete single order (only cancelled or pending)
-
 export const deleteOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -453,4 +451,3 @@ export const deleteSingleOrder = async (req, res) => {
     });
   }
 };
-

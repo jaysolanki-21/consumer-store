@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 
 const orderSchema = new mongoose.Schema({
-  rollNumber: { type: String, required: true },
   items: [{
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     quantity: { type: Number, required: true },
@@ -9,7 +8,8 @@ const orderSchema = new mongoose.Schema({
   }],
   totalAmount: { type: Number, required: true },
   status: { type: String, enum: ['Pending', 'Confirmed', 'Cancelled'], default: 'Pending' },
-  confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  confirmedAt: { type: Date }
 }, { timestamps: true });
 
 export default mongoose.model('Order', orderSchema);

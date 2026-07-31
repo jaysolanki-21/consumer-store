@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { clearCart, setCustomerInfo } from '../redux/slices/cartSlice';
+import { clearCart } from '../redux/slices/cartSlice';
 import api from '../services/api';
 import socket from '../services/socket';
 import ProductCard from '../components/ProductCard';
@@ -12,7 +12,6 @@ import PasswordProtection from '../components/PasswordProtection';
 import {
   FiShoppingCart,
   FiSearch,
-  FiUser,
   FiPackage,
   FiAlertCircle,
   FiZap,
@@ -21,7 +20,6 @@ import {
   FiCoffee,
   FiSmartphone,
   FiBook,
-  FiLogOut,
 } from 'react-icons/fi';
 
 // Icon mapping for categories
@@ -36,7 +34,6 @@ function ConsumerPageContent() {
   const dispatch = useDispatch();
 
   const cartItems = useSelector((state) => state.cart.items);
-  const savedRollNumber = useSelector((state) => state.cart.rollNumber || '');
 
   // Performance: useMemo for cart calculations
   const cartCount = useMemo(
@@ -54,10 +51,6 @@ function ConsumerPageContent() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [search, setSearch] = useState('');
   const [showCart, setShowCart] = useState(false);
-  const [rollNumber, setRollNumber] = useState(() => {
-    const saved = localStorage.getItem('consumer_roll_number');
-    return saved || savedRollNumber || '';
-  });
   const [isOrderConfirming, setIsOrderConfirming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -68,27 +61,6 @@ function ConsumerPageContent() {
       document.body.style.overflow = 'auto';
     };
   }, [showCart]);
-
-  // Save roll number to localStorage whenever it changes
-  useEffect(() => {
-    if (rollNumber) {
-      localStorage.setItem('consumer_roll_number', rollNumber);
-      dispatch(setCustomerInfo({ rollNumber: rollNumber }));
-    } else {
-      localStorage.removeItem('consumer_roll_number');
-      dispatch(setCustomerInfo({ rollNumber: '' }));
-    }
-  }, [rollNumber, dispatch]);
-
-  // Join socket room for real-time updates
-  useEffect(() => {
-    if (rollNumber) {
-      socket.emit('joinConsumerRoom', rollNumber);
-      return () => {
-        socket.emit('leaveConsumerRoom', rollNumber);
-      };
-    }
-  }, [rollNumber]);
 
   // Fetch products and categories
   useEffect(() => {
@@ -104,7 +76,6 @@ function ConsumerPageContent() {
     };
     fetchData();
 
-    // Fix memory leak in sockets
     const handleStockUpdate = () => {
       fetchProducts();
     };
@@ -143,30 +114,8 @@ function ConsumerPageContent() {
     }
   }, []);
 
-  const handleRollNumberChange = (val) => {
-    const formatted = val.trim().toUpperCase();
-    setRollNumber(formatted);
-  };
-
-  const clearRollNumber = () => {
-    setRollNumber('');
-    localStorage.removeItem('consumer_roll_number');
-    dispatch(setCustomerInfo({ rollNumber: '' }));
-  };
-
   // Updated handlePlaceOrder to accept cash and changeAmount from CartDrawer
   const handlePlaceOrder = async (cash, changeAmount) => {
-    if (!rollNumber) {
-      toast.error('Please enter Roll Number');
-      const input = document.getElementById('session-roll-input');
-      input?.focus();
-      input?.classList.add('animate-shake');
-      setTimeout(() => {
-        input?.classList.remove('animate-shake');
-      }, 500);
-      return;
-    }
-
     if (cartItems.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -187,7 +136,6 @@ function ConsumerPageContent() {
       }));
 
       await api.post('/orders', {
-        rollNumber,
         items: orderItems,
         amountReceived: cash,
         changeGiven: changeAmount,
@@ -202,26 +150,12 @@ function ConsumerPageContent() {
 
       dispatch(clearCart());
       setShowCart(false);
-
-      setTimeout(() => {
-        clearRollNumber();
-      }, 1500);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || 'Order failed');
     } finally {
       setIsOrderConfirming(false);
     }
-  };
-
-  const handleLogout = () => {
-    if (cartItems.length > 0) {
-      toast.error('Please clear cart before logging out', {
-        icon: '⚠️',
-      });
-      return;
-    }
-    clearRollNumber();
   };
 
   const categoryCounts = useMemo(() => {
@@ -233,7 +167,6 @@ function ConsumerPageContent() {
     return counts;
   }, [products]);
 
-  // Fix: Add null checks for product name
   const filteredProducts = useMemo(() => {
     return products.filter(
       (p) =>
@@ -254,7 +187,6 @@ function ConsumerPageContent() {
     return grouped;
   }, [products, categories, selectedCategory, search]);
 
-  // Fix: Return component, not JSX
   const getCategoryIcon = (categoryName) => {
     return categoryIcons[categoryName] || categoryIcons.Default;
   };
@@ -284,44 +216,23 @@ function ConsumerPageContent() {
               </div>
             </motion.div>
 
-            <div className="flex-1 max-w-xs md:max-w-md relative">
-              <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+            {/* Search Bar - Now full width on mobile */}
+            <div className="flex-1 max-w-md relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input
-                id="session-roll-input"
                 type="text"
-                placeholder="Roll Number"
-                value={rollNumber}
-                onChange={(e) => handleRollNumberChange(e.target.value)}
+                placeholder="Search products..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 className="w-full h-10 md:h-11 rounded-xl pl-9 pr-3 bg-gray-100 dark:bg-gray-800 border-0 focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium transition-all"
-                disabled={isOrderConfirming}
               />
             </div>
 
             <div className="flex items-center gap-2">
-              {rollNumber && (
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={handleLogout}
-                  className="h-10 md:h-11 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold flex items-center gap-1 transition-all"
-                  title="Clear Session"
-                >
-                  <FiLogOut className="text-base" />
-                  <span className="hidden sm:inline text-sm">Logout</span>
-                </motion.button>
-              )}
-              
               <motion.button
                 whileTap={{ scale: 0.95 }}
                 whileHover={{ scale: 1.02 }}
-                onClick={() => {
-                  if (!rollNumber) {
-                    toast.error('Please enter roll number first');
-                    document.getElementById('session-roll-input')?.focus();
-                    return;
-                  }
-                  setShowCart(true);
-                }}
+                onClick={() => setShowCart(true)}
                 className="relative h-10 md:h-11 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
                 <FiShoppingCart className="text-base" />
@@ -341,41 +252,8 @@ function ConsumerPageContent() {
         </div>
       </nav>
 
-      {/* Roll Number Status Bar */}
-      {rollNumber && (
-        <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 py-2 px-4">
-          <div className="container mx-auto flex items-center justify-between gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <FiUser className="text-green-600 dark:text-green-400" />
-              <span className="text-green-700 dark:text-green-300 font-medium">
-                Active Session: <strong className="font-mono">{rollNumber}</strong>
-              </span>
-            </div>
-            <button
-              onClick={clearRollNumber}
-              className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium flex items-center gap-1"
-            >
-              <FiLogOut className="text-xs" />
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
-
       <main className="container mx-auto px-4 py-6 pb-24">
-        {/* Search Bar */}
-        <div className="relative max-w-2xl mx-auto mb-8">
-          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-12 md:h-14 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 pl-12 pr-5 text-base font-medium outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
-          />
-        </div>
-
-        {/* Categories */}
+        {/* Categories - Now without search bar above */}
         <div className="mb-8">
           <div className="flex flex-wrap gap-2">
             <button
@@ -497,49 +375,13 @@ function ConsumerPageContent() {
         )}
       </main>
 
-      {/* Cart Drawer - REMOVED all cash-related props since CartDrawer manages its own state */}
+      {/* Cart Drawer */}
       <CartDrawer
         open={showCart}
         onClose={() => setShowCart(false)}
         onCheckout={handlePlaceOrder}
         isProcessing={isOrderConfirming}
       />
-
-      {/* Roll Number Warning */}
-      <AnimatePresence>
-        {!rollNumber && rollNumber !== undefined && !isOrderConfirming && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed inset-x-0 bottom-6 z-50 flex justify-center items-center px-4"
-          >
-            <div className="w-full max-w-md">
-              <div className="rounded-2xl bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-xl text-white p-4 shadow-2xl border border-gray-700/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <FiAlertCircle className="text-amber-400 text-xl" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm">Roll Number Required</p>
-                    <p className="text-xs text-gray-400 leading-relaxed">Please enter your roll number before checkout</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('session-roll-input');
-                      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      setTimeout(() => input?.focus(), 400);
-                    }}
-                    className="h-10 px-4 rounded-xl bg-white text-gray-900 text-xs font-bold hover:bg-gray-100 transition-all duration-200 active:scale-95 whitespace-nowrap"
-                  >
-                    Enter Now
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }

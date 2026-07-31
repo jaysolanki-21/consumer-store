@@ -25,12 +25,15 @@ import {
   FiRotateCcw,
   FiTrash2,
   FiTrash,
+  FiChevronDown,
+  FiChevronUp,
+  FiPrinter,
+  FiClock as FiTime,
 } from "react-icons/fi";
 
 // ✅ IST Date Functions
 function getTodayLocal() {
   const now = new Date();
-  // Convert to IST (UTC+5:30)
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(now.getTime() + istOffset);
   const year = istDate.getUTCFullYear();
@@ -39,7 +42,6 @@ function getTodayLocal() {
   return `${year}-${month}-${day}`;
 }
 
-// ✅ Convert UTC date to IST date string (YYYY-MM-DD)
 function getISTDateFromUTC(utcDateString) {
   const date = new Date(utcDateString);
   const istOffset = 5.5 * 60 * 60 * 1000;
@@ -50,13 +52,11 @@ function getISTDateFromUTC(utcDateString) {
   return `${year}-${month}-${day}`;
 }
 
-// ✅ Check if order date matches filter date (both in IST)
 function isSameISTDate(orderCreatedAt, filterDate) {
   const orderISTDate = getISTDateFromUTC(orderCreatedAt);
   return orderISTDate === filterDate;
 }
 
-// ✅ Add days to date (maintaining IST)
 function addDays(dateStr, days) {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
@@ -67,23 +67,245 @@ function addDays(dateStr, days) {
   return `${newYear}-${newMonth}-${newDay}`;
 }
 
+// ✅ THERMAL BILL PRINT FUNCTION - Roll Number Removed
+const printThermalBill = (order) => {
+  const billNumber = order._id.slice(-6);
+  const date = new Date(order.createdAt).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const time = new Date(order.createdAt).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const billHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Thermal Bill</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+          font-family: 'Courier New', monospace;
+          background: #fff;
+          padding: 20px;
+          width: 80mm;
+          margin: 0 auto;
+        }
+        .bill-container {
+          border: 1px dashed #ddd;
+          padding: 15px;
+          background: #fff;
+        }
+        .header {
+          text-align: center;
+          border-bottom: 2px solid #000;
+          padding-bottom: 10px;
+          margin-bottom: 10px;
+        }
+        .header h1 {
+          font-size: 18px;
+          font-weight: bold;
+          letter-spacing: 2px;
+        }
+        .header p {
+          font-size: 11px;
+          color: #666;
+          margin-top: 2px;
+        }
+        .bill-info {
+          display: flex;
+          justify-content: space-between;
+          font-size: 12px;
+          margin-bottom: 10px;
+          border-bottom: 1px dashed #ccc;
+          padding-bottom: 8px;
+        }
+        .items-table {
+          width: 100%;
+          font-size: 12px;
+          border-collapse: collapse;
+          margin-bottom: 10px;
+        }
+        .items-table th {
+          text-align: left;
+          border-bottom: 1px solid #000;
+          padding: 4px 0;
+          font-size: 11px;
+        }
+        .items-table td {
+          padding: 3px 0;
+        }
+        .items-table .qty { text-align: center; }
+        .items-table .amount { text-align: right; }
+        .total-row {
+          border-top: 2px solid #000;
+          padding-top: 6px;
+          margin-top: 4px;
+          font-weight: bold;
+          font-size: 14px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .payment-info {
+          border-top: 1px dashed #ccc;
+          padding-top: 8px;
+          margin-top: 8px;
+          font-size: 12px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .footer {
+          text-align: center;
+          font-size: 10px;
+          color: #888;
+          margin-top: 10px;
+          border-top: 1px dashed #ccc;
+          padding-top: 8px;
+        }
+        .thank-you {
+          text-align: center;
+          font-size: 14px;
+          font-weight: bold;
+          margin-top: 8px;
+          letter-spacing: 1px;
+        }
+        @media print {
+          body { padding: 10px; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="bill-container" id="bill-content">
+        <div class="header">
+          <h1>CAMPUS STORE</h1>
+          <p>APC Consumer Store • Hostel Campus</p>
+          <p style="font-size:10px; color:#999;">GST: 22ABCDE1234F1Z5</p>
+        </div>
+
+        <div class="bill-info">
+          <span><strong>Bill No:</strong> #${billNumber}</span>
+          <span><strong>Date:</strong> ${date}</span>
+        </div>
+        <div class="bill-info" style="border-bottom: none; padding-bottom: 0; margin-bottom: 8px;">
+          <span><strong>Time:</strong> ${time}</span>
+          <span><strong>Status:</strong> ${order.status === 'Confirmed' ? 'Completed' : 'Pending'}</span>
+        </div>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width:50%;">Item</th>
+              <th class="qty" style="width:20%;">Qty</th>
+              <th class="amount" style="width:30%;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.items.map(item => `
+              <tr>
+                <td>${item.productId?.name || 'Unknown'}</td>
+                <td class="qty">${item.quantity}</td>
+                <td class="amount">₹${(item.quantity * item.price).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="border-top: 2px solid #000; margin: 4px 0;"></div>
+
+        <div class="total-row">
+          <span>TOTAL</span>
+          <span>₹${order.totalAmount.toFixed(2)}</span>
+        </div>
+
+        <div class="payment-info">
+          <span><strong>Payment:</strong> Cash</span>
+          <span><strong>Items:</strong> ${totalItems}</span>
+        </div>
+
+        <div class="footer">
+          <p>Hostel Counter • APC Campus</p>
+          <p style="font-size:9px;">Support: +91 98765 43210</p>
+        </div>
+
+        <div class="thank-you">
+          Thank You!
+        </div>
+        <div style="text-align:center; font-size:10px; color:#aaa; margin-top:4px;">
+          Visit Again!
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top:15px;" class="no-print">
+        <button onclick="window.print()" style="padding:12px 40px; background:#4f46e5; color:white; border:none; border-radius:10px; font-size:16px; cursor:pointer;">
+          Print Bill
+        </button>
+        <button onclick="window.close()" style="padding:12px 30px; background:#6b7280; color:white; border:none; border-radius:10px; font-size:16px; cursor:pointer; margin-left:10px;">
+          Close
+        </button>
+      </div>
+
+      <script>
+        window.onload = function() {
+          setTimeout(() => {
+            window.print();
+          }, 500);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=400,height=600');
+  if (printWindow) {
+    printWindow.document.write(billHTML);
+    printWindow.document.close();
+  } else {
+    toast.error('Please allow popups for printing');
+  }
+};
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [livePulse, setLivePulse] = useState(false);
   const [revertingId, setRevertingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterDate, setFilterDate] = useState(() => getTodayLocal());
 
-  // ✅ Use ref for orders to avoid stale closures in socket
   const ordersRef = useRef([]);
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
 
-  // ✅ Custom confirm dialog
+  // ✅ Calculate order completion time
+  const getCompletionTime = (order) => {
+    if (order.status !== "Confirmed") return null;
+    
+    const created = new Date(order.createdAt);
+    const confirmed = new Date(order.confirmedAt || order.updatedAt);
+    
+    if (isNaN(confirmed.getTime())) return null;
+    
+    const diffMs = confirmed - created;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffSecs = Math.floor((diffMs % 60000) / 1000);
+    
+    if (diffMins > 0) {
+      return `${diffMins}m ${diffSecs}s`;
+    }
+    return `${diffSecs}s`;
+  };
+
   const showConfirm = (title, message, onConfirm, onCancel = () => {}) => {
     confirmAlert({
       title: title,
@@ -117,7 +339,6 @@ export default function AdminOrdersPage() {
     });
   };
 
-  // ✅ Fetch orders
   const fetchOrders = useCallback(async () => {
     try {
       const { data } = await api.get("/orders");
@@ -129,14 +350,12 @@ export default function AdminOrdersPage() {
     }
   }, []);
 
-  // ✅ Live update handler
   const handleLiveUpdate = useCallback(() => {
     fetchOrders();
     setLivePulse(true);
     setTimeout(() => setLivePulse(false), 1500);
   }, [fetchOrders]);
 
-  // ✅ Socket listeners
   useEffect(() => {
     fetchOrders();
 
@@ -155,7 +374,6 @@ export default function AdminOrdersPage() {
     };
   }, [fetchOrders, handleLiveUpdate]);
 
-  // ✅ Confirm order
   const confirmOrder = useCallback(async (orderId) => {
     try {
       await api.put(`/orders/${orderId}/confirm`);
@@ -166,7 +384,6 @@ export default function AdminOrdersPage() {
     }
   }, [fetchOrders]);
 
-  // ✅ Cancel order
   const cancelOrder = useCallback(async (orderId) => {
     showConfirm(
       "Cancel Order",
@@ -183,7 +400,6 @@ export default function AdminOrdersPage() {
     );
   }, [fetchOrders]);
 
-  // ✅ Revert order
   const revertOrder = useCallback(async (orderId) => {
     showConfirm(
       "Revert Order",
@@ -203,7 +419,6 @@ export default function AdminOrdersPage() {
     );
   }, [fetchOrders]);
 
-  // ✅ Delete single order
   const deleteOrder = useCallback(async (orderId, orderStatus) => {
     if (orderStatus !== "Cancelled" && orderStatus !== "Pending") {
       toast.error("Only cancelled or pending orders can be deleted");
@@ -228,7 +443,6 @@ export default function AdminOrdersPage() {
     );
   }, [fetchOrders]);
 
-  // ✅ Delete all pending orders for SELECTED DATE (IST)
   const deleteAllPendingOrders = useCallback(async () => {
     const pendingOrdersForDate = orders.filter(
       (o) => o.status === "Pending" && isSameISTDate(o.createdAt, filterDate)
@@ -254,7 +468,6 @@ export default function AdminOrdersPage() {
     );
   }, [orders, filterDate, fetchOrders]);
 
-  // ✅ Delete all cancelled orders for SELECTED DATE (IST)
   const deleteAllCancelledOrders = useCallback(async () => {
     const cancelledOrdersForDate = orders.filter(
       (o) => o.status === "Cancelled" && isSameISTDate(o.createdAt, filterDate)
@@ -280,7 +493,6 @@ export default function AdminOrdersPage() {
     );
   }, [orders, filterDate, fetchOrders]);
 
-  // ✅ Delete all records for SELECTED DATE (IST)
   const deleteAllRecordsForDate = useCallback(async () => {
     const ordersForDate = orders.filter((o) => isSameISTDate(o.createdAt, filterDate));
     
@@ -290,7 +502,7 @@ export default function AdminOrdersPage() {
     }
 
     showConfirm(
-      "⚠️ Delete All Orders",
+      "Delete All Orders",
       `Are you sure you want to delete ALL ${ordersForDate.length} orders for ${filterDate}?`,
       async () => {
         try {
@@ -304,6 +516,20 @@ export default function AdminOrdersPage() {
     );
   }, [orders, filterDate, fetchOrders]);
 
+  // ✅ Reprint order
+  const reprintOrder = useCallback((order) => {
+    if (!order || order.status !== "Confirmed") {
+      toast.error('Only confirmed orders can be reprinted');
+      return;
+    }
+    printThermalBill(order);
+    toast.success('Reprinting bill...', { duration: 2000 });
+  }, []);
+
+  const toggleExpand = (orderId) => {
+    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+  };
+
   const goPrevDay = () => setFilterDate((prev) => addDays(prev, -1));
   const goNextDay = () => {
     const today = getTodayLocal();
@@ -315,7 +541,6 @@ export default function AdminOrdersPage() {
     setFilterDate(next);
   };
 
-  // ✅ Filter orders using IST date
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchesDate = isSameISTDate(order.createdAt, filterDate);
@@ -348,12 +573,10 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // ✅ Counts using IST date
   const ordersForDate = orders.filter((o) => isSameISTDate(o.createdAt, filterDate));
   const cancelledOrdersForDate = ordersForDate.filter((o) => o.status === "Cancelled").length;
   const pendingOrdersForDate = ordersForDate.filter((o) => o.status === "Pending").length;
 
-  // Format display date
   const displayDate = (() => {
     const [year, month, day] = filterDate.split('-');
     return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
@@ -533,91 +756,146 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {filteredOrders.map((order) => (
-            <div
-              key={order._id}
-              className={`bg-white dark:bg-slate-800 rounded-3xl shadow-sm border overflow-hidden ${
-                order.status === "Pending" ? "border-yellow-300" : order.status === "Confirmed" ? "border-green-300" : "border-red-300"
-              }`}
-            >
-              {/* TOP BAR */}
-              <div className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="font-bold text-lg">Order #{order._id.slice(-8)}</h2>
-                    {getStatusBadge(order.status)}
-                  </div>
-                  <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
-                    <span>Roll No: <span className="font-semibold text-slate-700 dark:text-slate-200">{order.rollNumber}</span></span>
-                    <span>{new Date(order.createdAt).toLocaleString()}</span>
-                    {order.status === "Confirmed" && order.confirmedBy && (
-                      <span className="inline-flex items-center gap-1"><FiUserCheck className="text-green-600" />Confirmed by: <span className="font-semibold text-green-700 dark:text-green-300">{order.confirmedBy.name}</span></span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-slate-500">Total Amount</p>
-                  <h2 className="text-3xl font-bold text-indigo-600">₹{order.totalAmount}</h2>
-                </div>
-              </div>
+          {filteredOrders.map((order) => {
+            const completionTime = getCompletionTime(order);
+            const isExpanded = expandedOrderId === order._id;
 
-              {/* ITEMS */}
-              <div className="p-6">
-                <div className="space-y-3">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-2xl px-4 py-3">
-                      <div>
-                        <p className="font-semibold">{item.productId?.name || "Deleted Product"}</p>
-                        <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-lg">₹{item.quantity * item.price}</p>
-                        <p className="text-xs text-slate-500">₹{item.price} each</p>
-                      </div>
+            return (
+              <div
+                key={order._id}
+                className={`bg-white dark:bg-slate-800 rounded-3xl shadow-sm border overflow-hidden ${
+                  order.status === "Pending" ? "border-yellow-300" : order.status === "Confirmed" ? "border-green-300" : "border-red-300"
+                }`}
+              >
+                {/* TOP BAR - Entire clickable for expand/collapse - Roll Number Removed */}
+                <div
+                  onClick={() => toggleExpand(order._id)}
+                  className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h2 className="font-bold text-lg">Order #{order._id.slice(-8)}</h2>
+                      {getStatusBadge(order.status)}
+                      {/* Completion Time */}
+                      {completionTime && (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                          <FiTime className="text-xs" />
+                          {completionTime}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
+                      <span>{new Date(order.createdAt).toLocaleString()}</span>
+                      {order.status === "Confirmed" && order.confirmedBy && (
+                        <span className="inline-flex items-center gap-1"><FiUserCheck className="text-green-600" />Confirmed by: <span className="font-semibold text-green-700 dark:text-green-300">{order.confirmedBy.name}</span></span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Price + Expand Icon - on the right side */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500">Total Amount</p>
+                      <h2 className="text-3xl font-bold text-indigo-600">₹{order.totalAmount}</h2>
+                    </div>
+                    {/* Expand/Collapse Icon */}
+                    <div className="p-1.5 rounded-lg">
+                      {isExpanded ? (
+                        <FiChevronUp className="text-slate-600 dark:text-slate-400 text-2xl" />
+                      ) : (
+                        <FiChevronDown className="text-slate-600 dark:text-slate-400 text-2xl" />
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* ACTION BUTTONS */}
-                <div className="flex flex-wrap gap-3 mt-6">
-                  {order.status === "Pending" && (
-                    <>
-                      <button onClick={() => confirmOrder(order._id)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition">
-                        <FiCheck /> Confirm Order
-                      </button>
-                      <button onClick={() => cancelOrder(order._id)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition">
-                        <FiX /> Cancel Order
-                      </button>
-                    </>
-                  )}
+                {/* EXPANDABLE DETAILS - Only visible when expanded */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-6 border-t border-gray-200 dark:border-slate-700">
+                        {/* ITEMS DETAILS */}
+                        <div className="space-y-3">
+                          <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-3">Order Items</h4>
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-2xl px-4 py-3">
+                              <div>
+                                <p className="font-semibold">{item.productId?.name || "Deleted Product"}</p>
+                                <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-lg">₹{item.quantity * item.price}</p>
+                                <p className="text-xs text-slate-500">₹{item.price} each</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
 
-                  {(order.status === "Confirmed" || order.status === "Cancelled") && (
-                    <button onClick={() => revertOrder(order._id)} disabled={revertingId === order._id} className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl font-semibold transition disabled:opacity-50">
-                      <FiRotateCcw /> Revert to Pending
-                    </button>
-                  )}
+                        {/* ACTION BUTTONS */}
+                        <div className="flex flex-wrap gap-3 mt-6">
+                          {order.status === "Pending" && (
+                            <>
+                              <button onClick={() => confirmOrder(order._id)} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition">
+                                <FiCheck /> Confirm Order
+                              </button>
+                              <button onClick={() => cancelOrder(order._id)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition">
+                                <FiX /> Cancel Order
+                              </button>
+                            </>
+                          )}
 
-                  {(order.status === "Cancelled" || order.status === "Pending") && (
-                    <button onClick={() => deleteOrder(order._id, order.status)} disabled={deletingId === order._id} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition ml-auto">
-                      {deletingId === order._id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FiTrash2 className="text-lg" />}
-                      Delete Order
-                    </button>
-                  )}
-                </div>
+                          {(order.status === "Confirmed" || order.status === "Cancelled") && (
+                            <button onClick={() => revertOrder(order._id)} disabled={revertingId === order._id} className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl font-semibold transition disabled:opacity-50">
+                              <FiRotateCcw /> Revert to Pending
+                            </button>
+                          )}
 
-                {order.status === "Confirmed" && (
-                  <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold">
-                    <FiCheckCircle /> Order successfully confirmed{order.confirmedBy && ` by ${order.confirmedBy.name}`}
-                  </div>
-                )}
-                {order.status === "Cancelled" && (
-                  <div className="mt-6 flex items-center gap-2 text-red-600 font-semibold">
-                    <FiAlertCircle /> Order cancelled by admin
-                  </div>
-                )}
+                          {/* Reprint Button for Confirmed Orders - Inside expanded area */}
+                          {order.status === "Confirmed" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                reprintOrder(order);
+                              }}
+                              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                            >
+                              <FiPrinter className="text-lg" />
+                              Reprint Bill
+                            </button>
+                          )}
+
+                          {(order.status === "Cancelled" || order.status === "Pending") && (
+                            <button onClick={() => deleteOrder(order._id, order.status)} disabled={deletingId === order._id} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition ml-auto">
+                              {deletingId === order._id ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FiTrash2 className="text-lg" />}
+                              Delete Order
+                            </button>
+                          )}
+                        </div>
+
+                        {order.status === "Confirmed" && (
+                          <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold">
+                            <FiCheckCircle /> Order successfully confirmed{order.confirmedBy && ` by ${order.confirmedBy.name}`}
+                            {completionTime && <span className="ml-2 text-sm text-blue-600">Completed in {completionTime}</span>}
+                          </div>
+                        )}
+                        {order.status === "Cancelled" && (
+                          <div className="mt-6 flex items-center gap-2 text-red-600 font-semibold">
+                            <FiAlertCircle /> Order cancelled by admin
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

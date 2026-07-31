@@ -18,21 +18,20 @@ import {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Load saved email if remember me was checked before
+  // ✅ Always remember me = true (automatic)
+  const rememberMe = true;
+
+  // Load saved email if available
   useEffect(() => {
     const savedEmail = localStorage.getItem('savedEmail');
-    const savedRememberMe = localStorage.getItem('rememberMe') === 'true';
-    
-    if (savedRememberMe && savedEmail) {
+    if (savedEmail) {
       setEmail(savedEmail);
-      setRememberMe(true);
     }
   }, []);
 
@@ -46,21 +45,17 @@ export default function LoginPage() {
         password,
       });
 
-      // Save credentials with remember me preference
+      // ✅ Always save credentials (remember me is always ON)
       dispatch(
         setCredentials({
           user: data,
           token: data.token,
-          rememberMe: rememberMe,
+          rememberMe: true, // Always true
         })
       );
 
-      // Save email for next time if remember me is checked
-      if (rememberMe) {
-        localStorage.setItem('savedEmail', email);
-      } else {
-        localStorage.removeItem('savedEmail');
-      }
+      // ✅ Always save email for next time
+      localStorage.setItem('savedEmail', email);
 
       toast.success('Login successful');
 
@@ -110,7 +105,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* FORM */}
+        {/* FORM - Without Remember Me Checkbox */}
         <form onSubmit={handleSubmit} className="space-y-5">
 
           {/* EMAIL */}
@@ -156,17 +151,8 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* REMEMBER ME CHECKBOX */}
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-gray-300">Remember me</span>
-            </label>
+          {/* FORGOT PASSWORD LINK ONLY */}
+          <div className="flex justify-end">
             <a href="#" className="text-sm text-indigo-400 hover:text-indigo-300 transition">
               Forgot password?
             </a>
@@ -196,9 +182,7 @@ export default function LoginPage() {
         <div className="mt-6 pt-4 border-t border-white/10 text-center">
           <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
             <FiCheckCircle className="text-xs" />
-            {rememberMe 
-              ? "✓ You'll stay logged in until you logout" 
-              : "Session will expire when you close browser"}
+            Stay logged in until you logout
           </p>
           <p className="text-xs text-gray-500 mt-2">
             APC Consumer Store Management System
