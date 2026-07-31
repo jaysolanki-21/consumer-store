@@ -47,13 +47,13 @@ export default function SalesReportPage() {
   // ✅ FILTERS
   const [filterCounter, setFilterCounter] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
-  const [filterDateRange, setFilterDateRange] = useState("today"); // today, week, month, custom
+  const [filterDateRange, setFilterDateRange] = useState("today");
   
   // ✅ Custom date range
   const [customStartDate, setCustomStartDate] = useState(getTodayIST());
   const [customEndDate, setCustomEndDate] = useState(getTodayIST());
   
-  // ✅ TWO SEPARATE LOADING STATES
+  // ✅ LOADING STATES - Only for initial load
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -162,15 +162,16 @@ export default function SalesReportPage() {
     };
   }, [getFilteredOrders]);
 
-  // Initial load
+  // ✅ INITIAL FETCH - Only once
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(false);
   }, []);
 
-  // ✅ Socket events with SILENT refresh
+  // ✅ SOCKET EVENTS - Silent background refresh (NO SPINNER)
   useEffect(() => {
     const handleOrderChange = () => {
-      fetchOrders();
+      // ✅ SILENT REFRESH - No loading spinner
+      fetchOrders(true);
     };
 
     socket.on("orderConfirmed", handleOrderChange);
@@ -186,15 +187,30 @@ export default function SalesReportPage() {
     };
   }, []);
 
-  const fetchOrders = async () => {
+  // ✅ FETCH ORDERS with silent mode
+  const fetchOrders = async (silent = false) => {
     try {
-      setInitialLoading(true);
+      if (!silent) {
+        setInitialLoading(true);
+      } else {
+        // ✅ Show subtle refresh indicator instead of spinner
+        setRefreshing(true);
+      }
+      
       const { data } = await api.get("/orders");
       setAllOrders(data);
     } catch (err) {
-      toast.error("Failed to load orders");
+      if (!silent) {
+        toast.error("Failed to load orders");
+      }
+      console.error("Fetch error:", err);
     } finally {
-      setInitialLoading(false);
+      if (!silent) {
+        setInitialLoading(false);
+      } else {
+        // ✅ Hide refresh indicator after 1.5 seconds
+        setTimeout(() => setRefreshing(false), 1500);
+      }
     }
   };
 
@@ -414,7 +430,7 @@ export default function SalesReportPage() {
 
   return (
     <div className="p-6 relative">
-      {/* ✅ Refresh Indicator */}
+      {/* ✅ Refresh Indicator - Subtle top-right corner */}
       <AnimatePresence>
         {refreshing && (
           <motion.div
@@ -531,7 +547,7 @@ export default function SalesReportPage() {
             </select>
           </div>
 
-          {/* Payment Filter (if needed) */}
+          {/* Payment Filter */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Payment Method</label>
             <select
