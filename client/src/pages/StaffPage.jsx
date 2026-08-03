@@ -645,12 +645,12 @@ export default function StaffPage() {
       </div>
 
       {/* STATS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard title="Pending Orders" value={pendingCount} icon={FiClock} colorGradient="bg-gradient-to-br from-amber-500 to-orange-600" />
         <StatCard title="Completed Orders" value={confirmedCount} icon={FiCheckCircle} colorGradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
         <StatCard title="Revenue (Today)" value={`₹${totalRevenue.toLocaleString()}`} icon={FiTrendingUp} colorGradient="bg-gradient-to-br from-indigo-500 to-purple-600" />
         <StatCard title="Active Orders" value={activeOrdersCount} icon={FiShoppingBag} colorGradient="bg-gradient-to-br from-rose-500 to-pink-600" />
-      </div>
+      </div> */}
 
       {/* SEARCH + TABS */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
