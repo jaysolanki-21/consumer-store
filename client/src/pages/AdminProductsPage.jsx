@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import api from "../services/api";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 import { FiTrendingUp } from "react-icons/fi";
 
 import {
@@ -35,7 +36,8 @@ export default function AdminProductsPage() {
   // Form fields
   const [form, setForm] = useState({
     name: "",
-    price: "",
+    costPrice: "",
+    sellingPrice: "",
     stock: "",
     categoryId: "",
     lowStockThreshold: 5,
@@ -83,7 +85,8 @@ export default function AdminProductsPage() {
     setEditing(null);
     setForm({
       name: "",
-      price: "",
+      costPrice: "",
+      sellingPrice: "",
       stock: "",
       categoryId: "",
       lowStockThreshold: 5,
@@ -130,11 +133,14 @@ export default function AdminProductsPage() {
       return;
     }
 
-    const confirmReset = window.confirm(
-      `Reset reserved stock for ${product.name}?`,
-    );
+    const result = await Swal.fire({
+      title: `Reset reserved stock for ${product.name}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Reset"
+    });
 
-    if (!confirmReset) return;
+    if (!result.isConfirmed) return;
 
     try {
       await api.patch(`/products/reset-reserved/${product._id}`);
@@ -163,11 +169,17 @@ export default function AdminProductsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (Number(form.sellingPrice) < Number(form.costPrice)) {
+      toast.error("Selling price cannot be lower than buying price.");
+      return;
+    }
     setLoading(true);
 
     const formData = new FormData();
     formData.append("name", form.name);
-    formData.append("price", form.price);
+    formData.append("costPrice", form.costPrice);
+    formData.append("sellingPrice", form.sellingPrice);
+    formData.append("price", form.sellingPrice);
     formData.append("stock", form.stock);
     formData.append("categoryId", form.categoryId);
     formData.append("lowStockThreshold", form.lowStockThreshold);
@@ -232,7 +244,8 @@ export default function AdminProductsPage() {
     setEditing(product._id);
     setForm({
       name: product.name,
-      price: product.price,
+      costPrice: product.costPrice ?? "",
+      sellingPrice: product.sellingPrice ?? product.price,
       stock: product.stock,
       categoryId: product.categoryId?._id || product.categoryId,
       lowStockThreshold: product.lowStockThreshold,
@@ -246,7 +259,14 @@ export default function AdminProductsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this product?")) return;
+    const result = await Swal.fire({
+      title: "Delete this product?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc2626",
+      confirmButtonText: "Delete"
+    });
+    if (!result.isConfirmed) return;
     try {
       await api.delete(`/products/${id}`);
       toast.success("Product deleted");
@@ -284,7 +304,9 @@ export default function AdminProductsPage() {
       const newVisibility = !product.visibility;
       await api.put(`/products/${product._id}`, {
         name: product.name,
-        price: product.price,
+        costPrice: product.costPrice || 0,
+        sellingPrice: product.sellingPrice ?? product.price,
+        price: product.sellingPrice ?? product.price,
         stock: product.stock,
         categoryId: product.categoryId?._id || product.categoryId,
         lowStockThreshold: product.lowStockThreshold,
@@ -462,19 +484,41 @@ export default function AdminProductsPage() {
                   required
                 />
               </div>
-              {/* Price */}
+              {/* Cost Price */}
               <div>
                 <label className="block text-sm font-semibold mb-2">
-                  Price
+                  Cost Price
                 </label>
                 <div className="relative">
                   <FaRupeeSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="number"
-                    placeholder="Price"
-                    value={form.price}
+                    min="0"
+                    step="0.01"
+                    placeholder="Cost price"
+                    value={form.costPrice}
                     onChange={(e) =>
-                      setForm({ ...form, price: e.target.value })
+                      setForm({ ...form, costPrice: e.target.value })
+                    }
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  />
+                </div>
+              </div>
+              {/* Selling Price */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">
+                  Selling Price
+                </label>
+                <div className="relative">
+                  <FaRupeeSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Selling price"
+                    value={form.sellingPrice}
+                    onChange={(e) =>
+                      setForm({ ...form, sellingPrice: e.target.value })
                     }
                     className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/30"
                     required
@@ -755,8 +799,11 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-semibold text-base text-green-600 dark:text-green-400">
-                        ₹{p.price}
+                        ₹{p.sellingPrice ?? p.price}
                       </span>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Cost: ₹{p.costPrice ?? 0}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-mono text-base font-medium text-slate-700 dark:text-slate-300">

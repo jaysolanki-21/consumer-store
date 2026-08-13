@@ -29,7 +29,7 @@ export const login = async (req, res) => {
     }
     
     // Check if user is active
-    if (!user.isActive) {
+    if (!user.isActive || (user.disabledUntil && user.disabledUntil > new Date())) {
       return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
     }
     
@@ -39,6 +39,7 @@ export const login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      isActive: user.isActive,
       token: generateToken(user._id)
     };
     

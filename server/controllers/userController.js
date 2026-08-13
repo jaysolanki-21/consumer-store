@@ -45,6 +45,24 @@ export const updateStaff = async (req, res) => {
   }
 };
 
+export const setStaffStatus = async (req, res) => {
+  try {
+    const { isActive, disabledUntil } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Staff not found' });
+    if (user.role !== 'staff') return res.status(400).json({ message: 'Not a staff account' });
+    user.isActive = Boolean(isActive);
+    user.disabledUntil = disabledUntil || null;
+    await user.save();
+    const { password, ...userData } = user.toObject();
+    const io = req.app.get('io');
+    if (io) io.emit('usersUpdated');
+    res.json(userData);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Reset staff password
 export const resetStaffPassword = async (req, res) => {
   try {

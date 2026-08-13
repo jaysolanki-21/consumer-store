@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import Swal from 'sweetalert2';
 import {
   FiUserPlus,
   FiEdit2,
@@ -10,7 +11,8 @@ import {
   FiUser,
   FiShield,
   FiSearch,
-  FiX
+  FiX,
+  FiPower
 } from 'react-icons/fi';
 
 export default function AdminStaffPage() {
@@ -105,7 +107,14 @@ export default function AdminStaffPage() {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete staff "${name}"?`)) return;
+    const result = await Swal.fire({
+      title: `Delete staff "${name}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      confirmButtonText: 'Delete'
+    });
+    if (!result.isConfirmed) return;
 
     try {
       await api.delete(`/users/staff/${id}`);
@@ -113,6 +122,30 @@ export default function AdminStaffPage() {
       fetchStaff();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Delete failed');
+    }
+  };
+
+  const handleStatus = async member => {
+    const nextActive = !member.isActive;
+    const result = await Swal.fire({
+      title: `${nextActive ? 'Enable' : 'Disable'} ${member.name}?`,
+      input: nextActive ? undefined : 'datetime-local',
+      inputLabel: nextActive ? undefined : 'Disable until (optional)',
+      showCancelButton: true,
+      confirmButtonText: nextActive ? 'Enable' : 'Disable',
+      icon: 'warning'
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      await api.put(`/users/staff/${member._id}/status`, {
+        isActive: nextActive,
+        disabledUntil: nextActive ? null : result.value || null
+      });
+      toast.success(`Staff ${nextActive ? 'enabled' : 'disabled'}`);
+      fetchStaff();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Status update failed');
     }
   };
 
@@ -312,6 +345,9 @@ export default function AdminStaffPage() {
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
                         Staff
                       </span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${member.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {member.isActive ? 'Enabled' : 'Disabled'}
+                      </span>
 
                       <span className="text-xs text-gray-400">
                         Joined{' '}
@@ -341,6 +377,13 @@ export default function AdminStaffPage() {
                     className="w-10 h-10 rounded-xl bg-yellow-100 hover:bg-yellow-200 text-yellow-600 flex items-center justify-center transition"
                   >
                     <FiKey />
+                  </button>
+
+                  <button
+                    onClick={() => handleStatus(member)}
+                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition"
+                  >
+                    <FiPower />
                   </button>
 
                   <button

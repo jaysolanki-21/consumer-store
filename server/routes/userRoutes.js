@@ -3,6 +3,7 @@ import {
   getStaff,
   createStaff,
   updateStaff,
+  setStaffStatus,
   resetStaffPassword,
   deleteStaff
 } from '../controllers/userController.js';
@@ -20,5 +21,6 @@ router.route('/staff/:id')
   .delete(protect, adminOnly, deleteStaff);
 
 router.put('/staff/:id/reset-password', protect, adminOnly, resetStaffPassword);
+router.put('/staff/:id/status', protect, adminOnly, setStaffStatus);
 
 export default router;

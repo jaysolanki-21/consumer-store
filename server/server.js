@@ -9,6 +9,7 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import counterRoutes from './routes/counterRoutes.js';
 import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
@@ -46,6 +47,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/counters', counterRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });

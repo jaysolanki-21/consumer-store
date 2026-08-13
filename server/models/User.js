@@ -13,11 +13,12 @@ const userSchema = new mongoose.Schema({
     default: 'counter' 
   },
   counterId: { 
-    type: String, 
-    enum: ['counter-1', 'counter-2', 'counter-3', 'counter-4', 'counter-5', 'counter-6', 'counter-7', 'counter-8', 'counter-9', 'counter-10'], 
+    type: String,
+    trim: true,
     required: function() { return this.role === 'counter'; }
   },
   isActive: { type: Boolean, default: true },
+  disabledUntil: { type: Date, default: null },
   lastLogin: { type: Date }
 }, { timestamps: true });
 
@@ -30,6 +31,7 @@ userSchema.pre('save', function(next) {
     next();
   });
 });
+
 
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);

@@ -17,6 +17,7 @@ import AdminOrdersPage from "./pages/AdminOrdersPage";
 import AdminStaffPage from "./pages/AdminStaffPage";
 import AdminAlertsPage from "./pages/AdminAlertsPage";
 import InsightsPage from "./pages/InsightsPage";
+import AdminCountersPage from "./pages/AdminCountersPage";
 
 function App() {
   const { user, token } = useSelector((state) => state.auth);
@@ -152,6 +153,14 @@ function App() {
           element={
             <ProtectedRoute roles={["admin"]}>
               <Layout><InsightsPage /></Layout>
+            </ProtectedRoute>
+          }
+        />
+         <Route
+          path="/admin/counters"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <Layout><AdminCountersPage /></Layout>
             </ProtectedRoute>
           }
         />

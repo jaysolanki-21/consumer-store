@@ -41,7 +41,7 @@ export default function Layout({ children }) {
       const { data } = await api.get("/orders");
 
       const pending = data.filter(
-        (o) => o.status?.toLowerCase() === "pending"
+        (o) => o.status?.toLowerCase() === "pending",
       ).length;
 
       setPendingOrdersCount(pending);
@@ -61,13 +61,11 @@ export default function Layout({ children }) {
         (p) =>
           p.visibility !== false &&
           p.stock > 0 &&
-          p.stock <= p.lowStockThreshold
+          p.stock <= p.lowStockThreshold,
       ).length;
 
       const out = data.filter(
-        (p) =>
-          p.visibility !== false &&
-          p.stock <= 0
+        (p) => p.visibility !== false && p.stock <= 0,
       ).length;
 
       setLowStockCount(low + out);
@@ -168,8 +166,8 @@ export default function Layout({ children }) {
     user?.role === "admin"
       ? lowStockCount
       : user?.role === "staff"
-      ? pendingOrdersCount
-      : 0;
+        ? pendingOrdersCount
+        : 0;
 
   const isAlertsActive = location.pathname === "/admin/alerts";
 
@@ -179,10 +177,8 @@ export default function Layout({ children }) {
       <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="max-w-[1600px] mx-auto px-4 lg:px-8">
           <div className="h-16 flex items-center justify-between gap-4">
-
             {/* LEFT */}
             <div className="flex items-center gap-6 overflow-x-auto">
-
               {/* LOGO */}
               <Link to="/" className="flex items-center gap-2 flex-shrink-0">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-md">
@@ -199,7 +195,6 @@ export default function Layout({ children }) {
               {/* ADMIN NAV */}
               {user?.role === "admin" && (
                 <div className="flex items-center gap-1 overflow-x-auto">
-
                   <Link to="/admin" className={navClass("/admin")}>
                     <FiGrid className="text-sm" />
                     Dashboard
@@ -245,14 +240,17 @@ export default function Layout({ children }) {
                     Orders
                   </Link>
 
-                  <Link
-                    to="/admin/staff"
-                    className={navClass("/admin/staff")}
-                  >
+                  <Link to="/admin/staff" className={navClass("/admin/staff")}>
                     <FiUsers className="text-sm" />
                     Staff
                   </Link>
-
+                  <Link
+                    to="/admin/counters"
+                    className={navClass("/admin/counters")}
+                  >
+                    <FiGrid className="text-sm" />
+                    Counters
+                  </Link>
                   <Link
                     to="/admin/insights"
                     className={navClass("/admin/insights")}
@@ -266,7 +264,6 @@ export default function Layout({ children }) {
 
             {/* RIGHT */}
             <div className="flex items-center gap-2 flex-shrink-0">
-
               {/* ALERT BELL */}
               <button
                 onClick={handleBellClick}
@@ -286,9 +283,7 @@ export default function Layout({ children }) {
 
                     <span
                       className={`absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-white text-[10px] font-bold ${
-                        isAlertsActive
-                          ? "bg-red-600"
-                          : "bg-red-500"
+                        isAlertsActive ? "bg-red-600" : "bg-red-500"
                       }`}
                     >
                       {totalAlerts > 99 ? "99+" : totalAlerts}
