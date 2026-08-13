@@ -3,7 +3,13 @@ import Product from '../models/Product.js';
 
 export const createOrder = async (req, res) => {
   try {
-    const { items, counterId } = req.body;
+    const { 
+      items, 
+      counterId, 
+      staffId, 
+      staffName,
+      payment = {} 
+    } = req.body;
 
     if (!counterId) {
       return res.status(400).json({ message: 'Counter ID is required' });
@@ -30,17 +36,21 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // 3. Calculate total & create order
+    // 3. Calculate total & create order with all required fields
     let totalAmount = 0;
     const orderItems = [];
     for (const item of items) {
       const product = await Product.findById(item.productId);
-      const price = product.price;
+      const price = product.sellingPrice || product.price || 0;
+      const costPrice = product.costPrice || 0;
       totalAmount += price * item.quantity;
+      
       orderItems.push({
         productId: item.productId,
         quantity: item.quantity,
-        price
+        price: price,
+        sellingPrice: price,  // ✅ Store sellingPrice
+        costPrice: costPrice  // ✅ Store costPrice for profit calculations
       });
     }
 
@@ -57,15 +67,43 @@ export const createOrder = async (req, res) => {
       'counter-10': 'Counter 10'
     };
 
+    // Prepare payment object
+    const paymentData = {
+      method: payment.method || 'Cash',
+      receivedAmount: payment.receivedAmount || totalAmount,
+      changeReturned: payment.changeReturned || 0,
+      transactionId: payment.transactionId || '',
+      gatewayOrderId: payment.gatewayOrderId || '',
+      gatewayPaymentId: payment.gatewayPaymentId || '',
+      paymentSessionId: payment.paymentSessionId || '',
+      status: payment.status || 'Pending',
+      paidAt: payment.status === 'Paid' ? new Date() : null
+    };
+
     const order = await Order.create({
       items: orderItems,
       totalAmount,
       status: 'Pending',
       counterId: counterId,
-      counterName: counterNames[counterId] || counterId
+      counterName: counterNames[counterId] || counterId,
+      staffId: staffId || null,
+      staffName: staffName || '',
+      payment: paymentData,
+      print: {
+        status: 'Pending'
+      },
+      timeline: [{
+        status: 'Pending',
+        message: 'Order created',
+        at: new Date()
+      }]
     });
 
-    const populatedOrder = await Order.findById(order._id).populate('items.productId');
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name');
+
     const io = req.app.get('io');
     io.emit('newOrder', populatedOrder);
     io.emit('stockUpdated');
@@ -78,11 +116,17 @@ export const createOrder = async (req, res) => {
 };
 
 export const getOrders = async (req, res) => {
-  const orders = await Order.find()
-    .populate('items.productId')
-    .populate('confirmedBy', 'name')
-    .sort({ createdAt: -1 });
-  res.json(orders);
+  try {
+    const orders = await Order.find()
+      .populate('items.productId')
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name')
+      .sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const confirmOrder = async (req, res) => {
@@ -93,12 +137,11 @@ export const confirmOrder = async (req, res) => {
       return res.status(400).json({ message: 'Order already processed' });
     }
 
-    // ✅ FIX: Check reservedStock before deducting
+    // Check reservedStock before deducting
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
       if (!product) continue;
       
-      // ✅ Prevent negative reservedStock
       if (product.reservedStock < item.quantity) {
         const actualDeduct = Math.max(0, product.reservedStock);
         await Product.findByIdAndUpdate(item.productId, {
@@ -119,9 +162,23 @@ export const confirmOrder = async (req, res) => {
 
     order.status = 'Confirmed';
     order.confirmedBy = req.user._id;
+    order.confirmedAt = new Date();
+    
+    // Add to timeline
+    order.timeline.push({
+      status: 'Confirmed',
+      message: 'Order confirmed',
+      by: req.user._id,
+      at: new Date()
+    });
+
     await order.save();
 
-    const populatedOrder = await Order.findById(order._id).populate('items.productId');
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name');
+
     const io = req.app.get('io');
     io.emit('orderConfirmed', populatedOrder);
     io.emit('stockUpdated');
@@ -155,23 +212,31 @@ export const getSalesReport = async (req, res) => {
     }).populate('items.productId');
 
     let totalIncome = 0;
+    let totalCost = 0;
     const productSales = {};
 
     orders.forEach(order => {
       totalIncome += order.totalAmount || 0;
       order.items.forEach(item => {
-        const productName = item.productId?.name || 'Deleted Product';
-        const productId = item.productId?._id || 'unknown';
+        const productName = item.productId?.name || item.name || 'Deleted Product';
+        const productId = item.productId?._id || item.productId || 'unknown';
+        const costPrice = item.costPrice || item.productId?.costPrice || 0;
+        
         if (!productSales[productId]) {
           productSales[productId] = {
             productId,
             name: productName,
             quantity: 0,
-            revenue: 0
+            revenue: 0,
+            cost: 0,
+            profit: 0
           };
         }
         productSales[productId].quantity += item.quantity;
-        productSales[productId].revenue += item.quantity * (item.price || 0);
+        productSales[productId].revenue += item.quantity * (item.sellingPrice || item.price || 0);
+        productSales[productId].cost += item.quantity * costPrice;
+        productSales[productId].profit = productSales[productId].revenue - productSales[productId].cost;
+        totalCost += item.quantity * costPrice;
       });
     });
 
@@ -179,6 +244,9 @@ export const getSalesReport = async (req, res) => {
       date,
       totalOrders: orders.length,
       totalIncome,
+      totalCost,
+      grossProfit: totalIncome - totalCost,
+      profitMargin: totalIncome ? ((totalIncome - totalCost) / totalIncome) * 100 : 0,
       productWise: Object.values(productSales)
     });
   } catch (error) {
@@ -187,7 +255,6 @@ export const getSalesReport = async (req, res) => {
   }
 };
 
-// ✅ FIX 1: cancelOrder with validation
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -196,7 +263,6 @@ export const cancelOrder = async (req, res) => {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
-    // ✅ FIX: Check before deducting
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
       if (!product) continue;
@@ -206,13 +272,20 @@ export const cancelOrder = async (req, res) => {
         await Product.findByIdAndUpdate(item.productId, {
           $inc: { reservedStock: -actualDeduct }
         });
-      } else {
-        console.warn(`⚠️ Cannot deduct reserved stock for ${product.name}. Current reserved: ${product.reservedStock}`);
       }
     }
 
     order.status = 'Cancelled';
     order.confirmedBy = req.user._id;
+    order.confirmedAt = new Date();
+    
+    order.timeline.push({
+      status: 'Cancelled',
+      message: 'Order cancelled',
+      by: req.user._id,
+      at: new Date()
+    });
+    
     await order.save();
 
     const io = req.app.get('io');
@@ -265,6 +338,15 @@ export const revertOrder = async (req, res) => {
 
     order.status = 'Pending';
     order.confirmedBy = null;
+    order.confirmedAt = null;
+    
+    order.timeline.push({
+      status: 'Pending',
+      message: `Order reverted from ${originalStatus}`,
+      by: req.user._id,
+      at: new Date()
+    });
+    
     await order.save();
 
     const io = req.app.get('io');
@@ -278,7 +360,6 @@ export const revertOrder = async (req, res) => {
   }
 };
 
-// ✅ FIX 2: deleteOrder - RESTORE should ADD, not SUBTRACT
 export const deleteOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -293,14 +374,11 @@ export const deleteOrder = async (req, res) => {
       });
     }
 
-    // ✅ FIX: RESTORE reserved stock (ADD, not SUBTRACT)
     if (order.status === 'Pending') {
       for (const item of order.items) {
         const product = await Product.findById(item.productId);
         if (!product) continue;
         
-        // ✅ Restore reserved stock by subtracting (since reservedStock tracks active reservations)
-        // If order is deleted, we need to release the reservation
         const actualRestore = Math.min(product.reservedStock, item.quantity);
         if (actualRestore > 0) {
           await Product.findByIdAndUpdate(item.productId, {
@@ -323,7 +401,6 @@ export const deleteOrder = async (req, res) => {
   }
 };
 
-// ✅ FIX 3: bulkDeletePendingOrders
 export const bulkDeletePendingOrders = async (req, res) => {
   try {
     const { date } = req.body;
@@ -342,7 +419,6 @@ export const bulkDeletePendingOrders = async (req, res) => {
       createdAt: { $gte: startDate, $lte: endDate }
     });
 
-    // ✅ FIX: Restore reserved stock safely
     for (const order of orders) {
       for (const item of order.items) {
         const product = await Product.findById(item.productId);
@@ -376,7 +452,6 @@ export const bulkDeletePendingOrders = async (req, res) => {
   }
 };
 
-// ✅ FIX 4: deleteSingleOrder
 export const deleteSingleOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
@@ -392,7 +467,6 @@ export const deleteSingleOrder = async (req, res) => {
       });
     }
 
-    // ✅ FIX: Restore reserved stock safely
     if (order.status === 'Pending') {
       for (const item of order.items) {
         const product = await Product.findById(item.productId);
@@ -420,7 +494,6 @@ export const deleteSingleOrder = async (req, res) => {
   }
 };
 
-// Delete all cancelled orders for specific date
 export const bulkDeleteCancelledOrders = async (req, res) => {
   try {
     const { date } = req.body;
@@ -438,14 +511,16 @@ export const bulkDeleteCancelledOrders = async (req, res) => {
       createdAt: { $gte: startDate, $lte: endDate }
     });
     
-    res.json({ message: `${result.deletedCount} cancelled orders deleted`, count: result.deletedCount });
+    res.json({ 
+      message: `${result.deletedCount} cancelled orders deleted`, 
+      count: result.deletedCount 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Delete all orders for specific date (all statuses)
 export const deleteAllOrdersByDate = async (req, res) => {
   try {
     const { date } = req.body;
@@ -458,18 +533,42 @@ export const deleteAllOrdersByDate = async (req, res) => {
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
     
+    // First, get all pending orders to release stock
+    const pendingOrders = await Order.find({
+      status: 'Pending',
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+    
+    for (const order of pendingOrders) {
+      for (const item of order.items) {
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
+        const actualRestore = Math.min(product.reservedStock, item.quantity);
+        if (actualRestore > 0) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { reservedStock: -actualRestore }
+          });
+        }
+      }
+    }
+    
     const result = await Order.deleteMany({ 
       createdAt: { $gte: startDate, $lte: endDate }
     });
     
-    res.json({ message: `${result.deletedCount} orders deleted`, count: result.deletedCount });
+    const io = req.app.get('io');
+    io.emit('stockUpdated');
+    
+    res.json({ 
+      message: `${result.deletedCount} orders deleted`, 
+      count: result.deletedCount 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Admin function to reset negative reserved stock
 export const resetReservedStock = async (req, res) => {
   try {
     const productId = req.params.id;
@@ -479,7 +578,6 @@ export const resetReservedStock = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // ✅ Only reset if negative
     if (product.reservedStock < 0) {
       product.reservedStock = 0;
       await product.save();
@@ -497,6 +595,81 @@ export const resetReservedStock = async (req, res) => {
         product 
       });
     }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ NEW: Update payment status
+export const updatePaymentStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentStatus, receivedAmount, transactionId } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ message: 'Cannot update payment for cancelled order' });
+    }
+
+    order.payment.status = paymentStatus;
+    if (receivedAmount !== undefined) {
+      order.payment.receivedAmount = receivedAmount;
+      order.payment.changeReturned = receivedAmount - order.totalAmount;
+    }
+    if (transactionId) {
+      order.payment.transactionId = transactionId;
+    }
+    if (paymentStatus === 'Paid') {
+      order.payment.paidAt = new Date();
+    }
+
+    order.timeline.push({
+      status: order.status,
+      message: `Payment status updated to ${paymentStatus}`,
+      by: req.user._id,
+      at: new Date()
+    });
+
+    await order.save();
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name');
+
+    const io = req.app.get('io');
+    io.emit('orderUpdated', populatedOrder);
+
+    res.json(populatedOrder);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ NEW: Update print status
+export const updatePrintStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { printStatus } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    order.print.status = printStatus;
+    if (printStatus === 'Printed') {
+      order.print.printedAt = new Date();
+    }
+
+    await order.save();
+
+    res.json({ message: 'Print status updated', order });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });

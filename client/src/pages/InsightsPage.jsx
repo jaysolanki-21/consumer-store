@@ -197,13 +197,22 @@ export default function InsightsPage() {
         api.get(`/products/sales-analytics?startDate=${prevStartDate}&endDate=${prevEndDate}`),
       ]);
 
-      setSalesData(currentRes.data);
-      setPreviousSalesData(prevRes.data);
+      // ✅ FIX: Extract sales array from response
+      const currentData = currentRes.data?.sales || currentRes.data || [];
+      const prevData = prevRes.data?.sales || prevRes.data || [];
+
+      // ✅ Ensure it's an array
+      setSalesData(Array.isArray(currentData) ? currentData : []);
+      setPreviousSalesData(Array.isArray(prevData) ? prevData : []);
+      
     } catch (err) {
       if (!silent) {
         toast.error("Failed to load insights");
       }
       console.error("Analytics error:", err);
+      // ✅ Set empty array on error to prevent map errors
+      setSalesData([]);
+      setPreviousSalesData([]);
     } finally {
       if (silent) {
         setRefreshing(false);
@@ -294,10 +303,13 @@ export default function InsightsPage() {
     return product?.categoryId?._id || product?.categoryId || null;
   }, [products]);
 
-  // ✅ MEMOIZED FILTERS
+  // ✅ MEMOIZED FILTERS - with safe array check
   const filteredSalesData = useMemo(() => {
-    if (!selectedCategory) return salesData;
-    return salesData.filter((item) => {
+    // ✅ Ensure salesData is an array
+    const data = Array.isArray(salesData) ? salesData : [];
+    
+    if (!selectedCategory) return data;
+    return data.filter((item) => {
       const catId = getProductCategoryId(item.productId);
       return catId === selectedCategory;
     });
@@ -305,24 +317,27 @@ export default function InsightsPage() {
 
   // ✅ Chart Data
   const chartData = useMemo(() => {
-    return filteredSalesData.map((item) => ({
-      name: item.name,
-      quantity: item.totalQuantity,
-      revenue: item.totalRevenue,
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.map((item) => ({
+      name: item.name || 'Unknown',
+      quantity: item.totalQuantity || 0,
+      revenue: item.totalRevenue || 0,
     }));
   }, [filteredSalesData]);
 
   // ✅ Category Distribution for Pie Chart
   const categoryDistribution = useMemo(() => {
     const dist = {};
-    filteredSalesData.forEach((item) => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    
+    data.forEach((item) => {
       const catId = getProductCategoryId(item.productId);
       const category = categories.find((c) => c._id === catId);
       const catName = category?.name || "Uncategorized";
       if (!dist[catName]) {
         dist[catName] = 0;
       }
-      dist[catName] += item.totalQuantity;
+      dist[catName] += item.totalQuantity || 0;
     });
     return Object.entries(dist).map(([name, value]) => ({ name, value }));
   }, [filteredSalesData, categories, getProductCategoryId]);
@@ -331,21 +346,34 @@ export default function InsightsPage() {
   const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
   const totalRevenue = useMemo(
-    () => filteredSalesData.reduce((sum, item) => sum + item.totalRevenue, 0),
+    () => {
+      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+      return data.reduce((sum, item) => sum + (item.totalRevenue || 0), 0);
+    },
     [filteredSalesData]
   );
 
   const totalQuantity = useMemo(
-    () => filteredSalesData.reduce((sum, item) => sum + item.totalQuantity, 0),
+    () => {
+      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+      return data.reduce((sum, item) => sum + (item.totalQuantity || 0), 0);
+    },
     [filteredSalesData]
   );
 
-  const totalProducts = useMemo(() => filteredSalesData.length, [filteredSalesData]);
+  const totalProducts = useMemo(
+    () => {
+      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+      return data.length;
+    },
+    [filteredSalesData]
+  );
 
   // ✅ Top 5 products
   const topProducts = useMemo(() => {
-    return [...filteredSalesData]
-      .sort((a, b) => b.totalQuantity - a.totalQuantity)
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return [...data]
+      .sort((a, b) => (b.totalQuantity || 0) - (a.totalQuantity || 0))
       .slice(0, 5);
   }, [filteredSalesData]);
 

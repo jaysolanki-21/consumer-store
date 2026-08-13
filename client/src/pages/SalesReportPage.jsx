@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import api from "../services/api";
-import socket from "../services/socket";
+import socket from "../services/socket";  // ✅ Direct import like working version
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -75,7 +75,14 @@ export default function SalesReportPage() {
     const names = {
       'counter-1': 'Counter 1',
       'counter-2': 'Counter 2',
-      'counter-3': 'Counter 3'
+      'counter-3': 'Counter 3',
+      'counter-4': 'Counter 4',
+      'counter-5': 'Counter 5',
+      'counter-6': 'Counter 6',
+      'counter-7': 'Counter 7',
+      'counter-8': 'Counter 8',
+      'counter-9': 'Counter 9',
+      'counter-10': 'Counter 10'
     };
     return names[counterId] || counterId;
   };
@@ -119,7 +126,7 @@ export default function SalesReportPage() {
 
     // Payment filter
     if (filterPayment !== 'all') {
-      filtered = filtered.filter(order => order.paymentMethod === filterPayment);
+      filtered = filtered.filter(order => order.payment?.method === filterPayment);
     }
 
     return filtered;
@@ -135,29 +142,43 @@ export default function SalesReportPage() {
     const filtered = getFilteredOrders.filter(order => order.status === 'Confirmed');
     
     let totalIncome = 0;
+    let totalCost = 0;
     const productSales = {};
 
     filtered.forEach(order => {
       totalIncome += order.totalAmount || 0;
       order.items.forEach(item => {
-        const productName = item.productId?.name || 'Deleted Product';
-        const productId = item.productId?._id || 'unknown';
+        const productName = item.productId?.name || item.name || 'Deleted Product';
+        const productId = item.productId?._id || item.productId || 'unknown';
+        const costPrice = item.costPrice || 0;
+        
         if (!productSales[productId]) {
           productSales[productId] = {
             productId,
             name: productName,
             quantity: 0,
-            revenue: 0
+            revenue: 0,
+            cost: 0,
+            profit: 0
           };
         }
+        const itemRevenue = item.quantity * (item.sellingPrice || item.price || 0);
+        const itemCost = item.quantity * Number(costPrice);
+        
         productSales[productId].quantity += item.quantity;
-        productSales[productId].revenue += item.quantity * (item.price || 0);
+        productSales[productId].revenue += itemRevenue;
+        productSales[productId].cost += itemCost;
+        productSales[productId].profit = productSales[productId].revenue - productSales[productId].cost;
+        totalCost += itemCost;
       });
     });
 
     return {
       totalOrders: filtered.length,
       totalIncome,
+      totalCost,
+      grossProfit: totalIncome - totalCost,
+      profitMargin: totalIncome ? ((totalIncome - totalCost) / totalIncome) * 100 : 0,
       productWise: Object.values(productSales)
     };
   }, [getFilteredOrders]);
@@ -167,23 +188,31 @@ export default function SalesReportPage() {
     fetchOrders(false);
   }, []);
 
-  // ✅ SOCKET EVENTS - Silent background refresh (NO SPINNER)
+  // ✅ SOCKET EVENTS - Silent background refresh (Same as working version)
   useEffect(() => {
     const handleOrderChange = () => {
       // ✅ SILENT REFRESH - No loading spinner
       fetchOrders(true);
     };
 
+    // ✅ Register all socket events like working version
     socket.on("orderConfirmed", handleOrderChange);
     socket.on("orderCancelled", handleOrderChange);
     socket.on("newOrder", handleOrderChange);
     socket.on("stockUpdated", handleOrderChange);
+    socket.on("orderCreated", handleOrderChange);
+    socket.on("orderUpdated", handleOrderChange);
+    socket.on("orderDeleted", handleOrderChange);
 
+    // ✅ Cleanup
     return () => {
       socket.off("orderConfirmed", handleOrderChange);
       socket.off("orderCancelled", handleOrderChange);
       socket.off("newOrder", handleOrderChange);
       socket.off("stockUpdated", handleOrderChange);
+      socket.off("orderCreated", handleOrderChange);
+      socket.off("orderUpdated", handleOrderChange);
+      socket.off("orderDeleted", handleOrderChange);
     };
   }, []);
 
@@ -345,19 +374,28 @@ export default function SalesReportPage() {
         autoTable(doc, {
           startY: y,
           margin: { left: margin, right: margin },
-          head: [["#", "Product Name", "Qty Sold", "Revenue (Rs.)"]],
+          head: [["#", "Product Name", "Qty Sold", "Revenue (Rs.)", "Cost (Rs.)", "Profit (Rs.)"]],
           body: filteredSalesData.productWise.map((item, idx) => [
             idx + 1,
             item.name,
             item.quantity,
             Number(item.revenue).toLocaleString("en-IN"),
+            Number(item.cost || 0).toLocaleString("en-IN"),
+            Number(item.profit || 0).toLocaleString("en-IN"),
           ]),
-          foot: [["", "TOTAL", filteredSalesData.productWise.reduce((s, i) => s + i.quantity, 0), `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`]],
+          foot: [["", "TOTAL", filteredSalesData.productWise.reduce((s, i) => s + i.quantity, 0), `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`, `Rs. ${(filteredSalesData.totalCost || 0).toLocaleString("en-IN")}`, `Rs. ${(filteredSalesData.grossProfit || 0).toLocaleString("en-IN")}`]],
           headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
           footStyles: { fillColor: [238, 242, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
           bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "left" }, 2: { halign: "center" }, 3: { halign: "right" } },
+          columnStyles: { 
+            0: { cellWidth: 10, halign: "center" }, 
+            1: { halign: "left" }, 
+            2: { halign: "center" }, 
+            3: { halign: "right" },
+            4: { halign: "right" },
+            5: { halign: "right" }
+          },
           showFoot: "lastPage",
         });
         y = doc.lastAutoTable.finalY + 8;
@@ -398,7 +436,14 @@ export default function SalesReportPage() {
           footStyles: { fillColor: [245, 243, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
           bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: { 0: { cellWidth: 10, halign: "center" }, 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "center" }, 4: { halign: "right" }, 5: { halign: "center" } },
+          columnStyles: { 
+            0: { cellWidth: 10, halign: "center" }, 
+            1: { halign: "center" }, 
+            2: { halign: "center" }, 
+            3: { halign: "center" }, 
+            4: { halign: "right" }, 
+            5: { halign: "center" } 
+          },
           showFoot: "lastPage",
         });
       }
@@ -556,8 +601,8 @@ export default function SalesReportPage() {
               className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             >
               <option value="all">All Payments</option>
-              <option value="cash">Cash</option>
-              <option value="online">Online</option>
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
             </select>
           </div>
         </div>
@@ -594,7 +639,7 @@ export default function SalesReportPage() {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
               <div className="flex justify-between items-start">
                 <div>
@@ -644,6 +689,27 @@ export default function SalesReportPage() {
                 </div>
               </div>
             </div>
+
+            <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl p-5 text-white shadow-lg">
+              <div className="flex justify-between items-start">
+                <div><p className="text-rose-100 text-sm font-medium">Total Cost</p><p className="text-2xl font-bold mt-1">₹{(filteredSalesData.totalCost || 0).toLocaleString()}</p></div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FiDollarSign className="text-2xl text-white" /></div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl p-5 text-white shadow-lg">
+              <div className="flex justify-between items-start">
+                <div><p className="text-cyan-100 text-sm font-medium">Gross Profit</p><p className="text-2xl font-bold mt-1">₹{(filteredSalesData.grossProfit || 0).toLocaleString()}</p></div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FaRupeeSign className="text-2xl text-white" /></div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+              <div className="flex justify-between items-start">
+                <div><p className="text-teal-100 text-sm font-medium">Profit Margin</p><p className="text-2xl font-bold mt-1">{(filteredSalesData.profitMargin || 0).toFixed(1)}%</p></div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FiDollarSign className="text-2xl text-white" /></div>
+              </div>
+            </div>
           </div>
 
           {/* Product-wise Sales Table */}
@@ -660,12 +726,14 @@ export default function SalesReportPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Product</th>
                     <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Quantity Sold</th>
                     <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Revenue</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Cost</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Profit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {!filteredSalesData.productWise || filteredSalesData.productWise.length === 0 ? (
                     <tr>
-                      <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                         No sales for this period.
                       </td>
                     </tr>
@@ -677,6 +745,8 @@ export default function SalesReportPage() {
                         <td className="px-6 py-4 text-right font-semibold text-green-600 dark:text-green-400">
                           ₹{item.revenue.toLocaleString()}
                         </td>
+                        <td className="px-6 py-4 text-right text-rose-600 dark:text-rose-400">₹{item.cost.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-semibold text-cyan-700 dark:text-cyan-300">₹{item.profit.toLocaleString()}</td>
                       </tr>
                     ))
                   )}
@@ -691,6 +761,8 @@ export default function SalesReportPage() {
                       <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">
                         ₹{(filteredSalesData.totalIncome || 0).toLocaleString()}
                       </td>
+                      <td className="px-6 py-3 text-right text-sm font-bold text-rose-700 dark:text-rose-300">₹{(filteredSalesData.totalCost || 0).toLocaleString()}</td>
+                      <td className="px-6 py-3 text-right text-sm font-bold text-cyan-700 dark:text-cyan-300">₹{(filteredSalesData.grossProfit || 0).toLocaleString()}</td>
                     </tr>
                   </tfoot>
                 )}

@@ -48,7 +48,7 @@ export default function ProductCard({ product }) {
 
     dispatch(addToCart({ product, quantity }));
 
-    toast.success(`${quantity} × ${product.name} added to cart`);
+    // toast.success(`${quantity} × ${product.name} added to cart`,center);
 
     setQuantity(1);
   };
