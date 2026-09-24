@@ -196,10 +196,13 @@ function ConsumerPageContent() {
 
       const { data } = await api.post("/orders", {
         items: orderItems,
-        amountReceived: cash,
-        changeGiven: changeAmount,
         counterId: user.counterId,
-        paymentMethod: "CASH",
+        payment: {
+          method: "Cash",
+          receivedAmount: cash,
+          changeReturned: changeAmount,
+          status: "Paid" // Default for cash in consumer? Or leave default.
+        }
       });
 
       const receiptOrder = {

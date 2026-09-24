@@ -144,9 +144,7 @@ export default function AdminOrdersPage() {
             <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
               {title}
             </h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              {message}
-            </p>
+            <p className="text-slate-600 dark:text-slate-300 mb-6">{message}</p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => {
@@ -182,10 +180,14 @@ export default function AdminOrdersPage() {
     const cashReceived =
       order.amountReceived ??
       order.cashReceived ??
+      order.payment?.receivedAmount ??
       order.payment?.amountReceived ??
       null;
     const changeGiven =
-      order.changeGiven ?? order.payment?.changeGiven ?? null;
+      order.changeGiven ??
+      order.payment?.changeReturned ??
+      order.payment?.changeGiven ??
+      null;
 
     confirmAlert({
       customUI: ({ onClose }) => (
@@ -198,10 +200,12 @@ export default function AdminOrdersPage() {
               <p>
                 <strong>Payment Method:</strong> {paymentMethod}
               </p>
-              <p>
-                <strong>Payment Status:</strong>{" "}
-                {order.payment?.status || "N/A"}
-              </p>
+              {!isCash && (
+                <p>
+                  <strong>Payment Status:</strong>{" "}
+                  {order.payment?.status || "N/A"}
+                </p>
+              )}
 
               {/* ✅ Cash Received & Change Given */}
               {isCash && (
@@ -238,8 +242,7 @@ export default function AdminOrdersPage() {
               )}
               {order.payment?.transactionId && (
                 <p>
-                  <strong>Transaction ID:</strong>{" "}
-                  {order.payment.transactionId}
+                  <strong>Transaction ID:</strong> {order.payment.transactionId}
                 </p>
               )}
             </div>
@@ -375,8 +378,7 @@ export default function AdminOrdersPage() {
 
   const deleteAllPendingOrders = useCallback(async () => {
     const pendingOrdersForDate = orders.filter(
-      (o) =>
-        o.status === "Pending" && isSameISTDate(o.createdAt, filterDate),
+      (o) => o.status === "Pending" && isSameISTDate(o.createdAt, filterDate),
     );
 
     if (pendingOrdersForDate.length === 0) {
@@ -405,9 +407,7 @@ export default function AdminOrdersPage() {
 
   const deleteAllCancelledOrders = useCallback(async () => {
     const cancelledOrdersForDate = orders.filter(
-      (o) =>
-        o.status === "Cancelled" &&
-        isSameISTDate(o.createdAt, filterDate),
+      (o) => o.status === "Cancelled" && isSameISTDate(o.createdAt, filterDate),
     );
 
     if (cancelledOrdersForDate.length === 0) {
@@ -512,9 +512,7 @@ export default function AdminOrdersPage() {
           ? true
           : order.status.toLowerCase() === filterStatus;
       const matchesCounter =
-        filterCounter === "all"
-          ? true
-          : order.counterId === filterCounter;
+        filterCounter === "all" ? true : order.counterId === filterCounter;
       return matchesDate && matchesStatus && matchesCounter;
     });
   }, [orders, filterStatus, filterDate, filterCounter]);
@@ -898,8 +896,8 @@ export default function AdminOrdersPage() {
                     order.status === "Pending"
                       ? "border-yellow-300"
                       : order.status === "Confirmed"
-                      ? "border-green-300"
-                      : "border-red-300"
+                        ? "border-green-300"
+                        : "border-red-300"
                   }`}
                 >
                   {/* TOP BAR */}
@@ -946,24 +944,21 @@ export default function AdminOrdersPage() {
                         <span>
                           {new Date(order.createdAt).toLocaleString()}
                         </span>
-                        {order.status === "Confirmed" &&
-                          order.confirmedBy && (
-                            <span className="inline-flex items-center gap-1">
-                              <FiUserCheck className="text-green-600" />
-                              Confirmed by:{" "}
-                              <span className="font-semibold text-green-700 dark:text-green-300">
-                                {order.confirmedBy.name}
-                              </span>
+                        {order.status === "Confirmed" && order.confirmedBy && (
+                          <span className="inline-flex items-center gap-1">
+                            <FiUserCheck className="text-green-600" />
+                            Confirmed by:{" "}
+                            <span className="font-semibold text-green-700 dark:text-green-300">
+                              {order.confirmedBy.name}
                             </span>
-                          )}
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="text-sm text-slate-500">
-                          Total Amount
-                        </p>
+                        <p className="text-sm text-slate-500">Total Amount</p>
                         <h2 className="text-3xl font-bold text-indigo-600">
                           ₹{order.totalAmount}
                         </h2>
@@ -1001,8 +996,7 @@ export default function AdminOrdersPage() {
                               >
                                 <div>
                                   <p className="font-semibold">
-                                    {item.productId?.name ||
-                                      "Deleted Product"}
+                                    {item.productId?.name || "Deleted Product"}
                                   </p>
                                   <p className="text-sm text-slate-500">
                                     Qty: {item.quantity}
@@ -1025,17 +1019,13 @@ export default function AdminOrdersPage() {
                             {order.status === "Pending" && (
                               <>
                                 <button
-                                  onClick={() =>
-                                    confirmOrder(order._id)
-                                  }
+                                  onClick={() => confirmOrder(order._id)}
                                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
                                 >
                                   <FiCheck /> Confirm Order
                                 </button>
                                 <button
-                                  onClick={() =>
-                                    cancelOrder(order._id)
-                                  }
+                                  onClick={() => cancelOrder(order._id)}
                                   className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
                                 >
                                   <FiX /> Cancel Order

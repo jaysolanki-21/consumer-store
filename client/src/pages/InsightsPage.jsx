@@ -57,7 +57,7 @@ export default function InsightsPage() {
 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // ✅ Custom Date Range
+  // Custom Date Range
   const [customStartDate, setCustomStartDate] = useState(() => {
     const today = new Date();
     today.setDate(today.getDate() - 30);
@@ -76,10 +76,19 @@ export default function InsightsPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [chartType, setChartType] = useState("bar");
 
-  // ✅ Total revenue straight from orders (reliable)
+  // Total revenue straight from orders (reliable)
   const [orderRevenue, setOrderRevenue] = useState(0);
 
-  // ✅ TWO LOADING STATES
+  // Total profit from orders (based on costPrice snapshots)
+  const [orderProfit, setOrderProfit] = useState(0);
+
+  // Peak hour timing
+  const [peakHour, setPeakHour] = useState("N/A");
+
+  // Hourly distribution for chart
+  const [hourlyData, setHourlyData] = useState([]);
+
+  // Two loading states
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -108,7 +117,7 @@ export default function InsightsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewType, selectedDate, selectedMonth, selectedYear, customStartDate, customEndDate, useCustomRange]);
 
-  // ✅ STABLE SOCKET LISTENERS
+  // Stable socket listeners
   useEffect(() => {
     const handleOrderChange = () => {
       fetchAnalytics(true);
@@ -147,7 +156,7 @@ export default function InsightsPage() {
     }
   };
 
-  // ✅ UPDATED: fetchAnalytics with silent mode and custom range
+  // Updated fetchAnalytics with profit and hourly distribution
   const fetchAnalytics = async (silent = false) => {
     try {
       if (silent) {
@@ -212,6 +221,17 @@ export default function InsightsPage() {
       let cashRevenue = 0;
       let onlineRevenue = 0;
       let totalFromOrders = 0;
+      let totalProfitFromOrders = 0;
+      const hourCounts = {};
+      const hourRevenue = {};
+      const hourProfit = {};
+
+      // Initialize all 24 hours
+      for (let h = 0; h < 24; h++) {
+        hourCounts[h] = 0;
+        hourRevenue[h] = 0;
+        hourProfit[h] = 0;
+      }
 
       allOrders.forEach(order => {
         if (order.status !== 'Confirmed') return;
@@ -220,6 +240,25 @@ export default function InsightsPage() {
           const method = (order.payment?.method || order.paymentMethod || "Cash").toLowerCase();
           const amount = Number(order.totalAmount) || 0;
           totalFromOrders += amount;
+
+          // Track peak hour
+          const orderHour = new Date(order.createdAt).getHours();
+          hourCounts[orderHour] = (hourCounts[orderHour] || 0) + 1;
+          hourRevenue[orderHour] = (hourRevenue[orderHour] || 0) + amount;
+
+          // Profit calculation using costPrice snapshot per item
+          let orderProfitValue = 0;
+          if (Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const selling = Number(item.price ?? item.sellingPrice ?? 0);
+              const cost = Number(item.costPrice ?? 0);
+              const qty = Number(item.quantity ?? 0);
+              orderProfitValue += (selling - cost) * qty;
+            });
+          }
+          hourProfit[orderHour] = (hourProfit[orderHour] || 0) + orderProfitValue;
+          totalProfitFromOrders += orderProfitValue;
+
           if (method === 'online') {
             onlineRevenue += amount;
           } else {
@@ -228,7 +267,45 @@ export default function InsightsPage() {
         }
       });
 
+      // Build hourly chart data
+      const hourlyChartData = [];
+      for (let h = 0; h < 24; h++) {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const formattedH = h % 12 || 12;
+        hourlyChartData.push({
+          hour: `${formattedH} ${ampm}`,
+          hour24: h,
+          orders: hourCounts[h],
+          revenue: hourRevenue[h],
+          profit: hourProfit[h],
+        });
+      }
+      setHourlyData(hourlyChartData);
+
+      // Calculate the peak hour
+      let maxCount = 0;
+      let peakH = null;
+      for (const [hourStr, count] of Object.entries(hourCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          peakH = parseInt(hourStr, 10);
+        }
+      }
+
+      if (peakH !== null && maxCount > 0) {
+        const formatHour = (h) => {
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const formattedH = h % 12 || 12;
+          return `${formattedH} ${ampm}`;
+        };
+        const nextH = (peakH + 1) % 24;
+        setPeakHour(`${formatHour(peakH)} - ${formatHour(nextH)}`);
+      } else {
+        setPeakHour("N/A");
+      }
+
       setOrderRevenue(totalFromOrders);
+      setOrderProfit(totalProfitFromOrders);
 
       setPaymentData([
         { name: 'Cash', value: cashRevenue },
@@ -246,6 +323,8 @@ export default function InsightsPage() {
       setPreviousSalesData([]);
       setPaymentData([]);
       setOrderRevenue(0);
+      setOrderProfit(0);
+      setHourlyData([]);
     } finally {
       if (silent) {
         setRefreshing(false);
@@ -336,7 +415,7 @@ export default function InsightsPage() {
     return product?.categoryId?._id || product?.categoryId || null;
   }, [products]);
 
-  // ✅ MEMOIZED FILTERS - with safe array check
+  // Memoized filters
   const filteredSalesData = useMemo(() => {
     const data = Array.isArray(salesData) ? salesData : [];
     if (!selectedCategory) return data;
@@ -346,7 +425,7 @@ export default function InsightsPage() {
     });
   }, [salesData, selectedCategory, getProductCategoryId]);
 
-  // ✅ Chart Data
+  // Chart Data
   const chartData = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
     return data.map((item) => ({
@@ -356,7 +435,7 @@ export default function InsightsPage() {
     }));
   }, [filteredSalesData]);
 
-  // ✅ Category Distribution for Pie Chart
+  // Category Distribution for Pie Chart
   const categoryDistribution = useMemo(() => {
     const dist = {};
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
@@ -373,22 +452,18 @@ export default function InsightsPage() {
     return Object.entries(dist).map(([name, value]) => ({ name, value }));
   }, [filteredSalesData, categories, getProductCategoryId]);
 
-  // ✅ Colors for Pie Chart
+  // Colors for Pie Chart
   const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
-  // ✅ Total revenue: prefer the order-derived value when NO category filter is active.
-  // When a category filter IS active, sum from filtered products (fallback).
   const totalRevenueFromProducts = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
     return data.reduce((sum, item) => sum + (Number(item.totalRevenue) || 0), 0);
   }, [filteredSalesData]);
 
   const totalRevenue = useMemo(() => {
-    // If no category filter -> use order-based revenue (most reliable)
     if (!selectedCategory) {
       return orderRevenue || totalRevenueFromProducts;
     }
-    // With category filter -> fall back to product-level sum
     return totalRevenueFromProducts;
   }, [selectedCategory, orderRevenue, totalRevenueFromProducts]);
 
@@ -402,7 +477,7 @@ export default function InsightsPage() {
     return data.length;
   }, [filteredSalesData]);
 
-  // ✅ Top 5 products
+  // Top 5 products
   const topProducts = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
     return [...data]
@@ -410,7 +485,12 @@ export default function InsightsPage() {
       .slice(0, 5);
   }, [filteredSalesData]);
 
-  // ✅ Format date range display
+  // Filter hourly data to only show hours with activity for cleaner chart
+  const activeHourlyData = useMemo(() => {
+    return hourlyData.filter(h => h.orders > 0);
+  }, [hourlyData]);
+
+  // Format date range display
   const getDateRangeDisplay = () => {
     if (useCustomRange) {
       return `${customStartDate} to ${customEndDate}`;
@@ -426,12 +506,11 @@ export default function InsightsPage() {
     return selectedYear.toString();
   };
 
-  // Show summary cards when we either have product data OR an order revenue value
   const showSummaryCards = !initialLoading && (filteredSalesData.length > 0 || orderRevenue > 0);
 
   return (
     <div className="space-y-6 relative">
-      {/* ✅ Super Smooth Refresh Indicator */}
+      {/* Refresh Indicator */}
       <AnimatePresence>
         {refreshing && (
           <motion.div
@@ -448,7 +527,7 @@ export default function InsightsPage() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
+      {/* Header with Date Selector on top right */}
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
@@ -459,7 +538,65 @@ export default function InsightsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* Top Right Controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Date Selector */}
+          {!useCustomRange && viewType === "daily" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="date"
+                value={selectedDate}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
+              />
+              <button onClick={goNextDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {!useCustomRange && viewType === "monthly" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="month"
+                value={selectedMonth}
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
+              />
+              <button onClick={goNextMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {!useCustomRange && viewType === "yearly" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="number"
+                min="2020"
+                max={new Date().getFullYear()}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="w-20 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none text-center"
+              />
+              <button onClick={goNextYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {/* View Type Toggle */}
           <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
             {["daily", "monthly", "yearly"].map((type) => (
               <button
@@ -468,7 +605,7 @@ export default function InsightsPage() {
                   setViewType(type);
                   setUseCustomRange(false);
                 }}
-                className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
                   viewType === type && !useCustomRange
                     ? "bg-indigo-600 text-white shadow-md"
                     : "text-gray-500 hover:text-indigo-600"
@@ -479,7 +616,7 @@ export default function InsightsPage() {
             ))}
             <button
               onClick={() => setUseCustomRange(!useCustomRange)}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize flex items-center gap-1 ${
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize flex items-center gap-1 ${
                 useCustomRange
                   ? "bg-indigo-600 text-white shadow-md"
                   : "text-gray-500 hover:text-indigo-600"
@@ -539,130 +676,95 @@ export default function InsightsPage() {
         )}
       </div>
 
-      {/* Combined Row: Select Period + Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Select Period Card */}
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-              <FiCalendar className="text-white text-lg" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-indigo-200 uppercase tracking-wide font-medium">
-                Select Period
-              </p>
-
-              {!useCustomRange && viewType === "daily" && (
-                <div className="flex items-center gap-1 mt-2">
-                  <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronLeft className="text-base" />
-                  </button>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    max={new Date().toISOString().split("T")[0]}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="flex-1 border border-white/30 bg-white/10 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:ring-2 focus:ring-white/50"
-                  />
-                  <button onClick={goNextDay} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronRight className="text-base" />
-                  </button>
-                </div>
-              )}
-
-              {!useCustomRange && viewType === "monthly" && (
-                <div className="flex items-center gap-1 mt-2">
-                  <button onClick={goPrevMonth} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronLeft className="text-base" />
-                  </button>
-                  <input
-                    type="month"
-                    value={selectedMonth}
-                    max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="flex-1 border border-white/30 bg-white/10 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:ring-2 focus:ring-white/50"
-                  />
-                  <button onClick={goNextMonth} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronRight className="text-base" />
-                  </button>
-                </div>
-              )}
-
-              {!useCustomRange && viewType === "yearly" && (
-                <div className="flex items-center gap-1 mt-2">
-                  <button onClick={goPrevYear} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronLeft className="text-base" />
-                  </button>
-                  <input
-                    type="number"
-                    min="2020"
-                    max={new Date().getFullYear()}
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="w-24 border border-white/30 bg-white/10 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:ring-2 focus:ring-white/50 text-center"
-                  />
-                  <button onClick={goNextYear} className="p-1.5 rounded-lg hover:bg-white/10 transition">
-                    <FiChevronRight className="text-base" />
-                  </button>
-                </div>
-              )}
-
-              {useCustomRange && (
-                <div className="mt-2 text-xs text-indigo-200">
-                  {customStartDate} to {customEndDate}
-                </div>
-              )}
+      {/* Summary Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+        {/* Total Revenue */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-emerald-200 uppercase tracking-wide font-medium">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold mt-2">
+                  ₹{Number(totalRevenue || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FaRupeeSign className="text-white text-xl" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* ✅ Summary Cards */}
+        {/* Total Profit */}
         {showSummaryCards && (
-          <>
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-emerald-200 uppercase tracking-wide font-medium">
-                    Total Revenue
-                  </p>
-                  <p className="text-2xl font-bold mt-2">
-                    ₹{Number(totalRevenue || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                  <FaRupeeSign className="text-white text-xl" />
-                </div>
+          <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-purple-200 uppercase tracking-wide font-medium">
+                  Total Profit
+                </p>
+                <p className="text-2xl font-bold mt-2">
+                  ₹{Number(orderProfit || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiTrendingUp className="text-white text-xl" />
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-indigo-200 uppercase tracking-wide font-medium">
-                    Products Sold
-                  </p>
-                  <p className="text-2xl font-bold mt-2">{totalQuantity}</p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                  <FiShoppingCart className="text-white text-xl" />
-                </div>
+        {/* Products Sold */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-indigo-200 uppercase tracking-wide font-medium">
+                  Products Sold
+                </p>
+                <p className="text-2xl font-bold mt-2">{totalQuantity}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiShoppingCart className="text-white text-xl" />
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-amber-200 uppercase tracking-wide font-medium">
-                    Active Products
-                  </p>
-                  <p className="text-2xl font-bold mt-2">{totalProducts}</p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                  <FiBox className="text-white text-xl" />
-                </div>
+        {/* Active Products */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-200 uppercase tracking-wide font-medium">
+                  Active Products
+                </p>
+                <p className="text-2xl font-bold mt-2">{totalProducts}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiBox className="text-white text-xl" />
               </div>
             </div>
-          </>
+          </div>
+        )}
+
+        {/* Peak Hour */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-rose-200 uppercase tracking-wide font-medium">
+                  Peak Hour
+                </p>
+                <p className="text-2xl font-bold mt-2">{peakHour}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiClock className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Loading skeletons */}
@@ -672,6 +774,12 @@ export default function InsightsPage() {
               <div className="animate-pulse">
                 <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
                 <div className="h-8 bg-white/30 rounded w-32"></div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-24"></div>
               </div>
             </div>
             <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 shadow-lg">
@@ -686,9 +794,62 @@ export default function InsightsPage() {
                 <div className="h-8 bg-white/30 rounded w-20"></div>
               </div>
             </div>
+            <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-24"></div>
+              </div>
+            </div>
           </>
         )}
       </div>
+
+      {/* Peak Hour Chart */}
+      {!initialLoading && activeHourlyData.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center">
+                <FiClock className="text-rose-600 dark:text-rose-400 text-lg" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Hourly Sales Distribution</h3>
+                <p className="text-xs text-gray-500">Orders, revenue and profit by hour of day</p>
+              </div>
+            </div>
+            {peakHour !== "N/A" && (
+              <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-xl">
+                <FiClock className="text-rose-500 text-sm" />
+                <span className="text-xs font-semibold text-rose-700 dark:text-rose-400">
+                  Peak: {peakHour}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === "Revenue (₹)" || name === "Profit (₹)") {
+                      return `₹${Number(value).toLocaleString()}`;
+                    }
+                    return value;
+                  }}
+                />
+                <Legend />
+                <Bar yAxisId="left" dataKey="orders" fill="#f43f5e" name="Orders" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue (₹)" dot={{ r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="profit" stroke="#6366f1" strokeWidth={2} name="Profit (₹)" dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Charts Section */}
       {!initialLoading && filteredSalesData.length > 0 && (
@@ -922,7 +1083,7 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      {/* ✅ Loading / Empty / Products Grid */}
+      {/* Loading / Empty / Products Grid */}
       {initialLoading ? (
         <div className="flex justify-center items-center h-[50vh]">
           <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
