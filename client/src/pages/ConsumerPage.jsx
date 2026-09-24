@@ -7,15 +7,14 @@ import api from "../services/api";
 import socket from "../services/socket";
 import ProductCard from "../components/ProductCard";
 import CartDrawer from "../components/CartDrawer";
+import ThermalReceipt from "../components/ThermalReceipt";
 import { useNavigate } from "react-router-dom";
-import { useDispatch as useReduxDispatch } from "react-redux";
 import { logout } from "../redux/slices/authSlice";
 
 import {
   FiShoppingCart,
   FiSearch,
   FiPackage,
-  FiAlertCircle,
   FiZap,
   FiGrid,
   FiTag,
@@ -26,7 +25,6 @@ import {
   FiMonitor,
 } from "react-icons/fi";
 
-// Icon mapping for categories
 const categoryIcons = {
   "Food & Beverages": FiCoffee,
   Electronics: FiSmartphone,
@@ -35,14 +33,16 @@ const categoryIcons = {
 };
 
 function ConsumerPageContent() {
-  const dispatch = useReduxDispatch();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const cartItems = useSelector((state) => state.cart.items);
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // ✅ Check if counter user is logged in
+  // Receipt data — used only for silent print
+  const [lastOrder, setLastOrder] = useState(null);
+
   useEffect(() => {
     const token = localStorage.getItem("counterToken");
     const userData = localStorage.getItem("counterUser");
@@ -62,7 +62,6 @@ function ConsumerPageContent() {
     }
   }, []);
 
-  // Performance: useMemo for cart calculations
   const cartCount = useMemo(
     () => cartItems.reduce((acc, item) => acc + item.quantity, 0),
     [cartItems],
@@ -81,38 +80,12 @@ function ConsumerPageContent() {
   const [isOrderConfirming, setIsOrderConfirming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Prevent background scroll when cart is open
   useEffect(() => {
     document.body.style.overflow = showCart ? "hidden" : "auto";
     return () => {
       document.body.style.overflow = "auto";
     };
   }, [showCart]);
-
-  // Fetch products and categories
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        await Promise.all([fetchProducts(), fetchCategories()]);
-      } catch (err) {
-        console.error("Fetch error:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-
-    const handleStockUpdate = () => {
-      fetchProducts();
-    };
-
-    socket.on("stockUpdated", handleStockUpdate);
-
-    return () => {
-      socket.off("stockUpdated", handleStockUpdate);
-    };
-  }, []);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -155,6 +128,30 @@ function ConsumerPageContent() {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([fetchProducts(), fetchCategories()]);
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+
+    const handleStockUpdate = () => {
+      fetchProducts();
+    };
+
+    socket.on("stockUpdated", handleStockUpdate);
+
+    return () => {
+      socket.off("stockUpdated", handleStockUpdate);
+    };
+  }, [fetchProducts, fetchCategories]);
+
   const handleLogout = () => {
     if (cartItems.length > 0) {
       toast.error("Please clear cart before logging out");
@@ -191,16 +188,31 @@ function ConsumerPageContent() {
 
       const orderItems = cartItems.map((item) => ({
         productId: item.productId,
+        name: item.name,
         quantity: item.quantity,
         price: item.price,
       }));
 
-      await api.post("/orders", {
+      const { data } = await api.post("/orders", {
         items: orderItems,
         amountReceived: cash,
         changeGiven: changeAmount,
         counterId: user.counterId,
+        paymentMethod: "CASH",
       });
+
+      const receiptOrder = {
+        _id: data?._id || data?.orderId || `ORD${Date.now()}`,
+        items: orderItems,
+        totalAmount: cartTotal,
+        amountReceived: cash,
+        changeGiven: changeAmount,
+        paymentMethod: "CASH",
+        createdAt: new Date().toISOString(),
+        customerName: null,
+      };
+
+      setLastOrder(receiptOrder);
 
       toast.success(
         `Order placed successfully! Change: ₹${changeAmount.toFixed(2)} 🎉`,
@@ -209,6 +221,11 @@ function ConsumerPageContent() {
 
       dispatch(clearCart());
       setShowCart(false);
+
+      // Silent print — no popup
+      setTimeout(() => {
+        window.print();
+      }, 400);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Order failed");
@@ -251,23 +268,18 @@ function ConsumerPageContent() {
     return categoryIcons[categoryName] || categoryIcons.Default;
   };
 
-  // ✅ If not logged in, redirect to login page
   if (!isLoggedIn) {
     navigate("/login");
     return null;
   }
 
-  // ✅ Get counter display info
   const counterNumber = user?.counterId ? user.counterId.split("-")[1] : "1";
-  const counterDisplayName = user?.counterName || `Counter ${counterNumber}`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
-      {/* ✅ Navbar with Counter Number */}
-      <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm">
+      <nav className="sticky top-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm print:hidden">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            {/* Logo */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -283,7 +295,6 @@ function ConsumerPageContent() {
               </div>
             </motion.div>
 
-            {/* Search Bar */}
             <div className="flex-1 max-w-md relative">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input
@@ -295,9 +306,7 @@ function ConsumerPageContent() {
               />
             </div>
 
-            {/* Right Side */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Counter Display */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20">
                 <FiMonitor className="text-indigo-500 text-sm" />
                 <span className="text-xs text-gray-600 dark:text-gray-400">
@@ -308,7 +317,6 @@ function ConsumerPageContent() {
                 </span>
               </div>
 
-              {/* Logout */}
               <button
                 onClick={handleLogout}
                 className="h-10 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold flex items-center gap-1 transition-all"
@@ -317,7 +325,6 @@ function ConsumerPageContent() {
                 <span className="hidden sm:inline text-sm">Logout</span>
               </button>
 
-              {/* Cart */}
               <button
                 onClick={() => setShowCart(true)}
                 className="relative h-10 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
@@ -335,8 +342,7 @@ function ConsumerPageContent() {
         </div>
       </nav>
 
-      <main className="container mx-auto px-4 py-6 pb-24">
-        {/* Categories */}
+      <main className="container mx-auto px-4 py-6 pb-24 print:hidden">
         <div className="mb-8">
           <div className="flex flex-wrap gap-2">
             <button
@@ -350,7 +356,11 @@ function ConsumerPageContent() {
               <FiGrid className="w-4 h-4" />
               All
               <span
-                className={`text-xs px-2 py-0.5 rounded-full ${!selectedCategory ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  !selectedCategory
+                    ? "bg-white/20 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                }`}
               >
                 {products.length}
               </span>
@@ -372,7 +382,11 @@ function ConsumerPageContent() {
                   <span className="hidden xs:inline">{cat.name}</span>
                   <span className="xs:hidden">{cat.name.substring(0, 8)}</span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${selectedCategory === cat._id ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      selectedCategory === cat._id
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    }`}
                   >
                     {count}
                   </span>
@@ -382,7 +396,6 @@ function ConsumerPageContent() {
           </div>
         </div>
 
-        {/* Loading State */}
         {isLoading ? (
           <div className="py-20 flex flex-col items-center">
             <div className="w-12 h-12 border-3 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -445,7 +458,6 @@ function ConsumerPageContent() {
           </>
         )}
 
-        {/* Empty State */}
         {!isLoading && filteredProducts.length === 0 && (
           <div className="py-16 text-center">
             <div className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-gray-800 mx-auto flex items-center justify-center mb-4">
@@ -470,13 +482,19 @@ function ConsumerPageContent() {
         )}
       </main>
 
-      {/* Cart Drawer */}
       <CartDrawer
         open={showCart}
         onClose={() => setShowCart(false)}
         onCheckout={handlePlaceOrder}
         isProcessing={isOrderConfirming}
       />
+
+      {/* ✅ Silent print target — invisible on screen, only prints */}
+      {lastOrder && (
+        <div className="hidden print:block">
+          <ThermalReceipt order={lastOrder} counter={user} />
+        </div>
+      )}
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {
@@ -517,7 +535,6 @@ function ConsumerPageContent() {
   );
 }
 
-// Main export
 export default function ConsumerPage() {
   return <ConsumerPageContent />;
 }

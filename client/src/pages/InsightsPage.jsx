@@ -20,6 +20,7 @@ import {
   FiFilter,
   FiDollarSign,
   FiClock,
+  FiCreditCard,
 } from "react-icons/fi";
 import { FaRupeeSign } from "react-icons/fa";
 import {
@@ -153,7 +154,6 @@ export default function InsightsPage() {
       if (useCustomRange) {
         startDate = customStartDate;
         endDate = customEndDate;
-        // Previous period same length
         const start = new Date(customStartDate);
         const end = new Date(customEndDate);
         const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
@@ -197,20 +197,16 @@ export default function InsightsPage() {
         api.get(`/products/sales-analytics?startDate=${prevStartDate}&endDate=${prevEndDate}`),
       ]);
 
-      // ✅ FIX: Extract sales array from response
       const currentData = currentRes.data?.sales || currentRes.data || [];
       const prevData = prevRes.data?.sales || prevRes.data || [];
 
-      // ✅ Ensure it's an array
       setSalesData(Array.isArray(currentData) ? currentData : []);
       setPreviousSalesData(Array.isArray(prevData) ? prevData : []);
-      
     } catch (err) {
       if (!silent) {
         toast.error("Failed to load insights");
       }
       console.error("Analytics error:", err);
-      // ✅ Set empty array on error to prevent map errors
       setSalesData([]);
       setPreviousSalesData([]);
     } finally {
@@ -305,9 +301,7 @@ export default function InsightsPage() {
 
   // ✅ MEMOIZED FILTERS - with safe array check
   const filteredSalesData = useMemo(() => {
-    // ✅ Ensure salesData is an array
     const data = Array.isArray(salesData) ? salesData : [];
-    
     if (!selectedCategory) return data;
     return data.filter((item) => {
       const catId = getProductCategoryId(item.productId);
@@ -319,7 +313,7 @@ export default function InsightsPage() {
   const chartData = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
     return data.map((item) => ({
-      name: item.name || 'Unknown',
+      name: item.name || "Unknown",
       quantity: item.totalQuantity || 0,
       revenue: item.totalRevenue || 0,
     }));
@@ -329,7 +323,7 @@ export default function InsightsPage() {
   const categoryDistribution = useMemo(() => {
     const dist = {};
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
-    
+
     data.forEach((item) => {
       const catId = getProductCategoryId(item.productId);
       const category = categories.find((c) => c._id === catId);
@@ -345,29 +339,20 @@ export default function InsightsPage() {
   // ✅ Colors for Pie Chart
   const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
-  const totalRevenue = useMemo(
-    () => {
-      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
-      return data.reduce((sum, item) => sum + (item.totalRevenue || 0), 0);
-    },
-    [filteredSalesData]
-  );
+  const totalRevenue = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.reduce((sum, item) => sum + (item.totalRevenue || 0), 0);
+  }, [filteredSalesData]);
 
-  const totalQuantity = useMemo(
-    () => {
-      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
-      return data.reduce((sum, item) => sum + (item.totalQuantity || 0), 0);
-    },
-    [filteredSalesData]
-  );
+  const totalQuantity = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.reduce((sum, item) => sum + (item.totalQuantity || 0), 0);
+  }, [filteredSalesData]);
 
-  const totalProducts = useMemo(
-    () => {
-      const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
-      return data.length;
-    },
-    [filteredSalesData]
-  );
+  const totalProducts = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.length;
+  }, [filteredSalesData]);
 
   // ✅ Top 5 products
   const topProducts = useMemo(() => {

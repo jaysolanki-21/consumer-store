@@ -13,3 +13,42 @@
     @apply bg-white/30 dark:bg-gray-800/30 backdrop-blur-md border border-white/20;
   }
 }
+
+/* ---------- Thermal Print Styles ---------- */
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Only show the receipt */
+  .thermal-receipt,
+  .thermal-receipt * {
+    visibility: visible;
+  }
+
+  .thermal-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm !important;
+    padding: 4mm 2mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Page setup for thermal printers */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  /* Remove backgrounds & colors (thermal = B/W only) */
+  .thermal-receipt {
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

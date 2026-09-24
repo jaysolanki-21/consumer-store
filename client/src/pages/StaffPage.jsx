@@ -4,25 +4,21 @@ import React, {
   useRef,
   useCallback,
   useMemo,
-} from 'react';
+} from "react";
 
-import { useDispatch, useSelector } from 'react-redux';
-import toast from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useDispatch, useSelector } from "react-redux";
+import toast from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
-import {
-  setOrders,
-  updateOrder,
-  setLoading,
-} from '../redux/slices/orderSlice';
+import { setOrders, updateOrder, setLoading } from "../redux/slices/orderSlice";
 
 import {
   selectLoadingState,
   selectAllOrders,
-} from '../redux/selectors/orderSelectors';
+} from "../redux/selectors/orderSelectors";
 
-import api from '../services/api';
-import { useSocket } from '../hooks/useSocket';
+import api from "../services/api";
+import { useSocket } from "../hooks/useSocket";
 import socket from "../services/socket";
 
 import {
@@ -40,10 +36,10 @@ import {
   FiVolume2,
   FiVolumeX,
   FiMonitor,
-} from 'react-icons/fi';
+} from "react-icons/fi";
 
 // ✅ Notification sound URL
-const NOTIFICATION_SOUND_URL = '/sounds/notification-bell.mp3';
+const NOTIFICATION_SOUND_URL = "/sounds/notification-bell.mp3";
 
 // ✅ IST Date Functions
 function getTodayLocal() {
@@ -51,8 +47,8 @@ function getTodayLocal() {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(now.getTime() + istOffset);
   const year = istDate.getUTCFullYear();
-  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(istDate.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -61,17 +57,17 @@ function getISTDateFromUTC(utcDateString) {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(date.getTime() + istOffset);
   const year = istDate.getUTCFullYear();
-  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(istDate.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
 function formatTime(date) {
   const d = new Date(date);
-  return d.toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Kolkata',
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -91,132 +87,148 @@ function getOrderISTDate(order) {
 // ✅ Get counter name
 const getCounterName = (counterId) => {
   const names = {
-    'counter-1': 'Counter 1',
-    'counter-2': 'Counter 2',
-    'counter-3': 'Counter 3'
+    "counter-1": "Counter 1",
+    "counter-2": "Counter 2",
+    "counter-3": "Counter 3",
   };
-  return names[counterId] || counterId || 'N/A';
+  return names[counterId] || counterId || "N/A";
 };
 
 // ✅ Order Card Component with Counter Display
-const OrderCard = React.memo(({ order, onConfirm }) => {
-  const [isConfirming, setIsConfirming] = useState(false);
-  const isNewOrder = useRef(Date.now() - new Date(order.createdAt).getTime() < 5000);
+const OrderCard = React.memo(
+  ({ order, onConfirm }) => {
+    const [isConfirming, setIsConfirming] = useState(false);
+    const isNewOrder = useRef(
+      Date.now() - new Date(order.createdAt).getTime() < 5000,
+    );
 
-  const handleConfirm = useCallback(async () => {
-    if (isConfirming) return;
-    setIsConfirming(true);
-    try {
-      await onConfirm(order._id);
-    } finally {
-      setIsConfirming(false);
-    }
-  }, [onConfirm, order._id, isConfirming]);
+    const handleConfirm = useCallback(async () => {
+      if (isConfirming) return;
+      setIsConfirming(true);
+      try {
+        await onConfirm(order._id);
+      } finally {
+        setIsConfirming(false);
+      }
+    }, [onConfirm, order._id, isConfirming]);
 
-  const counterName = getCounterName(order.counterId);
+    const counterName = getCounterName(order.counterId);
 
-  return (
-    <motion.div
-      initial={isNewOrder.current ? { opacity: 0, y: -20 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden transition-all duration-150">
-        {/* HEADER */}
-        <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-semibold flex items-center gap-1">
-              <FiHash className="text-sm" />
-              #{order._id.slice(-6)}
-            </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
-              <FiClock className="text-sm" />
-              {order.formattedTime}
-            </div>
-            {/* ✅ Counter Badge */}
-            {order.counterId && (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
-                <FiMonitor className="text-xs" />
-                {counterName}
+    return (
+      <motion.div
+        initial={isNewOrder.current ? { opacity: 0, y: -20 } : false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden transition-all duration-150">
+          {/* HEADER */}
+          <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-semibold flex items-center gap-1">
+                <FiHash className="text-sm" />#{order._id.slice(-6)}
               </div>
-            )}
-          </div>
-          <div>
-            {order.status === 'Pending' ? (
-              <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">Pending</span>
-            ) : (
-              <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">Completed</span>
-            )}
-          </div>
-        </div>
-
-        {/* BODY */}
-        <div className="p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-xs uppercase text-gray-400 font-semibold border-b border-gray-100 dark:border-slate-800">
-                  <th className="pb-3">Product</th>
-                  <th className="pb-3 text-center">Qty</th>
-                  <th className="pb-3 text-right">Price</th>
-                  <th className="pb-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {order.items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-gray-50 dark:border-slate-800/50">
-                    <td className="py-4 font-medium text-gray-800 dark:text-gray-200">
-                      {item.productId?.name || 'Unknown'}
-                    </td>
-                    <td className="py-4 text-center">
-                      <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold dark:text-gray-200">
-                        {item.quantity}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right text-gray-500 dark:text-gray-400 font-medium">
-                      ₹{item.price}
-                    </td>
-                    <td className="py-4 text-right font-semibold text-gray-800 dark:text-gray-200">
-                      ₹{item.quantity * item.price}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* FOOTER */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
-            <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Bill Amount</p>
-              <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">₹{order.totalAmount}</h2>
+              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+                <FiClock className="text-sm" />
+                {order.formattedTime}
+              </div>
+              {/* ✅ Counter Badge */}
+              {order.counterId && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
+                  <FiMonitor className="text-xs" />
+                  {counterName}
+                </div>
+              )}
             </div>
-            
-            {/* ✅ Only Confirm button for Pending orders */}
-            {order.status === 'Pending' && (
-              <button
-                onClick={handleConfirm}
-                disabled={isConfirming}
-                className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm"
-              >
-                <FiCheckCircle className="text-base" />
-                {isConfirming ? 'Confirming...' : 'Confirm'}
-              </button>
-            )}
+            <div>
+              {order.status === "Pending" ? (
+                <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
+                  Pending
+                </span>
+              ) : (
+                <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold flex items-center gap-2">
+                  <FiCheckCircle className="text-emerald-600 text-lg" />
+                  Completed
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* BODY */}
+          <div className="p-5">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-gray-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                    <th className="pb-3">Product</th>
+                    <th className="pb-3 text-center">Qty</th>
+                    <th className="pb-3 text-right">Price</th>
+                    <th className="pb-3 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.items.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      className="border-b border-gray-50 dark:border-slate-800/50"
+                    >
+                      <td className="py-4 font-medium text-gray-800 dark:text-gray-200">
+                        {item.productId?.name || "Unknown"}
+                      </td>
+                      <td className="py-4 text-center">
+                        <span className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-sm font-mono font-semibold dark:text-gray-200">
+                          {item.quantity}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right text-gray-500 dark:text-gray-400 font-medium">
+                        ₹{item.price}
+                      </td>
+                      <td className="py-4 text-right font-semibold text-gray-800 dark:text-gray-200">
+                        ₹{item.quantity * item.price}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* FOOTER */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
+              <div>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Total Bill Amount
+                </p>
+                <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+                  ₹{order.totalAmount}
+                </h2>
+              </div>
+
+              {/* ✅ Only Confirm button for Pending orders */}
+              {order.status === "Pending" && (
+                <button
+                  onClick={handleConfirm}
+                  disabled={isConfirming}
+                  className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm"
+                >
+                  <FiCheckCircle className="text-base" />
+                  {isConfirming ? "Confirming..." : "Confirm"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </motion.div>
-  );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.order._id === nextProps.order._id &&
-    prevProps.order.status === nextProps.order.status &&
-    prevProps.order.totalAmount === nextProps.order.totalAmount
-  );
-});
+      </motion.div>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.order._id === nextProps.order._id &&
+      prevProps.order.status === nextProps.order.status &&
+      prevProps.order.totalAmount === nextProps.order.totalAmount
+    );
+  },
+);
 
-OrderCard.displayName = 'OrderCard';
+OrderCard.displayName = "OrderCard";
 
 const StatCard = ({ title, value, icon: Icon, colorGradient }) => (
   <div className={`${colorGradient} rounded-xl p-4 text-white shadow-lg`}>
@@ -238,14 +250,14 @@ export default function StaffPage() {
 
   const loading = useSelector(selectLoadingState);
   const allOrders = useSelector(selectAllOrders);
-  
-  const [filter, setFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('pending');
+
+  const [filter, setFilter] = useState("");
+  const [activeTab, setActiveTab] = useState("pending");
   const [filterDate, setFilterDate] = useState(getTodayLocal);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [livePulse, setLivePulse] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // ✅ SOUND OFF BY DEFAULT
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioElement, setAudioElement] = useState(null);
@@ -253,7 +265,7 @@ export default function StaffPage() {
   // ✅ Get unique counters from orders
   const uniqueCounters = useMemo(() => {
     const counters = new Set();
-    allOrders.forEach(order => {
+    allOrders.forEach((order) => {
       if (order.counterId) {
         counters.add(order.counterId);
       }
@@ -262,33 +274,36 @@ export default function StaffPage() {
   }, [allOrders]);
 
   // ✅ Counter filter state
-  const [filterCounter, setFilterCounter] = useState('all');
+  const [filterCounter, setFilterCounter] = useState("all");
 
   // ✅ Initialize audio element
   useEffect(() => {
     const audio = new Audio(NOTIFICATION_SOUND_URL);
-    audio.preload = 'auto';
+    audio.preload = "auto";
     audio.load();
     setAudioElement(audio);
-    
+
     const enableAudio = () => {
       if (audio) {
         audio.volume = 0;
-        audio.play().then(() => {
-          audio.pause();
-          audio.volume = 0.7;
-          audio.currentTime = 0;
-        }).catch(() => {});
+        audio
+          .play()
+          .then(() => {
+            audio.pause();
+            audio.volume = 0.7;
+            audio.currentTime = 0;
+          })
+          .catch(() => {});
       }
-      document.removeEventListener('click', enableAudio);
-      document.removeEventListener('touchstart', enableAudio);
+      document.removeEventListener("click", enableAudio);
+      document.removeEventListener("touchstart", enableAudio);
     };
-    document.addEventListener('click', enableAudio);
-    document.addEventListener('touchstart', enableAudio);
-    
+    document.addEventListener("click", enableAudio);
+    document.addEventListener("touchstart", enableAudio);
+
     return () => {
-      document.removeEventListener('click', enableAudio);
-      document.removeEventListener('touchstart', enableAudio);
+      document.removeEventListener("click", enableAudio);
+      document.removeEventListener("touchstart", enableAudio);
     };
   }, []);
 
@@ -305,7 +320,7 @@ export default function StaffPage() {
   const toggleSound = useCallback(() => {
     const newState = !soundEnabled;
     setSoundEnabled(newState);
-    toast.success(newState ? '🔔 Sound enabled' : '🔕 Sound disabled');
+    toast.success(newState ? "🔔 Sound enabled" : "🔕 Sound disabled");
     if (newState && audioElement) {
       audioElement.currentTime = 0;
       audioElement.play().catch(() => {});
@@ -315,7 +330,7 @@ export default function StaffPage() {
   // ✅ DATE-WISE FILTERING
   const dateFilteredOrders = useMemo(() => {
     if (!filterDate) return allOrders;
-    return allOrders.filter(order => {
+    return allOrders.filter((order) => {
       const orderISTDate = getOrderISTDate(order);
       return orderISTDate === filterDate;
     });
@@ -323,39 +338,45 @@ export default function StaffPage() {
 
   // ✅ COUNTER FILTER
   const counterFilteredOrders = useMemo(() => {
-    if (filterCounter === 'all') return dateFilteredOrders;
-    return dateFilteredOrders.filter(order => order.counterId === filterCounter);
+    if (filterCounter === "all") return dateFilteredOrders;
+    return dateFilteredOrders.filter(
+      (order) => order.counterId === filterCounter,
+    );
   }, [dateFilteredOrders, filterCounter]);
 
   // ✅ SEARCH FILTER - Order ID
   const searchFilteredOrders = useMemo(() => {
     if (!filter.trim()) return counterFilteredOrders;
     const term = filter.toLowerCase().trim();
-    return counterFilteredOrders.filter(order => 
-      order._id.toLowerCase().includes(term) ||
-      order._id.slice(-6).toLowerCase().includes(term)
+    return counterFilteredOrders.filter(
+      (order) =>
+        order._id.toLowerCase().includes(term) ||
+        order._id.slice(-6).toLowerCase().includes(term),
     );
   }, [counterFilteredOrders, filter]);
 
   const pendingOrders = useMemo(
-    () => searchFilteredOrders.filter((o) => o.status === 'Pending'),
-    [searchFilteredOrders]
+    () => searchFilteredOrders.filter((o) => o.status === "Pending"),
+    [searchFilteredOrders],
   );
 
   const confirmedOrders = useMemo(
-    () => searchFilteredOrders.filter((o) => o.status === 'Confirmed'),
-    [searchFilteredOrders]
+    () => searchFilteredOrders.filter((o) => o.status === "Confirmed"),
+    [searchFilteredOrders],
   );
 
   const currentOrders = useMemo(
-    () => (activeTab === 'pending' ? pendingOrders : confirmedOrders),
-    [activeTab, pendingOrders, confirmedOrders]
+    () => (activeTab === "pending" ? pendingOrders : confirmedOrders),
+    [activeTab, pendingOrders, confirmedOrders],
   );
 
   const pendingCount = pendingOrders.length;
   const confirmedCount = confirmedOrders.length;
   const totalRevenue = useMemo(() => {
-    return confirmedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    return confirmedOrders.reduce(
+      (sum, order) => sum + (order.totalAmount || 0),
+      0,
+    );
   }, [confirmedOrders]);
   const activeOrdersCount = pendingCount + confirmedCount;
 
@@ -363,13 +384,13 @@ export default function StaffPage() {
   const fetchOrders = useCallback(async () => {
     try {
       dispatch(setLoading(true));
-      const { data } = await api.get('/orders');
+      const { data } = await api.get("/orders");
       const normalized = data.map(normalizeOrder);
       dispatch(setOrders(normalized));
       setIsInitialLoad(false);
     } catch (error) {
-      console.error('Failed to fetch orders:', error);
-      toast.error('Failed to connect to server');
+      console.error("Failed to fetch orders:", error);
+      toast.error("Failed to connect to server");
       setIsInitialLoad(false);
     } finally {
       dispatch(setLoading(false));
@@ -380,11 +401,11 @@ export default function StaffPage() {
   const refreshOrdersSilently = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const { data } = await api.get('/orders');
+      const { data } = await api.get("/orders");
       const normalized = data.map(normalizeOrder);
       dispatch(setOrders(normalized));
     } catch (error) {
-      console.error('Silent refresh failed:', error);
+      console.error("Silent refresh failed:", error);
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
@@ -392,7 +413,7 @@ export default function StaffPage() {
 
   // ✅ Live update handler with sound - NO SPINNER
   const handleLiveUpdate = useCallback(() => {
-    refreshOrdersSilently();  // ✅ Silent refresh - no spinner
+    refreshOrdersSilently(); // ✅ Silent refresh - no spinner
     setLivePulse(true);
     setTimeout(() => setLivePulse(false), 1500);
   }, [refreshOrdersSilently]);
@@ -403,34 +424,34 @@ export default function StaffPage() {
 
     // ✅ Only for new order - show toast
     const handleNewOrder = () => {
-      console.log('🔔 New order received!');
+      console.log("🔔 New order received!");
       if (soundEnabled) playNotificationSound();
       handleLiveUpdate();
-      toast.success('🛒 New Order Received!', {
+      toast.success("🛒 New Order Received!", {
         duration: 5000,
-        icon: '🛒',
-        style: { background: '#10b981', color: '#fff', fontWeight: 'bold' },
+        icon: "🛒",
+        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
     };
 
     // ✅ Silent updates - No toast for confirmed/cancelled/reverted
     const handleOrderConfirmed = () => {
-      console.log('✅ Order confirmed (socket)');
+      console.log("✅ Order confirmed (socket)");
       handleLiveUpdate();
     };
 
     const handleOrderCancelled = () => {
-      console.log('❌ Order cancelled');
+      console.log("❌ Order cancelled");
       handleLiveUpdate();
     };
 
     const handleOrderReverted = () => {
-      console.log('🔄 Order reverted');
+      console.log("🔄 Order reverted");
       handleLiveUpdate();
     };
 
     const handleStockUpdated = () => {
-      console.log('📦 Stock updated');
+      console.log("📦 Stock updated");
       handleLiveUpdate();
     };
 
@@ -450,36 +471,42 @@ export default function StaffPage() {
   }, [fetchOrders, handleLiveUpdate, playNotificationSound, soundEnabled]);
 
   // ✅ CONFIRM ORDER - Only toast from here
-  const confirmOrder = useCallback(async (orderId) => {
-    try {
-      // Optimistic update - update UI immediately
-      dispatch(updateOrder({ id: orderId, changes: { status: 'Confirmed' } }));
+  const confirmOrder = useCallback(
+    async (orderId) => {
+      try {
+        // Optimistic update - update UI immediately
+        dispatch(
+          updateOrder({ id: orderId, changes: { status: "Confirmed" } }),
+        );
 
-      // Call API to confirm
-      await api.put(`/orders/${orderId}/confirm`);
+        // Call API to confirm
+        await api.put(`/orders/${orderId}/confirm`);
 
-      // ✅ ONLY ONE TOAST - from here
-      toast.success(`Order confirmed! ✅`, { duration: 2000 });
-
-    } catch (error) {
-      console.error('Failed to confirm order:', error);
-      // Rollback
-      const order = allOrders.find(o => o._id === orderId);
-      if (order) {
-        dispatch(updateOrder({ id: orderId, changes: { status: 'Pending' } }));
+        // ✅ ONLY ONE TOAST - from here
+        toast.success(`Order confirmed! ✅`, { duration: 2000 });
+      } catch (error) {
+        console.error("Failed to confirm order:", error);
+        // Rollback
+        const order = allOrders.find((o) => o._id === orderId);
+        if (order) {
+          dispatch(
+            updateOrder({ id: orderId, changes: { status: "Pending" } }),
+          );
+        }
+        toast.error("Failed to confirm order");
       }
-      toast.error('Failed to confirm order');
-    }
-  }, [dispatch, allOrders]);
+    },
+    [dispatch, allOrders],
+  );
 
   // ✅ DATE NAVIGATION
   const addDays = useCallback((dateStr, days) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    const [year, month, day] = dateStr.split("-").map(Number);
     const date = new Date(year, month - 1, day);
     date.setDate(date.getDate() + days);
     const newYear = date.getFullYear();
-    const newMonth = String(date.getMonth() + 1).padStart(2, '0');
-    const newDay = String(date.getDate()).padStart(2, '0');
+    const newMonth = String(date.getMonth() + 1).padStart(2, "0");
+    const newDay = String(date.getDate()).padStart(2, "0");
     return `${newYear}-${newMonth}-${newDay}`;
   }, []);
 
@@ -492,7 +519,7 @@ export default function StaffPage() {
     setFilterDate((prev) => {
       const next = addDays(prev, 1);
       if (next > today) {
-        toast.error('Cannot go beyond today');
+        toast.error("Cannot go beyond today");
         return prev;
       }
       return next;
@@ -502,9 +529,9 @@ export default function StaffPage() {
   // ✅ Get counter name
   const getCounterName = (counterId) => {
     const names = {
-      'counter-1': 'Counter 1',
-      'counter-2': 'Counter 2',
-      'counter-3': 'Counter 3'
+      "counter-1": "Counter 1",
+      "counter-2": "Counter 2",
+      "counter-3": "Counter 3",
     };
     return names[counterId] || counterId;
   };
@@ -516,19 +543,21 @@ export default function StaffPage() {
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-500">Loading dashboard...</p>
-          <p className="text-xs text-gray-400 mt-2">Waking up server (may take a few seconds)</p>
+          <p className="text-xs text-gray-400 mt-2">
+            Waking up server (may take a few seconds)
+          </p>
         </div>
       </div>
     );
   }
 
   const displayDate = (() => {
-    const [year, month, day] = filterDate.split('-');
-    return new Date(year, month - 1, day).toLocaleDateString('en-IN', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+    const [year, month, day] = filterDate.split("-");
+    return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   })();
 
@@ -594,7 +623,10 @@ export default function StaffPage() {
 
           {/* Date Filter */}
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-4 py-2 rounded-xl shadow-sm">
-            <button onClick={goPrevDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+            <button
+              onClick={goPrevDay}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+            >
               <FiChevronLeft className="text-indigo-500" />
             </button>
             <FiCalendar className="text-indigo-500" />
@@ -605,7 +637,10 @@ export default function StaffPage() {
               max={getTodayLocal()}
               className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
             />
-            <button onClick={goNextDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+            <button
+              onClick={goNextDay}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+            >
               <FiChevronRight className="text-indigo-500" />
             </button>
           </div>
@@ -668,14 +703,14 @@ export default function StaffPage() {
 
           <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-2xl">
             <button
-              onClick={() => setActiveTab('pending')}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'pending' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500'}`}
+              onClick={() => setActiveTab("pending")}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "pending" ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400" : "text-gray-500"}`}
             >
               Pending ({pendingCount})
             </button>
             <button
-              onClick={() => setActiveTab('confirmed')}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'confirmed' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500'}`}
+              onClick={() => setActiveTab("confirmed")}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "confirmed" ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400" : "text-gray-500"}`}
             >
               Completed ({confirmedCount})
             </button>
@@ -690,16 +725,16 @@ export default function StaffPage() {
             <div className="w-20 h-20 mx-auto rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-4xl text-gray-400 mb-5">
               <FiPackage />
             </div>
-            <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">No Orders Found</h2>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">No {activeTab} orders found for this date</p>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">
+              No Orders Found
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
+              No {activeTab} orders found for this date
+            </p>
           </div>
         ) : (
           currentOrders.map((order) => (
-            <OrderCard
-              key={order._id}
-              order={order}
-              onConfirm={confirmOrder}
-            />
+            <OrderCard key={order._id} order={order} onConfirm={confirmOrder} />
           ))
         )}
       </div>
