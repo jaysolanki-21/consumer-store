@@ -22,7 +22,7 @@ const orderSchema = new mongoose.Schema({
   staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   staffName: { type: String },
   payment: {
-    method: { type: String, enum: ['Cash', 'UPI'], default: 'Cash' },
+    method: { type: String, enum: ['Cash', 'UPI', 'Online'], default: 'Cash' },
     receivedAmount: { type: Number, default: 0, min: 0 },
     changeReturned: { type: Number, default: 0, min: 0 },
     transactionId: { type: String, default: '' },

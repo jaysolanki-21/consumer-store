@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import api from "../services/api";
-import socket from "../services/socket";  // ✅ Direct import like working version
+import socket from "../services/socket"; // ✅ Direct import like working version
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,16 +43,16 @@ export default function SalesReportPage() {
   });
   const [confirmedOrders, setConfirmedOrders] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
-  
+
   // ✅ FILTERS
   const [filterCounter, setFilterCounter] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("today");
-  
+
   // ✅ Custom date range
   const [customStartDate, setCustomStartDate] = useState(getTodayIST());
   const [customEndDate, setCustomEndDate] = useState(getTodayIST());
-  
+
   // ✅ LOADING STATES - Only for initial load
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,7 +62,7 @@ export default function SalesReportPage() {
   // ✅ Get unique counters
   const getUniqueCounters = useMemo(() => {
     const counters = new Set();
-    allOrders.forEach(order => {
+    allOrders.forEach((order) => {
       if (order.counterId) {
         counters.add(order.counterId);
       }
@@ -73,16 +73,16 @@ export default function SalesReportPage() {
   // ✅ Counter name mapping
   const getCounterName = (counterId) => {
     const names = {
-      'counter-1': 'Counter 1',
-      'counter-2': 'Counter 2',
-      'counter-3': 'Counter 3',
-      'counter-4': 'Counter 4',
-      'counter-5': 'Counter 5',
-      'counter-6': 'Counter 6',
-      'counter-7': 'Counter 7',
-      'counter-8': 'Counter 8',
-      'counter-9': 'Counter 9',
-      'counter-10': 'Counter 10'
+      "counter-1": "Counter 1",
+      "counter-2": "Counter 2",
+      "counter-3": "Counter 3",
+      "counter-4": "Counter 4",
+      "counter-5": "Counter 5",
+      "counter-6": "Counter 6",
+      "counter-7": "Counter 7",
+      "counter-8": "Counter 8",
+      "counter-9": "Counter 9",
+      "counter-10": "Counter 10",
     };
     return names[counterId] || counterId;
   };
@@ -92,66 +92,78 @@ export default function SalesReportPage() {
     let filtered = [...allOrders];
 
     // Date filter
-    if (filterDateRange === 'today') {
+    if (filterDateRange === "today") {
       const today = getTodayIST();
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      filtered = filtered.filter((order) => {
+        const orderDate = new Date(order.createdAt).toISOString().split("T")[0];
         return orderDate === today;
       });
-    } else if (filterDateRange === 'week') {
+    } else if (filterDateRange === "week") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      filtered = filtered.filter(order => {
+      filtered = filtered.filter((order) => {
         const orderDate = new Date(order.createdAt);
         return orderDate >= weekAgo;
       });
-    } else if (filterDateRange === 'month') {
+    } else if (filterDateRange === "month") {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
-      filtered = filtered.filter(order => {
+      filtered = filtered.filter((order) => {
         const orderDate = new Date(order.createdAt);
         return orderDate >= monthAgo;
       });
-    } else if (filterDateRange === 'custom') {
-      filtered = filtered.filter(order => {
-        const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+    } else if (filterDateRange === "custom") {
+      filtered = filtered.filter((order) => {
+        const orderDate = new Date(order.createdAt).toISOString().split("T")[0];
         return orderDate >= customStartDate && orderDate <= customEndDate;
       });
     }
 
     // Counter filter
-    if (filterCounter !== 'all') {
-      filtered = filtered.filter(order => order.counterId === filterCounter);
+    if (filterCounter !== "all") {
+      filtered = filtered.filter((order) => order.counterId === filterCounter);
     }
 
     // Payment filter
-    if (filterPayment !== 'all') {
-      filtered = filtered.filter(order => order.payment?.method === filterPayment);
+    if (filterPayment !== "all") {
+      filtered = filtered.filter(
+        (order) => order.payment?.method === filterPayment,
+      );
     }
 
     return filtered;
-  }, [allOrders, filterDateRange, filterCounter, filterPayment, customStartDate, customEndDate]);
+  }, [
+    allOrders,
+    filterDateRange,
+    filterCounter,
+    filterPayment,
+    customStartDate,
+    customEndDate,
+  ]);
 
   // ✅ Confirmed orders only
   const filteredConfirmedOrders = useMemo(() => {
-    return getFilteredOrders.filter(order => order.status === 'Confirmed');
+    return getFilteredOrders.filter((order) => order.status === "Confirmed");
   }, [getFilteredOrders]);
 
   // ✅ Sales report data from filtered orders
   const filteredSalesData = useMemo(() => {
-    const filtered = getFilteredOrders.filter(order => order.status === 'Confirmed');
-    
+    const filtered = getFilteredOrders.filter(
+      (order) => order.status === "Confirmed",
+    );
+
     let totalIncome = 0;
     let totalCost = 0;
     const productSales = {};
 
-    filtered.forEach(order => {
+    filtered.forEach((order) => {
       totalIncome += order.totalAmount || 0;
-      order.items.forEach(item => {
-        const productName = item.productId?.name || item.name || 'Deleted Product';
-        const productId = item.productId?._id || item.productId || 'unknown';
+      order.items.forEach((item) => {
+        const productName =
+          item.productId?.name || item.name || "Deleted Product";
+        const productId = item.productId?._id || item.productId || "unknown";
         const costPrice = item.costPrice || 0;
-        
+
         if (!productSales[productId]) {
           productSales[productId] = {
             productId,
@@ -159,16 +171,18 @@ export default function SalesReportPage() {
             quantity: 0,
             revenue: 0,
             cost: 0,
-            profit: 0
+            profit: 0,
           };
         }
-        const itemRevenue = item.quantity * (item.sellingPrice || item.price || 0);
+        const itemRevenue =
+          item.quantity * (item.sellingPrice || item.price || 0);
         const itemCost = item.quantity * Number(costPrice);
-        
+
         productSales[productId].quantity += item.quantity;
         productSales[productId].revenue += itemRevenue;
         productSales[productId].cost += itemCost;
-        productSales[productId].profit = productSales[productId].revenue - productSales[productId].cost;
+        productSales[productId].profit =
+          productSales[productId].revenue - productSales[productId].cost;
         totalCost += itemCost;
       });
     });
@@ -178,8 +192,10 @@ export default function SalesReportPage() {
       totalIncome,
       totalCost,
       grossProfit: totalIncome - totalCost,
-      profitMargin: totalIncome ? ((totalIncome - totalCost) / totalIncome) * 100 : 0,
-      productWise: Object.values(productSales)
+      profitMargin: totalIncome
+        ? ((totalIncome - totalCost) / totalIncome) * 100
+        : 0,
+      productWise: Object.values(productSales),
     };
   }, [getFilteredOrders]);
 
@@ -225,7 +241,7 @@ export default function SalesReportPage() {
         // ✅ Show subtle refresh indicator instead of spinner
         setRefreshing(true);
       }
-      
+
       const { data } = await api.get("/orders");
       setAllOrders(data);
     } catch (err) {
@@ -299,7 +315,11 @@ export default function SalesReportPage() {
   const downloadPDF = () => {
     setDownloadingPdf(true);
     try {
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
       const margin = 14;
@@ -320,13 +340,14 @@ export default function SalesReportPage() {
         `Generated: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
         pageW - margin,
         13,
-        { align: "right" }
+        { align: "right" },
       );
 
       // Filter info
       let filterText = `Date: ${filterDateRange}`;
-      if (filterCounter !== 'all') filterText += ` | Counter: ${getCounterName(filterCounter)}`;
-      if (filterPayment !== 'all') filterText += ` | Payment: ${filterPayment}`;
+      if (filterCounter !== "all")
+        filterText += ` | Counter: ${getCounterName(filterCounter)}`;
+      if (filterPayment !== "all") filterText += ` | Payment: ${filterPayment}`;
       doc.text(filterText, pageW - margin, 20, { align: "right" });
 
       let y = 36;
@@ -334,9 +355,22 @@ export default function SalesReportPage() {
       // ── Summary cards ──
       const cardW = (contentW - 8) / 3;
       const cards = [
-        { label: "Report Date", value: formatDate(selectedDate), color: [79, 70, 229], small: true },
-        { label: "Total Income", value: `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`, color: [16, 185, 129] },
-        { label: "Confirmed Orders", value: String(filteredSalesData.totalOrders || 0), color: [124, 58, 237] },
+        {
+          label: "Report Date",
+          value: formatDate(selectedDate),
+          color: [79, 70, 229],
+          small: true,
+        },
+        {
+          label: "Total Income",
+          value: `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`,
+          color: [16, 185, 129],
+        },
+        {
+          label: "Confirmed Orders",
+          value: String(filteredSalesData.totalOrders || 0),
+          color: [124, 58, 237],
+        },
       ];
 
       cards.forEach((card, i) => {
@@ -364,7 +398,10 @@ export default function SalesReportPage() {
       doc.text("Product-wise Sales", margin, y);
       y += 5;
 
-      if (!filteredSalesData.productWise || filteredSalesData.productWise.length === 0) {
+      if (
+        !filteredSalesData.productWise ||
+        filteredSalesData.productWise.length === 0
+      ) {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
@@ -374,7 +411,16 @@ export default function SalesReportPage() {
         autoTable(doc, {
           startY: y,
           margin: { left: margin, right: margin },
-          head: [["#", "Product Name", "Qty Sold", "Revenue (Rs.)", "Cost (Rs.)", "Profit (Rs.)"]],
+          head: [
+            [
+              "#",
+              "Product Name",
+              "Qty Sold",
+              "Revenue (Rs.)",
+              "Cost (Rs.)",
+              "Profit (Rs.)",
+            ],
+          ],
           body: filteredSalesData.productWise.map((item, idx) => [
             idx + 1,
             item.name,
@@ -383,18 +429,43 @@ export default function SalesReportPage() {
             Number(item.cost || 0).toLocaleString("en-IN"),
             Number(item.profit || 0).toLocaleString("en-IN"),
           ]),
-          foot: [["", "TOTAL", filteredSalesData.productWise.reduce((s, i) => s + i.quantity, 0), `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`, `Rs. ${(filteredSalesData.totalCost || 0).toLocaleString("en-IN")}`, `Rs. ${(filteredSalesData.grossProfit || 0).toLocaleString("en-IN")}`]],
-          headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
-          footStyles: { fillColor: [238, 242, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
-          bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
+          foot: [
+            [
+              "",
+              "TOTAL",
+              filteredSalesData.productWise.reduce((s, i) => s + i.quantity, 0),
+              `Rs. ${(filteredSalesData.totalIncome || 0).toLocaleString("en-IN")}`,
+              `Rs. ${(filteredSalesData.totalCost || 0).toLocaleString("en-IN")}`,
+              `Rs. ${(filteredSalesData.grossProfit || 0).toLocaleString("en-IN")}`,
+            ],
+          ],
+          headStyles: {
+            fillColor: [79, 70, 229],
+            textColor: 255,
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "center",
+          },
+          footStyles: {
+            fillColor: [238, 242, 255],
+            textColor: [31, 41, 55],
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "center",
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [31, 41, 55],
+            halign: "center",
+          },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: { 
-            0: { cellWidth: 10, halign: "center" }, 
-            1: { halign: "left" }, 
-            2: { halign: "center" }, 
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" },
+            1: { halign: "left" },
+            2: { halign: "center" },
             3: { halign: "right" },
             4: { halign: "right" },
-            5: { halign: "right" }
+            5: { halign: "right" },
           },
           showFoot: "lastPage",
         });
@@ -422,27 +493,61 @@ export default function SalesReportPage() {
         autoTable(doc, {
           startY: y,
           margin: { left: margin, right: margin },
-          head: [["#", "Order ID", "Time", "Counter", "Amount (Rs.)", "Approved By"]],
+          head: [
+            ["#", "Order ID", "Time", "Counter", "Amount (Rs.)", "Approved By"],
+          ],
           body: filteredConfirmedOrders.map((order, idx) => [
             idx + 1,
             `#${order._id.slice(-8)}`,
-            new Date(order.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }),
-            getCounterName(order.counterId) || '-',
+            new Date(order.createdAt).toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              hour12: true,
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "2-digit",
+              month: "short",
+            }),
+            getCounterName(order.counterId) || "-",
             `Rs. ${Number(order.totalAmount).toLocaleString("en-IN")}`,
             order.confirmedBy?.name || "System",
           ]),
-          foot: [["", "", "", `${filteredConfirmedOrders.length} Orders`, `Rs. ${filteredConfirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString("en-IN")}`, ""]],
-          headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: "bold", fontSize: 9, halign: "center" },
-          footStyles: { fillColor: [245, 243, 255], textColor: [31, 41, 55], fontStyle: "bold", fontSize: 9, halign: "center" },
-          bodyStyles: { fontSize: 9, textColor: [31, 41, 55], halign: "center" },
+          foot: [
+            [
+              "",
+              "",
+              "",
+              `${filteredConfirmedOrders.length} Orders`,
+              `Rs. ${filteredConfirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString("en-IN")}`,
+              "",
+            ],
+          ],
+          headStyles: {
+            fillColor: [124, 58, 237],
+            textColor: 255,
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "center",
+          },
+          footStyles: {
+            fillColor: [245, 243, 255],
+            textColor: [31, 41, 55],
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "center",
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [31, 41, 55],
+            halign: "center",
+          },
           alternateRowStyles: { fillColor: [248, 250, 252] },
-          columnStyles: { 
-            0: { cellWidth: 10, halign: "center" }, 
-            1: { halign: "center" }, 
-            2: { halign: "center" }, 
-            3: { halign: "center" }, 
-            4: { halign: "right" }, 
-            5: { halign: "center" } 
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" },
+            1: { halign: "center" },
+            2: { halign: "center" },
+            3: { halign: "center" },
+            4: { halign: "right" },
+            5: { halign: "center" },
           },
           showFoot: "lastPage",
         });
@@ -459,7 +564,9 @@ export default function SalesReportPage() {
         doc.setFontSize(8);
         doc.setTextColor(107, 114, 128);
         doc.text("Consumer Store – Confidential", margin, pageH - 7);
-        doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 7, { align: "right" });
+        doc.text(`Page ${p} of ${totalPages}`, pageW - margin, pageH - 7, {
+          align: "right",
+        });
       }
 
       const fileName = `Sales_Report_${selectedDate}.pdf`;
@@ -531,13 +638,17 @@ export default function SalesReportPage() {
         <div className="flex items-center gap-2 mb-3">
           <FiFilter className="text-indigo-500" />
           <h3 className="font-semibold text-sm">Filters</h3>
-          <span className="text-xs text-gray-400">({filteredConfirmedOrders.length} orders found)</span>
+          <span className="text-xs text-gray-400">
+            ({filteredConfirmedOrders.length} orders found)
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Date Range Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Date Range</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Date Range
+            </label>
             <select
               value={filterDateRange}
               onChange={(e) => setFilterDateRange(e.target.value)}
@@ -551,10 +662,12 @@ export default function SalesReportPage() {
           </div>
 
           {/* Custom Date Range */}
-          {filterDateRange === 'custom' && (
+          {filterDateRange === "custom" && (
             <>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Start Date
+                </label>
                 <input
                   type="date"
                   value={customStartDate}
@@ -563,7 +676,9 @@ export default function SalesReportPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">End Date</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  End Date
+                </label>
                 <input
                   type="date"
                   value={customEndDate}
@@ -577,7 +692,9 @@ export default function SalesReportPage() {
 
           {/* Counter Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Counter</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Counter
+            </label>
             <select
               value={filterCounter}
               onChange={(e) => setFilterCounter(e.target.value)}
@@ -594,7 +711,9 @@ export default function SalesReportPage() {
 
           {/* Payment Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Payment Method</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Payment Method
+            </label>
             <select
               value={filterPayment}
               onChange={(e) => setFilterPayment(e.target.value)}
@@ -602,27 +721,33 @@ export default function SalesReportPage() {
             >
               <option value="all">All Payments</option>
               <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
+              <option value="Online">Online</option>
             </select>
           </div>
         </div>
 
         {/* Active Filters Display */}
-        {(filterCounter !== 'all' || filterPayment !== 'all' || filterDateRange !== 'today') && (
+        {(filterCounter !== "all" ||
+          filterPayment !== "all" ||
+          filterDateRange !== "today") && (
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500">Active Filters:</span>
-            {filterDateRange !== 'today' && (
+            {filterDateRange !== "today" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs">
-                {filterDateRange === 'week' ? 'Last 7 Days' : filterDateRange === 'month' ? 'Last 30 Days' : 'Custom Range'}
+                {filterDateRange === "week"
+                  ? "Last 7 Days"
+                  : filterDateRange === "month"
+                    ? "Last 30 Days"
+                    : "Custom Range"}
               </span>
             )}
-            {filterCounter !== 'all' && (
+            {filterCounter !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs">
                 <FiMonitor className="text-xs" />
                 {getCounterName(filterCounter)}
               </span>
             )}
-            {filterPayment !== 'all' && (
+            {filterPayment !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs">
                 {filterPayment}
               </span>
@@ -643,8 +768,12 @@ export default function SalesReportPage() {
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-indigo-100 text-sm font-medium">Total Orders</p>
-                  <p className="text-2xl font-bold mt-1">{filteredSalesData.totalOrders}</p>
+                  <p className="text-indigo-100 text-sm font-medium">
+                    Total Orders
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    {filteredSalesData.totalOrders}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
                   <FiShoppingBag className="text-2xl text-white" />
@@ -655,7 +784,9 @@ export default function SalesReportPage() {
             <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-emerald-100 text-sm font-medium">Total Revenue</p>
+                  <p className="text-emerald-100 text-sm font-medium">
+                    Total Revenue
+                  </p>
                   <p className="text-2xl font-bold mt-1">
                     ₹{(filteredSalesData.totalIncome || 0).toLocaleString()}
                   </p>
@@ -669,8 +800,12 @@ export default function SalesReportPage() {
             <div className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-purple-100 text-sm font-medium">Active Counters</p>
-                  <p className="text-2xl font-bold mt-1">{getUniqueCounters.length}</p>
+                  <p className="text-purple-100 text-sm font-medium">
+                    Active Counters
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    {getUniqueCounters.length}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
                   <FiMonitor className="text-2xl text-white" />
@@ -681,8 +816,12 @@ export default function SalesReportPage() {
             <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-amber-100 text-sm font-medium">Total Products</p>
-                  <p className="text-2xl font-bold mt-1">{filteredSalesData.productWise?.length || 0}</p>
+                  <p className="text-amber-100 text-sm font-medium">
+                    Total Products
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    {filteredSalesData.productWise?.length || 0}
+                  </p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
                   <FiPackage className="text-2xl text-white" />
@@ -692,22 +831,49 @@ export default function SalesReportPage() {
 
             <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl p-5 text-white shadow-lg">
               <div className="flex justify-between items-start">
-                <div><p className="text-rose-100 text-sm font-medium">Total Cost</p><p className="text-2xl font-bold mt-1">₹{(filteredSalesData.totalCost || 0).toLocaleString()}</p></div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FiDollarSign className="text-2xl text-white" /></div>
+                <div>
+                  <p className="text-rose-100 text-sm font-medium">
+                    Total Cost
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    ₹{(filteredSalesData.totalCost || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FiDollarSign className="text-2xl text-white" />
+                </div>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl p-5 text-white shadow-lg">
               <div className="flex justify-between items-start">
-                <div><p className="text-cyan-100 text-sm font-medium">Gross Profit</p><p className="text-2xl font-bold mt-1">₹{(filteredSalesData.grossProfit || 0).toLocaleString()}</p></div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FaRupeeSign className="text-2xl text-white" /></div>
+                <div>
+                  <p className="text-cyan-100 text-sm font-medium">
+                    Gross Profit
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    ₹{(filteredSalesData.grossProfit || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FaRupeeSign className="text-2xl text-white" />
+                </div>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
               <div className="flex justify-between items-start">
-                <div><p className="text-teal-100 text-sm font-medium">Profit Margin</p><p className="text-2xl font-bold mt-1">{(filteredSalesData.profitMargin || 0).toFixed(1)}%</p></div>
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><FiDollarSign className="text-2xl text-white" /></div>
+                <div>
+                  <p className="text-teal-100 text-sm font-medium">
+                    Profit Margin
+                  </p>
+                  <p className="text-2xl font-bold mt-1">
+                    {(filteredSalesData.profitMargin || 0).toFixed(1)}%
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FiDollarSign className="text-2xl text-white" />
+                </div>
               </div>
             </div>
           </div>
@@ -723,49 +889,90 @@ export default function SalesReportPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr className="text-center">
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Product</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Quantity Sold</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Revenue</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Cost</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Profit</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                      Product
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                      Quantity Sold
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                      Revenue
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                      Cost
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                      Profit
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {!filteredSalesData.productWise || filteredSalesData.productWise.length === 0 ? (
+                  {!filteredSalesData.productWise ||
+                  filteredSalesData.productWise.length === 0 ? (
                     <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                      <td
+                        colSpan="5"
+                        className="px-6 py-8 text-center text-gray-500"
+                      >
                         No sales for this period.
                       </td>
                     </tr>
                   ) : (
                     filteredSalesData.productWise.map((item) => (
-                      <tr key={item.productId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white text-left">{item.name}</td>
-                        <td className="px-6 py-4 text-center text-gray-600 dark:text-gray-300">{item.quantity}</td>
+                      <tr
+                        key={item.productId}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                      >
+                        <td className="px-6 py-4 font-medium text-gray-900 dark:text-white text-left">
+                          {item.name}
+                        </td>
+                        <td className="px-6 py-4 text-center text-gray-600 dark:text-gray-300">
+                          {item.quantity}
+                        </td>
                         <td className="px-6 py-4 text-right font-semibold text-green-600 dark:text-green-400">
                           ₹{item.revenue.toLocaleString()}
                         </td>
-                        <td className="px-6 py-4 text-right text-rose-600 dark:text-rose-400">₹{item.cost.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-right font-semibold text-cyan-700 dark:text-cyan-300">₹{item.profit.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right text-rose-600 dark:text-rose-400">
+                          ₹{item.cost.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right font-semibold text-cyan-700 dark:text-cyan-300">
+                          ₹{item.profit.toLocaleString()}
+                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
-                {filteredSalesData.productWise && filteredSalesData.productWise.length > 0 && (
-                  <tfoot className="bg-gray-50 dark:bg-gray-700 font-semibold">
-                    <tr>
-                      <td className="px-6 py-3 text-left text-sm font-bold text-gray-900 dark:text-white">TOTAL</td>
-                      <td className="px-6 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">
-                        {filteredSalesData.productWise.reduce((s, i) => s + i.quantity, 0)}
-                      </td>
-                      <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">
-                        ₹{(filteredSalesData.totalIncome || 0).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-3 text-right text-sm font-bold text-rose-700 dark:text-rose-300">₹{(filteredSalesData.totalCost || 0).toLocaleString()}</td>
-                      <td className="px-6 py-3 text-right text-sm font-bold text-cyan-700 dark:text-cyan-300">₹{(filteredSalesData.grossProfit || 0).toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                )}
+                {filteredSalesData.productWise &&
+                  filteredSalesData.productWise.length > 0 && (
+                    <tfoot className="bg-gray-50 dark:bg-gray-700 font-semibold">
+                      <tr>
+                        <td className="px-6 py-3 text-left text-sm font-bold text-gray-900 dark:text-white">
+                          TOTAL
+                        </td>
+                        <td className="px-6 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">
+                          {filteredSalesData.productWise.reduce(
+                            (s, i) => s + i.quantity,
+                            0,
+                          )}
+                        </td>
+                        <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">
+                          ₹
+                          {(
+                            filteredSalesData.totalIncome || 0
+                          ).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-3 text-right text-sm font-bold text-rose-700 dark:text-rose-300">
+                          ₹{(filteredSalesData.totalCost || 0).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-3 text-right text-sm font-bold text-cyan-700 dark:text-cyan-300">
+                          ₹
+                          {(
+                            filteredSalesData.grossProfit || 0
+                          ).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
               </table>
             </div>
           </div>
@@ -786,23 +993,39 @@ export default function SalesReportPage() {
                 <table className="w-full">
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr className="text-center">
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Order ID</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Time</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Counter</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Amount</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Approved By</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                        Order ID
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                        Time
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                        Counter
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-300">
+                        Approved By
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredConfirmedOrders.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                        <td
+                          colSpan="5"
+                          className="px-6 py-8 text-center text-gray-500"
+                        >
                           No confirmed orders for this period.
                         </td>
                       </tr>
                     ) : (
                       filteredConfirmedOrders.map((order) => (
-                        <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                        <tr
+                          key={order._id}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                        >
                           <td className="px-6 py-4 font-mono text-sm text-gray-900 dark:text-white text-left">
                             #{order._id.slice(-8)}
                           </td>
@@ -812,7 +1035,7 @@ export default function SalesReportPage() {
                           <td className="px-6 py-4 text-center">
                             <span className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">
                               <FiMonitor size={12} />
-                              {getCounterName(order.counterId) || '-'}
+                              {getCounterName(order.counterId) || "-"}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right font-semibold text-green-600 dark:text-green-400">
@@ -831,11 +1054,17 @@ export default function SalesReportPage() {
                   {filteredConfirmedOrders.length > 0 && (
                     <tfoot className="bg-gray-50 dark:bg-gray-700 font-semibold">
                       <tr>
-                        <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white">
+                        <td
+                          colSpan="3"
+                          className="px-6 py-3 text-right text-sm font-bold text-gray-900 dark:text-white"
+                        >
                           TOTAL:
                         </td>
                         <td className="px-6 py-3 text-right text-sm font-bold text-green-700 dark:text-green-300">
-                          ₹{filteredConfirmedOrders.reduce((s, o) => s + Number(o.totalAmount), 0).toLocaleString()}
+                          ₹
+                          {filteredConfirmedOrders
+                            .reduce((s, o) => s + Number(o.totalAmount), 0)
+                            .toLocaleString()}
                         </td>
                         <td className="px-6 py-3 text-center text-sm text-gray-500">
                           {filteredConfirmedOrders.length} Orders

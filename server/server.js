@@ -10,8 +10,10 @@ import productRoutes from './routes/productRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import counterRoutes from './routes/counterRoutes.js';
+import cashfreeRoutes from './routes/cashfreeRoutes.js';
 import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { setIO } from './sockets/ioInstance.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -37,9 +39,21 @@ app.use(cors({
   origin: process.env.CLIENT_URL,
   credentials: true
 }));
+
+// ── Raw body capture for Cashfree webhook HMAC verification ──────────────────
+// Registered BEFORE express.json() — only applies to the webhook route.
+app.use('/api/payments/cashfree/webhook', express.raw({ type: 'application/json' }), (req, _res, next) => {
+  req.rawBody = req.body.toString('utf8');
+  next();
+});
+
 app.use(express.json());
 
 app.set('io', io);
+
+// Register IO singleton so the webhook handler can emit Socket.IO events
+// without needing req.app (webhooks arrive without going through app middleware)
+setIO(io);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -48,6 +62,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/counters', counterRoutes);
+app.use('/api/payments/cashfree', cashfreeRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });

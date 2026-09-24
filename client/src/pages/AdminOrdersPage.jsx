@@ -32,7 +32,9 @@ import {
   FiPrinter,
   FiClock as FiTime,
   FiMonitor,
+  FiCreditCard,
 } from "react-icons/fi";
+import { FaRupeeSign } from "react-icons/fa";
 
 // ✅ IST Date Functions
 function getTodayLocal() {
@@ -96,7 +98,6 @@ export default function AdminOrdersPage() {
 
     const timer = setTimeout(() => {
       window.print();
-      // Cleanup after print dialog closes
       setTimeout(() => setPrintOrder(null), 500);
     }, 300);
 
@@ -164,6 +165,90 @@ export default function AdminOrdersPage() {
                 className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ),
+    });
+  };
+
+  // ✅ Order Info Modal — now includes Cash Received & Change Given for cash orders
+  const showOrderInfo = (order) => {
+    const paymentMethod =
+      order.payment?.method || order.paymentMethod || "Cash";
+    const isCash = paymentMethod.toLowerCase() === "cash";
+
+    const cashReceived =
+      order.amountReceived ??
+      order.cashReceived ??
+      order.payment?.amountReceived ??
+      null;
+    const changeGiven =
+      order.changeGiven ?? order.payment?.changeGiven ?? null;
+
+    confirmAlert({
+      customUI: ({ onClose }) => (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">
+              Order Information
+            </h2>
+            <div className="space-y-3 mb-6 text-sm text-slate-600 dark:text-slate-300">
+              <p>
+                <strong>Payment Method:</strong> {paymentMethod}
+              </p>
+              <p>
+                <strong>Payment Status:</strong>{" "}
+                {order.payment?.status || "N/A"}
+              </p>
+
+              {/* ✅ Cash Received & Change Given */}
+              {isCash && (
+                <>
+                  <p>
+                    <strong>Cash Received:</strong>{" "}
+                    <span className="font-bold text-emerald-600">
+                      ₹
+                      {Number(
+                        cashReceived ?? order.totalAmount,
+                      ).toLocaleString()}
+                    </span>
+                  </p>
+                  <p>
+                    <strong>Change Given:</strong>{" "}
+                    <span className="font-bold text-amber-600">
+                      ₹{Number(changeGiven ?? 0).toLocaleString()}
+                    </span>
+                  </p>
+                </>
+              )}
+
+              {order.payment?.gatewayOrderId && (
+                <p>
+                  <strong>Gateway Order ID:</strong>{" "}
+                  {order.payment.gatewayOrderId}
+                </p>
+              )}
+              {order.payment?.gatewayPaymentId && (
+                <p>
+                  <strong>Gateway Payment ID:</strong>{" "}
+                  {order.payment.gatewayPaymentId}
+                </p>
+              )}
+              {order.payment?.transactionId && (
+                <p>
+                  <strong>Transaction ID:</strong>{" "}
+                  {order.payment.transactionId}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -385,7 +470,6 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    // Build receipt-friendly order object
     const receiptOrder = {
       _id: order._id,
       items: (order.items || []).map((it) => ({
@@ -439,13 +523,19 @@ export default function AdminOrdersPage() {
     return {
       total: filteredOrders.length,
       pending: filteredOrders.filter((o) => o.status === "Pending").length,
-      confirmed: filteredOrders.filter((o) => o.status === "Confirmed")
-        .length,
-      cancelled: filteredOrders.filter((o) => o.status === "Cancelled")
-        .length,
+      confirmed: filteredOrders.filter((o) => o.status === "Confirmed").length,
+      cancelled: filteredOrders.filter((o) => o.status === "Cancelled").length,
       revenue: filteredOrders
         .filter((o) => o.status === "Confirmed")
         .reduce((acc, item) => acc + item.totalAmount, 0),
+      cashCount: filteredOrders.filter((o) => {
+        const method = o.payment?.method || o.paymentMethod || "";
+        return method.toLowerCase() === "cash";
+      }).length,
+      onlineCount: filteredOrders.filter((o) => {
+        const method = o.payment?.method || o.paymentMethod || "";
+        return method.toLowerCase() === "online";
+      }).length,
     };
   }, [filteredOrders]);
 
@@ -628,8 +718,7 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* STATS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
-          {/* ... keep all 5 stat cards unchanged ... */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-5">
           <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
             <div className="flex justify-between items-start">
               <div>
@@ -692,6 +781,30 @@ export default function AdminOrdersPage() {
               </div>
               <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
                 <FiTrendingUp className="text-2xl text-white" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-blue-100 text-sm font-medium">Cash Orders</p>
+                <p className="text-3xl font-bold mt-1">{stats.cashCount}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiPackage className="text-2xl text-white" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-cyan-100 text-sm font-medium">
+                  Online Orders
+                </p>
+                <p className="text-3xl font-bold mt-1">{stats.onlineCount}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiPackage className="text-2xl text-white" />
               </div>
             </div>
           </div>
@@ -773,6 +886,11 @@ export default function AdminOrdersPage() {
               const isExpanded = expandedOrderId === order._id;
               const counterName = getCounterName(order.counterId);
 
+              // ✅ Payment method resolution for top-bar badge
+              const paymentMethodRaw =
+                order.payment?.method || order.paymentMethod || "Cash";
+              const isCashOrder = paymentMethodRaw.toLowerCase() === "cash";
+
               return (
                 <div
                   key={order._id}
@@ -807,6 +925,22 @@ export default function AdminOrdersPage() {
                             {counterName}
                           </div>
                         )}
+
+                        {/* ✅ Payment method badge */}
+                        <div
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                            isCashOrder
+                              ? "bg-green-100 text-green-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {isCashOrder ? (
+                            <FaRupeeSign className="text-xs" />
+                          ) : (
+                            <FiCreditCard className="text-xs" />
+                          )}
+                          {isCashOrder ? "Cash" : "Online"}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
                         <span>
@@ -932,6 +1066,17 @@ export default function AdminOrdersPage() {
                                 Reprint Bill
                               </button>
                             )}
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                showOrderInfo(order);
+                              }}
+                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                            >
+                              <FiActivity className="text-lg" />
+                              Order Info
+                            </button>
 
                             {(order.status === "Cancelled" ||
                               order.status === "Pending") && (

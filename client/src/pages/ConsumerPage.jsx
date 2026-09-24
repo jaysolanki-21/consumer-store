@@ -167,6 +167,7 @@ function ConsumerPageContent() {
     navigate("/login");
   };
 
+  // ─── CASH payment handler (unchanged) ─────────────────────────────────────
   const handlePlaceOrder = async (cash, changeAmount) => {
     if (cartItems.length === 0) {
       toast.error("Cart is empty");
@@ -229,6 +230,143 @@ function ConsumerPageContent() {
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Order failed");
+    } finally {
+      setIsOrderConfirming(false);
+    }
+  };
+
+  // ─── ONLINE payment handler (Cashfree) ────────────────────────────────────
+  const handleOnlineCheckout = async () => {
+    if (cartItems.length === 0) {
+      toast.error("Cart is empty");
+      return;
+    }
+
+    if (!user || !user.counterId) {
+      toast.error("Counter not identified. Please login again.");
+      return;
+    }
+
+    try {
+      setIsOrderConfirming(true);
+
+      const orderItems = cartItems.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+      }));
+
+      // Step 1: Create order + Cashfree session (backend calculates amount)
+      const { data: sessionData } = await api.post(
+        "/payments/cashfree/create-session",
+        {
+          items: orderItems,
+          counterId: user.counterId,
+          staffId: user._id || null,
+          staffName: user.name || "",
+        }
+      );
+
+      const { orderId, cfOrderId, paymentSessionId } = sessionData;
+
+      // Step 2: Load Cashfree JS SDK and open checkout
+      const { load } = await import("@cashfreepayments/cashfree-js");
+
+      const cashfree = await load({
+        mode:
+          import.meta.env.VITE_CASHFREE_ENV === "production"
+            ? "production"
+            : "sandbox",
+      });
+
+      // Step 3: Open Cashfree checkout
+      await new Promise((resolve, reject) => {
+        cashfree.checkout({
+          paymentSessionId,
+          redirectTarget: "_modal",
+        }).then(async (result) => {
+          if (result.error) {
+            // User cancelled or payment error occurred in modal
+            console.error("Cashfree checkout error:", result.error);
+            reject(new Error(result.error.message || "Payment failed"));
+            return;
+          }
+
+          if (result.paymentDetails) {
+            // Payment attempt was made — verify with backend (never trust frontend)
+            resolve(result.paymentDetails);
+          } else {
+            // Modal closed without a clear outcome — still verify
+            resolve(null);
+          }
+        }).catch(reject);
+      });
+
+      // Step 4: Verify payment on backend (always — regardless of frontend result)
+      const { data: verifyData } = await api.post(
+        "/payments/cashfree/verify",
+        { orderId, cfOrderId }
+      );
+
+      if (verifyData.success) {
+        // Payment verified as PAID — order is now Pending (awaiting staff/admin confirm)
+        const order = verifyData.order;
+
+        const receiptOrder = {
+          _id: order._id,
+          items: cartItems.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          totalAmount: order.totalAmount,
+          amountReceived: order.totalAmount,
+          changeGiven: 0,
+          paymentMethod: "ONLINE",
+          paymentStatus: "PAID",
+          createdAt: order.createdAt,
+          customerName: null,
+        };
+
+        setLastOrder(receiptOrder);
+
+        toast.success("Payment successful! Order placed 🎉", { duration: 4000 });
+
+        dispatch(clearCart());
+        setShowCart(false);
+
+        // Silent print
+        setTimeout(() => {
+          window.print();
+        }, 400);
+      } else {
+        toast.error(
+          verifyData.message ||
+            "Payment failed. Please try again or choose Cash.",
+          { duration: 5000 }
+        );
+      }
+    } catch (err) {
+      console.error("Online checkout error:", err);
+
+      // User-friendly error messages only
+      const errMsg = err?.response?.data?.message || err?.message || "";
+
+      if (
+        errMsg.toLowerCase().includes("unavailable") ||
+        errMsg.toLowerCase().includes("temporarily")
+      ) {
+        toast.error(
+          "Online payment is temporarily unavailable. Please try again or choose Cash.",
+          { duration: 5000 }
+        );
+      } else {
+        toast.error(
+          "Payment failed. Please try again or choose Cash.",
+          { duration: 5000 }
+        );
+      }
     } finally {
       setIsOrderConfirming(false);
     }
@@ -486,6 +624,7 @@ function ConsumerPageContent() {
         open={showCart}
         onClose={() => setShowCart(false)}
         onCheckout={handlePlaceOrder}
+        onOnlineCheckout={handleOnlineCheckout}
         isProcessing={isOrderConfirming}
       />
 

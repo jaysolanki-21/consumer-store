@@ -16,6 +16,8 @@ import {
   FiShoppingCart,
   FiAlertCircle,
   FiCheckCircle,
+  FiDollarSign,
+  FiSmartphone,
 } from "react-icons/fi";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -23,7 +25,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 export default function CartDrawer({
   open,
   onClose,
-  onCheckout,
+  onCheckout,       // called for CASH: (cash, change) => void
+  onOnlineCheckout, // called for ONLINE: () => void
   isProcessing,
 
   // Counter from which the order is placed
@@ -46,6 +49,7 @@ export default function CartDrawer({
       STATE
   ========================================================= */
 
+  const [paymentMethod, setPaymentMethod] = useState("CASH"); // "CASH" | "ONLINE"
   const [cashReceived, setCashReceived] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -57,8 +61,15 @@ export default function CartDrawer({
     if (!open) {
       setCashReceived("");
       setErrorMessage("");
+      setPaymentMethod("CASH");
     }
   }, [open]);
+
+  // Reset cash input when switching payment methods
+  useEffect(() => {
+    setCashReceived("");
+    setErrorMessage("");
+  }, [paymentMethod]);
 
   /* =========================================================
       DERIVED VALUES
@@ -152,30 +163,43 @@ export default function CartDrawer({
   const handleCheckout = async () => {
     setErrorMessage("");
 
-    if (!cashReceived) {
-      setErrorMessage(
-        `Please enter amount of ₹${total.toFixed(2)} or more`
-      );
-      return;
-    }
+    if (paymentMethod === "CASH") {
+      if (!cashReceived) {
+        setErrorMessage(
+          `Please enter amount of ₹${total.toFixed(2)} or more`
+        );
+        return;
+      }
 
-    if (parsedCash < total) {
-      setErrorMessage(
-        `Please enter amount of ₹${total.toFixed(2)} or more`
-      );
-      return;
-    }
+      if (parsedCash < total) {
+        setErrorMessage(
+          `Please enter amount of ₹${total.toFixed(2)} or more`
+        );
+        return;
+      }
 
-    try {
-      await onCheckout(parsedCash, changeAmount);
-      resetPaymentState();
-    } catch (error) {
-      console.error("Checkout error:", error);
+      try {
+        await onCheckout(parsedCash, changeAmount);
+        resetPaymentState();
+      } catch (error) {
+        console.error("Checkout error:", error);
 
-      setErrorMessage(
-        error?.message ||
-          "Something went wrong while placing the order."
-      );
+        setErrorMessage(
+          error?.message ||
+            "Something went wrong while placing the order."
+        );
+      }
+    } else {
+      // ONLINE payment
+      try {
+        await onOnlineCheckout();
+      } catch (error) {
+        console.error("Online checkout error:", error);
+        setErrorMessage(
+          error?.message ||
+            "Payment failed. Please try again or choose Cash."
+        );
+      }
     }
   };
 
@@ -364,38 +388,171 @@ export default function CartDrawer({
                     </div>
                   </div>
 
-                  {/* INPUT */}
+                  {/* ── PAYMENT METHOD SELECTOR ── */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Cash Received
+                      Payment Method
                     </label>
-
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg font-bold">
-                        ₹
-                      </span>
-
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="Enter amount"
-                        value={cashReceived}
-                        onChange={(e) =>
-                          handleCashReceived(
-                            e.target.value
-                          )
-                        }
-                        className={`w-full h-14 pl-10 pr-4 rounded-2xl border-2 bg-gray-50 dark:bg-slate-800 outline-none text-lg font-bold text-gray-900 dark:text-white transition-all
-                        ${
-                          errorMessage
-                            ? "border-red-500 focus:border-red-500"
-                            : isCashValid
-                            ? "border-emerald-500 focus:border-emerald-500"
-                            : "border-gray-200 dark:border-slate-700 focus:border-indigo-500"
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* CASH option */}
+                      <button
+                        onClick={() => setPaymentMethod("CASH")}
+                        className={`flex items-center justify-center gap-2 h-11 rounded-xl border-2 font-semibold text-sm transition-all ${
+                          paymentMethod === "CASH"
+                            ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300"
+                            : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:border-gray-300"
                         }`}
-                      />
+                      >
+                        <FiDollarSign className="text-base" />
+                        CASH
+                      </button>
+
+                      {/* ONLINE option */}
+                      <button
+                        onClick={() => setPaymentMethod("ONLINE")}
+                        className={`flex items-center justify-center gap-2 h-11 rounded-xl border-2 font-semibold text-sm transition-all ${
+                          paymentMethod === "ONLINE"
+                            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                            : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+                        }`}
+                      >
+                        <FiSmartphone className="text-base" />
+                        ONLINE
+                      </button>
                     </div>
                   </div>
+
+                  {/* ── CASH FIELDS (shown only when CASH is selected) ── */}
+                  {paymentMethod === "CASH" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Cash Received
+                        </label>
+
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg font-bold">
+                            ₹
+                          </span>
+
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Enter amount"
+                            value={cashReceived}
+                            onChange={(e) =>
+                              handleCashReceived(
+                                e.target.value
+                              )
+                            }
+                            className={`w-full h-14 pl-10 pr-4 rounded-2xl border-2 bg-gray-50 dark:bg-slate-800 outline-none text-lg font-bold text-gray-900 dark:text-white transition-all
+                            ${
+                              errorMessage
+                                ? "border-red-500 focus:border-red-500"
+                                : isCashValid
+                                ? "border-emerald-500 focus:border-emerald-500"
+                                : "border-gray-200 dark:border-slate-700 focus:border-indigo-500"
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* CHANGE display */}
+                      <AnimatePresence>
+                        {cashReceived && parsedCash > 0 && (
+                          <motion.div
+                            initial={{
+                              opacity: 0,
+                              y: 8,
+                            }}
+                            animate={{
+                              opacity: 1,
+                              y: 0,
+                            }}
+                            exit={{
+                              opacity: 0,
+                              y: 8,
+                            }}
+                            className={`rounded-2xl p-4 border ${
+                              isCashValid
+                                ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                                : "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  Change to return
+                                </p>
+
+                                <h3
+                                  className={`text-3xl font-bold mt-1 ${
+                                    isCashValid
+                                      ? "text-emerald-600 dark:text-emerald-400"
+                                      : "text-amber-600 dark:text-amber-400"
+                                  }`}
+                                >
+                                  ₹
+                                  {changeAmount.toFixed(
+                                    2
+                                  )}
+                                </h3>
+                              </div>
+
+                              {isCashValid ? (
+                                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                                  <FiCheckCircle className="text-emerald-600 dark:text-emerald-400 text-2xl" />
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                                  <FiAlertCircle className="text-amber-600 dark:text-amber-400 text-2xl" />
+                                </div>
+                              )}
+                            </div>
+
+                            {!isCashValid && (
+                              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-medium">
+                                Need additional ₹
+                                {(
+                                  total -
+                                  parsedCash
+                                ).toFixed(2)}
+                              </p>
+                            )}
+
+                            {isCashValid && (
+                              <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                                Ready to complete order
+                              </p>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  )}
+
+                  {/* ── ONLINE payment info banner ── */}
+                  {paymentMethod === "ONLINE" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+                          <FiSmartphone className="text-emerald-600 dark:text-emerald-400 text-lg" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                            Pay ₹{total.toFixed(2)} online
+                          </p>
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                            UPI, Cards, Net Banking via Cashfree
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
                   {/* ERROR */}
                   <AnimatePresence>
@@ -424,109 +581,63 @@ export default function CartDrawer({
                     )}
                   </AnimatePresence>
 
-                  {/* CHANGE */}
-                  <AnimatePresence>
-                    {cashReceived && parsedCash > 0 && (
-                      <motion.div
-                        initial={{
-                          opacity: 0,
-                          y: 8,
-                        }}
-                        animate={{
-                          opacity: 1,
-                          y: 0,
-                        }}
-                        exit={{
-                          opacity: 0,
-                          y: 8,
-                        }}
-                        className={`rounded-2xl p-4 border ${
-                          isCashValid
-                            ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
-                            : "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Change to return
-                            </p>
-
-                            <h3
-                              className={`text-3xl font-bold mt-1 ${
-                                isCashValid
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-amber-600 dark:text-amber-400"
-                              }`}
-                            >
-                              ₹
-                              {changeAmount.toFixed(
-                                2
-                              )}
-                            </h3>
-                          </div>
-
-                          {isCashValid ? (
-                            <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                              <FiCheckCircle className="text-emerald-600 dark:text-emerald-400 text-2xl" />
-                            </div>
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-                              <FiAlertCircle className="text-amber-600 dark:text-amber-400 text-2xl" />
-                            </div>
-                          )}
-                        </div>
-
-                        {!isCashValid && (
-                          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400 font-medium">
-                            Need additional ₹
-                            {(
-                              total -
-                              parsedCash
-                            ).toFixed(2)}
-                          </p>
-                        )}
-
-                        {isCashValid && (
-                          <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                            Ready to complete order
-                          </p>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
                   {/* ACTIONS */}
                   <div className="space-y-3">
-                    <button
-                      onClick={handleCheckout}
-                      disabled={
-                        isProcessing ||
-                        items.length === 0 ||
-                        !isCashValid
-                      }
-                      className={`w-full h-14 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all
-                      ${
-                        isCashValid &&
-                        !isProcessing
-                          ? "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:scale-[1.01] active:scale-[0.99] text-white shadow-lg"
-                          : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <FiCreditCard className="text-xl" />
-
-                          Complete Order
-                        </>
-                      )}
-                    </button>
+                    {/* Primary action button */}
+                    {paymentMethod === "CASH" ? (
+                      <button
+                        onClick={handleCheckout}
+                        disabled={
+                          isProcessing ||
+                          items.length === 0 ||
+                          !isCashValid
+                        }
+                        className={`w-full h-14 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all
+                        ${
+                          isCashValid &&
+                          !isProcessing
+                            ? "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:scale-[1.01] active:scale-[0.99] text-white shadow-lg"
+                            : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <FiCreditCard className="text-xl" />
+                            Complete Order
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleCheckout}
+                        disabled={
+                          isProcessing || items.length === 0
+                        }
+                        className={`w-full h-14 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all
+                        ${
+                          !isProcessing
+                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:scale-[1.01] active:scale-[0.99] text-white shadow-lg"
+                            : "bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Opening Payment...
+                          </>
+                        ) : (
+                          <>
+                            <FiSmartphone className="text-xl" />
+                            PAY ONLINE
+                          </>
+                        )}
+                      </button>
+                    )}
 
                     <button
                       onClick={handleClearCart}

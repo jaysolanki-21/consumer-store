@@ -201,10 +201,10 @@ const ThermalReceipt = forwardRef(({ order, counter }, ref) => {
               value={paymentMethod.toUpperCase()}
             />
             <TotalRow
-              label="Amount Paid"
-              value={`₹${Number(amountReceived || totalAmount).toFixed(2)}`}
+              label="Payment Status"
+              value="PAID"
+              bold
             />
-            <TotalRow label="Change" value="₹0.00" />
           </>
         )}
       </div>

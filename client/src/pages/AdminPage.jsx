@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import socket from '../services/socket';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { motion } from 'framer-motion';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { FiPackage, FiDollarSign, FiShoppingBag, FiUsers, FiCalendar, FiChevronLeft, FiChevronRight, FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
 import { FaRupeeSign } from 'react-icons/fa';
 
@@ -16,9 +17,9 @@ export default function AdminPage() {
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [monthlyIncome, setMonthlyIncome] = useState([]);
+  const [monthlyIncome, setMonthlyIncome] = useState(Array(12).fill(0));
+  const [monthlyProfit, setMonthlyProfit] = useState(Array(12).fill(0));
   const [dailyIncome, setDailyIncome] = useState([]);
-  const [monthlyProfit, setMonthlyProfit] = useState([]);
   const [dailyProfit, setDailyProfit] = useState([]);
 
   useEffect(() => {
@@ -41,8 +42,6 @@ export default function AdminPage() {
   }, [orders, selectedYear, selectedMonth]);
 
   // Calculate profit for a confirmed order.
-  // Supported cost-price fields: costPrice, purchasePrice, buyingPrice, buyPrice.
-  // If an order item already stores a profit/profitAmount value, that value is used.
   const getOrderProfit = (order) => {
     if (order.profitAmount != null) return Number(order.profitAmount) || 0;
     if (order.profit != null) return Number(order.profit) || 0;
@@ -53,7 +52,7 @@ export default function AdminPage() {
     return items.reduce((sum, item) => {
       const quantity = Number(item.quantity ?? item.qty ?? 1) || 1;
       const sellingPrice = Number(
-        item.sellingPrice ?? item.price ?? item.salePrice ?? item.totalPrice / quantity ?? 0
+        item.sellingPrice ?? item.price ?? item.salePrice ?? (item.totalPrice ? item.totalPrice / quantity : 0)
       ) || 0;
 
       const product = item.product || item.productId || {};
@@ -75,45 +74,48 @@ export default function AdminPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [productsRes, ordersRes] = await Promise.all([
-      api.get('/products'),
-      api.get('/orders')
-    ]);
-    const productsData = productsRes.data;
-    const ordersData = ordersRes.data;
+    try {
+      const [productsRes, ordersRes] = await Promise.all([
+        api.get('/products'),
+        api.get('/orders')
+      ]);
+      const productsData = productsRes.data;
+      const ordersData = ordersRes.data;
 
-    // Only confirmed orders for revenue
-    const confirmedOrders = ordersData.filter(o => o.status === 'Confirmed');
-    const totalRevenue = confirmedOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+      const confirmedOrders = ordersData.filter(o => o.status === 'Confirmed');
+      const totalRevenue = confirmedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
-    // Today's revenue and profit
-    const today = new Date();
-    const todayConfirmedOrders = confirmedOrders.filter(o => {
-      const d = new Date(o.createdAt);
-      return d.toDateString() === today.toDateString();
-    });
+      const today = new Date();
+      const todayConfirmedOrders = confirmedOrders.filter(o => {
+        const d = new Date(o.createdAt);
+        return d.toDateString() === today.toDateString();
+      });
 
-    const todayRevenue = todayConfirmedOrders.reduce(
-      (sum, o) => sum + (Number(o.totalAmount) || 0),
-      0
-    );
+      const todayRevenue = todayConfirmedOrders.reduce(
+        (sum, o) => sum + (Number(o.totalAmount) || 0),
+        0
+      );
 
-    const todayProfit = todayConfirmedOrders.reduce(
-      (sum, o) => sum + getOrderProfit(o),
-      0
-    );
+      const todayProfit = todayConfirmedOrders.reduce(
+        (sum, o) => sum + getOrderProfit(o),
+        0
+      );
 
-    setProducts(productsData);
-    setOrders(ordersData);
-    setStats({
-      totalProducts: productsData.length,
-      totalOrders: ordersData.length,
-      totalRevenue,
-      todayRevenue,
-      todayProfit,
-      pendingOrders: ordersData.filter(o => o.status === 'Pending').length
-    });
-    setLoading(false);
+      setProducts(productsData);
+      setOrders(ordersData);
+      setStats({
+        totalProducts: productsData.length,
+        totalOrders: ordersData.length,
+        totalRevenue,
+        todayRevenue,
+        todayProfit,
+        pendingOrders: ordersData.filter(o => o.status === 'Pending').length
+      });
+    } catch (err) {
+      console.error('Failed to load admin data', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const computeMonthlyIncome = () => {
@@ -187,14 +189,12 @@ export default function AdminPage() {
 
   const getGrowthForMonth = (monthIndex) => {
     if (monthIndex === 0) return { growth: 0, isPositive: false };
-    const prev = monthlyProfit[monthIndex - 1] || 0;
-    const current = monthlyProfit[monthIndex];
+    const prev = monthlyIncome[monthIndex - 1] || 0;
+    const current = monthlyIncome[monthIndex] || 0;
     if (prev === 0) return { growth: current > 0 ? 100 : 0, isPositive: current > 0 };
     const growth = Math.round(((current - prev) / prev) * 100);
     return { growth: Math.abs(growth), isPositive: growth >= 0 };
   };
-
-
 
   if (loading) {
     return (
@@ -211,12 +211,17 @@ export default function AdminPage() {
     );
   }
 
+  const yearlyConfirmedOrders = orders.filter(o => o.status === 'Confirmed' && new Date(o.createdAt).getFullYear() === selectedYear);
+  const yearlyRevenue = yearlyConfirmedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+  const yearlyProfit = yearlyConfirmedOrders.reduce((sum, o) => sum + getOrderProfit(o), 0);
+  const yearlyOrdersCount = orders.filter(o => new Date(o.createdAt).getFullYear() === selectedYear).length;
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
 
-      {/* Stats Cards (5 cards now) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-8">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -229,8 +234,8 @@ export default function AdminPage() {
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-blue-100 text-sm">Total Orders</p>
-              <p className="text-3xl font-bold mt-1">{stats.totalOrders}</p>
+              <p className="text-blue-100 text-sm">Yearly Orders</p>
+              <p className="text-3xl font-bold mt-1">{yearlyOrdersCount}</p>
             </div>
             <FiShoppingBag className="text-3xl text-blue-200" />
           </div>
@@ -238,10 +243,19 @@ export default function AdminPage() {
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-green-100 text-sm">Total Revenue</p>
-              <p className="text-3xl font-bold mt-1">₹{stats.totalRevenue.toLocaleString()}</p>
+              <p className="text-green-100 text-sm">Yearly Revenue</p>
+              <p className="text-3xl font-bold mt-1">₹{yearlyRevenue.toLocaleString()}</p>
             </div>
             <FaRupeeSign className="text-3xl text-green-200" />
+          </div>
+        </div>
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-purple-100 text-sm">Yearly Profit</p>
+              <p className="text-3xl font-bold mt-1">₹{yearlyProfit.toLocaleString()}</p>
+            </div>
+            <FiTrendingUp className="text-3xl text-purple-200" />
           </div>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
@@ -272,80 +286,250 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
-      
 
-      {/* Monthly Income Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Monthly Profit</h2>
-          <div className="flex items-center gap-2">
-            <button onClick={goPrevYear} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-              <FiChevronLeft size={20} />
-            </button>
-            <span className="text-lg font-medium">{selectedYear}</span>
-            <button
-              onClick={goNextYear}
-              disabled={selectedYear >= currentYear}
-              className={`p-1 rounded ${selectedYear >= currentYear ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-            >
-              <FiChevronRight size={20} />
-            </button>
+      {/* Monthly Revenue & Profit Calendar */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-8">
+
+        {/* Section Header */}
+        <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                <FiCalendar className="text-indigo-600 dark:text-indigo-400 text-xl" />
+              </div>
+
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">
+                  Monthly Revenue & Profit
+                </h2>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Track monthly financial performance
+                </p>
+              </div>
+            </div>
+
+            {/* Year Navigation */}
+            <div className="flex items-center justify-between sm:justify-center gap-1 bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-xl p-1">
+
+              <button
+                onClick={goPrevYear}
+                className="w-10 h-10 flex items-center justify-center rounded-lg
+                           text-gray-500 dark:text-gray-400
+                           hover:bg-white dark:hover:bg-gray-800
+                           hover:text-indigo-600 dark:hover:text-indigo-400
+                           transition-all"
+                title="Previous year"
+              >
+                <FiChevronLeft size={22} />
+              </button>
+
+              <div className="min-w-[90px] text-center">
+                <span className="text-lg font-bold text-gray-800 dark:text-white">
+                  {selectedYear}
+                </span>
+              </div>
+
+              <button
+                onClick={goNextYear}
+                disabled={selectedYear >= currentYear}
+                className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
+                  selectedYear >= currentYear
+                    ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                    : "text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400"
+                }`}
+                title="Next year"
+              >
+                <FiChevronRight size={22} />
+              </button>
+
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {monthlyIncome.map((income, idx) => {
-            const clickable = isMonthClickable(idx);
-            const { growth, isPositive } = getGrowthForMonth(idx);
-            return (
-              <div
-                key={idx}
-                onClick={() => clickable && handleMonthClick(idx)}
-                className={`rounded-xl p-4 transition-all duration-300 cursor-pointer ${
-                  !clickable
-                    ? 'bg-gray-100 dark:bg-gray-800 opacity-50 cursor-not-allowed'
-                    : selectedMonth === idx
-                    ? 'bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-950/40 dark:to-indigo-900/20 border-2 border-indigo-500 shadow-md'
-                    : 'bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-700 hover:scale-105 hover:shadow-lg'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <span className="font-semibold text-sm">{monthNames[idx]}</span>
-                  <FiCalendar className="text-indigo-400 text-sm" />
-                </div>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-2">₹{monthlyProfit[idx].toLocaleString()}</p>
-                {clickable && monthlyProfit[idx] > 0 && (
-                  <div className="flex items-center gap-1 mt-2 text-xs">
-                    {isPositive ? (
-                      <FiTrendingUp className="text-green-500" />
-                    ) : (
-                      <FiTrendingDown className="text-red-500" />
-                    )}
-                    <span className={isPositive ? 'text-green-600' : 'text-red-600'}>{growth}% from prev</span>
+
+        {/* Calendar Grid */}
+        <div className="p-5 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+
+            {monthlyIncome.map((income, idx) => {
+              const clickable = isMonthClickable(idx);
+              const { growth, isPositive } = getGrowthForMonth(idx);
+
+              const revenue = Number(monthlyIncome[idx] || 0);
+              const profit = Number(monthlyProfit[idx] || 0);
+
+              return (
+                <motion.div
+                  key={idx}
+                  onClick={() => clickable && handleMonthClick(idx)}
+                  whileHover={clickable ? { y: -3 } : {}}
+                  transition={{ duration: 0.2 }}
+                  className={`relative rounded-2xl p-5 transition-all duration-200 ${
+                    !clickable
+                      ? "bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 opacity-50 cursor-not-allowed"
+                      : selectedMonth === idx
+                      ? "bg-indigo-50/70 dark:bg-indigo-950/30 border-2 border-indigo-500 shadow-md shadow-indigo-100 dark:shadow-none cursor-pointer"
+                      : "bg-gray-50/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700 hover:shadow-md cursor-pointer"
+                  }`}
+                >
+                 
+
+                  {/* Month Header */}
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold">
+                        Month
+                      </p>
+                      <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-0.5">
+                        {monthNames[idx]}
+                      </h3>
+                    </div>
+
+                    <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center shadow-sm">
+                      <FiCalendar className="text-indigo-500 text-lg" />
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* Financial Stats */}
+                  <div className="grid grid-cols-2 gap-3">
+
+                    {/* Revenue */}
+                    <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/10 p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                          <FaRupeeSign className="text-emerald-600 dark:text-emerald-400 text-xs" />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                          Revenue
+                        </span>
+                      </div>
+
+                      <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 truncate">
+                        ₹{revenue.toLocaleString()}
+                      </p>
+                    </div>
+
+                    {/* Profit */}
+                    <div className={`rounded-xl p-3 border ${
+                      profit >= 0
+                        ? "bg-indigo-50 dark:bg-indigo-500/10 border-indigo-100 dark:border-indigo-500/10"
+                        : "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/10"
+                    }`}>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                          profit >= 0
+                            ? "bg-indigo-100 dark:bg-indigo-500/20"
+                            : "bg-red-100 dark:bg-red-500/20"
+                        }`}>
+                          <FiTrendingUp
+                            className={`text-xs ${
+                              profit >= 0
+                                ? "text-indigo-600 dark:text-indigo-400"
+                                : "text-red-600 dark:text-red-400"
+                            }`}
+                          />
+                        </div>
+
+                        <span className={`text-xs font-bold uppercase tracking-wide ${
+                          profit >= 0
+                            ? "text-indigo-700 dark:text-indigo-400"
+                            : "text-red-700 dark:text-red-400"
+                        }`}>
+                          Profit
+                        </span>
+                      </div>
+
+                      <p className={`text-lg font-bold truncate ${
+                        profit >= 0
+                          ? "text-indigo-600 dark:text-indigo-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}>
+                        ₹{profit.toLocaleString()}
+                      </p>
+                    </div>
+
+                  </div>
+
+                  {/* Growth */}
+                  {clickable && revenue > 0 && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        Revenue growth
+                      </span>
+
+                      <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                        isPositive
+                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400"
+                      }`}>
+                        {isPositive ? (
+                          <FiTrendingUp size={13} />
+                        ) : (
+                          <FiTrendingDown size={13} />
+                        )}
+                        {growth}%
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No Revenue */}
+                  {clickable && revenue === 0 && (
+                    <div className="mt-4">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        No revenue recorded
+                      </span>
+                    </div>
+                  )}
+
+                </motion.div>
+              );
+            })}
+
+          </div>
         </div>
       </div>
 
-      {/* Daily Income Bar Chart */}
+      {/* Daily Chart – Revenue + Profit */}
       {selectedMonth !== null && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Daily Profit – {monthNames[selectedMonth]} {selectedYear}</h2>
-            <button onClick={() => setSelectedMonth(null)} className="text-sm text-red-500 hover:text-red-700">Close</button>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+          <div className="flex justify-between items-center mb-5">
+            <h2 className="text-2xl font-bold">
+              Daily Revenue & Profit – {monthNames[selectedMonth]} {selectedYear}
+            </h2>
+            <button
+              onClick={() => setSelectedMonth(null)}
+              className="text-sm font-semibold text-red-500 hover:text-red-700"
+            >
+              Close
+            </button>
           </div>
-          {dailyProfit.length === 0 || dailyProfit.every(d => d.profit === 0) ? (
-            <p className="text-gray-500 text-center py-4">No sales recorded for this month.</p>
+
+          {dailyIncome.length === 0 || dailyIncome.every(d => d.revenue === 0 && d.profit === 0) ? (
+            <p className="text-gray-500 text-center py-6 text-base">No sales recorded for this month.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={dailyIncome} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <ResponsiveContainer width="100%" height={420}>
+              <BarChart data={dailyIncome} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
                 <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                <XAxis dataKey="day" label={{ value: 'Day of Month', position: 'insideBottom', offset: -5 }} stroke="#9CA3AF" />
-                <YAxis label={{ value: 'Profit (₹)', angle: -90, position: 'insideLeft' }} stroke="#9CA3AF" />
-                <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} contentStyle={{ backgroundColor: '#1f2937', border: 'none' }} labelStyle={{ color: '#f3f4f6' }} />
-                <Bar dataKey="profit" fill="#8884d8" radius={[4, 4, 0, 0]} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 13 }}
+                  label={{ value: 'Day of Month', position: 'insideBottom', offset: -5, fontSize: 14 }}
+                  stroke="#9CA3AF"
+                />
+                <YAxis
+                  tick={{ fontSize: 13 }}
+                  label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft', fontSize: 14 }}
+                  stroke="#9CA3AF"
+                />
+                <Tooltip
+                  formatter={(value) => `₹${Number(value).toLocaleString()}`}
+                  contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: 8, fontSize: 14 }}
+                  labelStyle={{ color: '#f3f4f6', fontSize: 14 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 14, paddingTop: 10 }} />
+                <Bar dataKey="revenue" fill="#10b981" name="Revenue" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="profit" fill="#6366f1" name="Profit" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

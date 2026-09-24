@@ -70,10 +70,14 @@ export default function InsightsPage() {
 
   const [salesData, setSalesData] = useState([]);
   const [previousSalesData, setPreviousSalesData] = useState([]);
+  const [paymentData, setPaymentData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [chartType, setChartType] = useState("bar");
+
+  // ✅ Total revenue straight from orders (reliable)
+  const [orderRevenue, setOrderRevenue] = useState(0);
 
   // ✅ TWO LOADING STATES
   const [initialLoading, setInitialLoading] = useState(true);
@@ -101,6 +105,7 @@ export default function InsightsPage() {
   // Fetch on view/date change
   useEffect(() => {
     fetchAnalytics(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewType, selectedDate, selectedMonth, selectedYear, customStartDate, customEndDate, useCustomRange]);
 
   // ✅ STABLE SOCKET LISTENERS
@@ -108,18 +113,20 @@ export default function InsightsPage() {
     const handleOrderChange = () => {
       fetchAnalytics(true);
     };
+    const handleStockUpdate = () => fetchAnalytics(true);
 
     socket.on("orderConfirmed", handleOrderChange);
     socket.on("orderCancelled", handleOrderChange);
     socket.on("newOrder", handleOrderChange);
-    socket.on("stockUpdated", () => fetchAnalytics(true));
+    socket.on("stockUpdated", handleStockUpdate);
 
     return () => {
       socket.off("orderConfirmed", handleOrderChange);
       socket.off("orderCancelled", handleOrderChange);
       socket.off("newOrder", handleOrderChange);
-      socket.off("stockUpdated", () => fetchAnalytics(true));
+      socket.off("stockUpdated", handleStockUpdate);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchCategories = async () => {
@@ -192,13 +199,41 @@ export default function InsightsPage() {
         prevEndDate = `${selectedYear - 1}-12-31`;
       }
 
-      const [currentRes, prevRes] = await Promise.all([
+      const [currentRes, prevRes, ordersRes] = await Promise.all([
         api.get(`/products/sales-analytics?startDate=${startDate}&endDate=${endDate}`),
         api.get(`/products/sales-analytics?startDate=${prevStartDate}&endDate=${prevEndDate}`),
+        api.get('/orders')
       ]);
 
       const currentData = currentRes.data?.sales || currentRes.data || [];
       const prevData = prevRes.data?.sales || prevRes.data || [];
+      const allOrders = ordersRes.data || [];
+
+      let cashRevenue = 0;
+      let onlineRevenue = 0;
+      let totalFromOrders = 0;
+
+      allOrders.forEach(order => {
+        if (order.status !== 'Confirmed') return;
+        const orderDate = new Date(order.createdAt).toISOString().split("T")[0];
+        if (orderDate >= startDate && orderDate <= endDate) {
+          const method = (order.payment?.method || order.paymentMethod || "Cash").toLowerCase();
+          const amount = Number(order.totalAmount) || 0;
+          totalFromOrders += amount;
+          if (method === 'online') {
+            onlineRevenue += amount;
+          } else {
+            cashRevenue += amount;
+          }
+        }
+      });
+
+      setOrderRevenue(totalFromOrders);
+
+      setPaymentData([
+        { name: 'Cash', value: cashRevenue },
+        { name: 'Online', value: onlineRevenue }
+      ]);
 
       setSalesData(Array.isArray(currentData) ? currentData : []);
       setPreviousSalesData(Array.isArray(prevData) ? prevData : []);
@@ -209,6 +244,8 @@ export default function InsightsPage() {
       console.error("Analytics error:", err);
       setSalesData([]);
       setPreviousSalesData([]);
+      setPaymentData([]);
+      setOrderRevenue(0);
     } finally {
       if (silent) {
         setRefreshing(false);
@@ -339,10 +376,21 @@ export default function InsightsPage() {
   // ✅ Colors for Pie Chart
   const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
-  const totalRevenue = useMemo(() => {
+  // ✅ Total revenue: prefer the order-derived value when NO category filter is active.
+  // When a category filter IS active, sum from filtered products (fallback).
+  const totalRevenueFromProducts = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
-    return data.reduce((sum, item) => sum + (item.totalRevenue || 0), 0);
+    return data.reduce((sum, item) => sum + (Number(item.totalRevenue) || 0), 0);
   }, [filteredSalesData]);
+
+  const totalRevenue = useMemo(() => {
+    // If no category filter -> use order-based revenue (most reliable)
+    if (!selectedCategory) {
+      return orderRevenue || totalRevenueFromProducts;
+    }
+    // With category filter -> fall back to product-level sum
+    return totalRevenueFromProducts;
+  }, [selectedCategory, orderRevenue, totalRevenueFromProducts]);
 
   const totalQuantity = useMemo(() => {
     const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
@@ -377,6 +425,9 @@ export default function InsightsPage() {
     }
     return selectedYear.toString();
   };
+
+  // Show summary cards when we either have product data OR an order revenue value
+  const showSummaryCards = !initialLoading && (filteredSalesData.length > 0 || orderRevenue > 0);
 
   return (
     <div className="space-y-6 relative">
@@ -566,7 +617,7 @@ export default function InsightsPage() {
         </div>
 
         {/* ✅ Summary Cards */}
-        {!initialLoading && filteredSalesData.length > 0 && (
+        {showSummaryCards && (
           <>
             <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
               <div className="flex items-center justify-between">
@@ -575,7 +626,7 @@ export default function InsightsPage() {
                     Total Revenue
                   </p>
                   <p className="text-2xl font-bold mt-2">
-                    ₹{totalRevenue.toLocaleString()}
+                    ₹{Number(totalRevenue || 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
@@ -643,7 +694,7 @@ export default function InsightsPage() {
       {!initialLoading && filteredSalesData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Product Sales Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Product Sales</h3>
               <div className="flex gap-2">
@@ -754,6 +805,39 @@ export default function InsightsPage() {
             )}
           </div>
 
+          {/* Payment Method Distribution Pie Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Methods (Revenue)</h3>
+            {paymentData.length > 0 && paymentData.some(p => p.value > 0) ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paymentData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {paymentData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index === 0 ? "#10b981" : "#4f46e5"} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-gray-500">
+                No payment data available
+              </div>
+            )}
+          </div>
+
           {/* Top Products */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top 5 Products</h3>
@@ -767,7 +851,7 @@ export default function InsightsPage() {
                     <div className="text-2xl font-bold text-indigo-600 mb-1">#{index + 1}</div>
                     <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">{product.name}</p>
                     <p className="text-xs text-gray-500 mt-1">Sold: {product.totalQuantity}</p>
-                    <p className="text-xs text-green-600 font-semibold">₹{product.totalRevenue.toLocaleString()}</p>
+                    <p className="text-xs text-green-600 font-semibold">₹{Number(product.totalRevenue || 0).toLocaleString()}</p>
                     <div className="mt-2">
                       {trend === "up" && (
                         <span className="text-xs text-green-500 flex items-center justify-center gap-1">
@@ -923,7 +1007,7 @@ export default function InsightsPage() {
                         <FaRupeeSign className="text-green-500 text-sm mb-1" />
                         <span className="text-[10px] text-slate-500 font-medium">Revenue</span>
                         <span className="text-sm font-bold text-green-600 mt-0.5 truncate max-w-full">
-                          ₹{product.totalRevenue.toLocaleString()}
+                          ₹{Number(product.totalRevenue || 0).toLocaleString()}
                         </span>
                       </div>
 
