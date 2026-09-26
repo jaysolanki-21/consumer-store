@@ -7,23 +7,24 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { 
-    type: String, 
-    enum: ['admin', 'staff', 'counter'], 
-    default: 'counter' 
+  role: {
+    type: String,
+    enum: ['admin', 'staff', 'counter'],
+    default: 'counter'
   },
-  counterId: { 
+  counterId: {
     type: String,
     trim: true,
-    required: function() { return this.role === 'counter'; }
+    required: function () { return this.role === 'counter'; }
   },
+  image: { type: String, default: '' },       // 👈 ImageKit URL
+  imageFileId: { type: String, default: '' }, // 👈 ImageKit fileId (for deletion)
   isActive: { type: Boolean, default: true },
   disabledUntil: { type: Date, default: null },
   lastLogin: { type: Date }
 }, { timestamps: true });
 
-// Hash password before saving
-userSchema.pre('save', function(next) {
+userSchema.pre('save', function (next) {
   if (!this.isModified('password')) return next();
   bcrypt.hash(this.password, 10, (err, hash) => {
     if (err) return next(err);
@@ -32,8 +33,7 @@ userSchema.pre('save', function(next) {
   });
 });
 
-
-userSchema.methods.matchPassword = async function(enteredPassword) {
+userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 

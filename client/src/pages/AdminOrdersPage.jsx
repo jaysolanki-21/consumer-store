@@ -171,7 +171,7 @@ export default function AdminOrdersPage() {
     });
   };
 
-  // ✅ Order Info Modal — now includes Cash Received & Change Given for cash orders
+  // ✅ Order Info Modal
   const showOrderInfo = (order) => {
     const paymentMethod =
       order.payment?.method || order.paymentMethod || "Cash";
@@ -207,7 +207,6 @@ export default function AdminOrdersPage() {
                 </p>
               )}
 
-              {/* ✅ Cash Received & Change Given */}
               {isCash && (
                 <>
                   <p>
@@ -295,19 +294,26 @@ export default function AdminOrdersPage() {
     };
   }, [fetchOrders, handleLiveUpdate]);
 
+  // ✅ CONFIRM — auto-collapse panel
   const confirmOrder = useCallback(
     async (orderId) => {
       try {
         await api.put(`/orders/${orderId}/confirm`);
         toast.success("Order confirmed successfully");
+
+        if (expandedOrderId === orderId) {
+          setExpandedOrderId(null);
+        }
+
         fetchOrders();
       } catch (err) {
         toast.error(err.response?.data?.message || "Confirmation failed");
       }
     },
-    [fetchOrders],
+    [fetchOrders, expandedOrderId],
   );
 
+  // ✅ CANCEL — auto-collapse panel
   const cancelOrder = useCallback(
     async (orderId) => {
       showConfirm(
@@ -317,6 +323,11 @@ export default function AdminOrdersPage() {
           try {
             await api.put(`/orders/${orderId}/cancel`);
             toast.success("Order cancelled successfully");
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
             fetchOrders();
           } catch (err) {
             toast.error(err.response?.data?.message || "Cancellation failed");
@@ -324,9 +335,10 @@ export default function AdminOrdersPage() {
         },
       );
     },
-    [fetchOrders],
+    [fetchOrders, expandedOrderId],
   );
 
+  // ✅ REVERT — auto-collapse panel
   const revertOrder = useCallback(
     async (orderId) => {
       showConfirm(
@@ -337,6 +349,11 @@ export default function AdminOrdersPage() {
           try {
             await api.put(`/orders/${orderId}/revert`);
             toast.success("Order reverted to Pending");
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
             fetchOrders();
           } catch (err) {
             toast.error(err.response?.data?.message || "Revert failed");
@@ -346,9 +363,10 @@ export default function AdminOrdersPage() {
         },
       );
     },
-    [fetchOrders],
+    [fetchOrders, expandedOrderId],
   );
 
+  // ✅ DELETE — auto-collapse panel
   const deleteOrder = useCallback(
     async (orderId, orderStatus) => {
       if (orderStatus !== "Cancelled" && orderStatus !== "Pending") {
@@ -364,6 +382,11 @@ export default function AdminOrdersPage() {
           try {
             await api.delete(`/orders/${orderId}`);
             toast.success("Order deleted successfully");
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
             fetchOrders();
           } catch (err) {
             toast.error(err.response?.data?.message || "Delete failed");
@@ -373,7 +396,7 @@ export default function AdminOrdersPage() {
         },
       );
     },
-    [fetchOrders],
+    [fetchOrders, expandedOrderId],
   );
 
   const deleteAllPendingOrders = useCallback(async () => {
@@ -463,7 +486,7 @@ export default function AdminOrdersPage() {
     );
   }, [orders, filterDate, fetchOrders]);
 
-  // ✅ Reprint — uses ThermalReceipt (hidden print block + window.print)
+  // ✅ Reprint
   const reprintOrder = useCallback((order) => {
     if (!order || order.status !== "Confirmed") {
       toast.error("Only confirmed orders can be reprinted");
@@ -884,7 +907,6 @@ export default function AdminOrdersPage() {
               const isExpanded = expandedOrderId === order._id;
               const counterName = getCounterName(order.counterId);
 
-              // ✅ Payment method resolution for top-bar badge
               const paymentMethodRaw =
                 order.payment?.method || order.paymentMethod || "Cash";
               const isCashOrder = paymentMethodRaw.toLowerCase() === "cash";
@@ -924,7 +946,6 @@ export default function AdminOrdersPage() {
                           </div>
                         )}
 
-                        {/* ✅ Payment method badge */}
                         <div
                           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                             isCashOrder

@@ -20,9 +20,13 @@ import {
   FiDollarSign,
   FiUpload,
   FiLink,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 
 import { FaRupeeSign } from "react-icons/fa";
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -32,6 +36,10 @@ export default function AdminProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+
+  // ✅ Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Form fields
   const [form, setForm] = useState({
@@ -45,7 +53,7 @@ export default function AdminProductsPage() {
   });
 
   // Image handling
-  const [imageMethod, setImageMethod] = useState("file"); // 'file' or 'url'
+  const [imageMethod, setImageMethod] = useState("file");
   const [imageFile, setImageFile] = useState(null);
   const [imageUrl, setImageUrl] = useState("");
   const [imagePreview, setImagePreview] = useState("");
@@ -103,14 +111,12 @@ export default function AdminProductsPage() {
     setShowForm(false);
   };
 
-  // Convert URL to File blob
   const urlToFile = async (url, filename = "image.jpg") => {
     try {
       const response = await fetch(url);
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       const blob = await response.blob();
-      // Get file extension from URL or response headers
       let extension = "jpg";
       const contentType = response.headers.get("content-type");
       if (contentType) {
@@ -137,7 +143,7 @@ export default function AdminProductsPage() {
       title: `Reset reserved stock for ${product.name}?`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Reset"
+      confirmButtonText: "Reset",
     });
 
     if (!result.isConfirmed) return;
@@ -147,7 +153,6 @@ export default function AdminProductsPage() {
 
       toast.success("Reserved stock reset successfully");
 
-      // instant realtime update
       setProducts((prev) =>
         prev.map((p) =>
           p._id === product._id
@@ -185,12 +190,10 @@ export default function AdminProductsPage() {
     formData.append("lowStockThreshold", form.lowStockThreshold);
     formData.append("visibility", form.visibility);
 
-    // Handle image
     try {
       if (imageMethod === "file" && imageFile) {
         formData.append("image", imageFile);
       } else if (imageMethod === "url" && imageUrl) {
-        // Validate URL exists and is reachable
         if (!imageUrl.trim()) {
           toast.error("Please enter an image URL");
           setLoading(false);
@@ -254,7 +257,7 @@ export default function AdminProductsPage() {
     setImagePreview(product.image || "");
     setImageFile(null);
     setImageUrl(product.image || "");
-    setImageMethod(product.image ? "url" : "file"); // if image exists, default to url mode
+    setImageMethod(product.image ? "url" : "file");
     setShowForm(true);
   };
 
@@ -264,7 +267,7 @@ export default function AdminProductsPage() {
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#dc2626",
-      confirmButtonText: "Delete"
+      confirmButtonText: "Delete",
     });
     if (!result.isConfirmed) return;
     try {
@@ -327,6 +330,7 @@ export default function AdminProductsPage() {
     }
   };
 
+  /* ---------- FILTER ---------- */
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -335,6 +339,26 @@ export default function AdminProductsPage() {
       return matchesSearch && matchesCategory;
     });
   }, [products, search, selectedCategory]);
+
+  /* ---------- PAGINATION ---------- */
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedCategory, pageSize]);
+
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const pagedProducts = useMemo(
+    () => filteredProducts.slice(startIndex, startIndex + pageSize),
+    [filteredProducts, startIndex, pageSize],
+  );
 
   const stats = useMemo(() => {
     return {
@@ -400,7 +424,6 @@ export default function AdminProductsPage() {
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Total Products Card */}
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -411,7 +434,6 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* Visible Products Card */}
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -422,7 +444,6 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* Hidden Products Card */}
         <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -433,7 +454,6 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* Low Stock Alert Card */}
         <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -444,6 +464,7 @@ export default function AdminProductsPage() {
           </div>
         </div>
       </div>
+
       {/* PRODUCT FORM (Add/Edit) */}
       {showForm && (
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border overflow-hidden">
@@ -601,13 +622,12 @@ export default function AdminProductsPage() {
                 </button>
               </div>
 
-              {/* Image Upload Section with Toggle */}
+              {/* Image Upload Section */}
               <div className="md:col-span-2 xl:col-span-3">
                 <label className="block text-sm font-semibold mb-2">
                   Product Image
                 </label>
                 <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-6 bg-slate-50 dark:bg-slate-900">
-                  {/* Toggle buttons */}
                   <div className="flex gap-2 mb-4">
                     <button
                       type="button"
@@ -633,7 +653,6 @@ export default function AdminProductsPage() {
                     </button>
                   </div>
 
-                  {/* File upload mode */}
                   {imageMethod === "file" && (
                     <input
                       type="file"
@@ -643,7 +662,6 @@ export default function AdminProductsPage() {
                     />
                   )}
 
-                  {/* URL mode */}
                   {imageMethod === "url" && (
                     <input
                       type="text"
@@ -654,7 +672,6 @@ export default function AdminProductsPage() {
                     />
                   )}
 
-                  {/* Image preview */}
                   {imagePreview && (
                     <div className="mt-4">
                       <p className="text-sm font-medium mb-2">Preview:</p>
@@ -762,7 +779,7 @@ export default function AdminProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {filteredProducts.map((p) => {
+              {pagedProducts.map((p) => {
                 const reserved = p.reservedStock || 0;
                 const available = (p.stock || 0) - reserved;
                 const isLowStock = available <= p.lowStockThreshold;
@@ -817,7 +834,13 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`font-mono text-base font-semibold ${available <= 0 ? "text-red-600 dark:text-red-400" : isLowStock ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}
+                        className={`font-mono text-base font-semibold ${
+                          available <= 0
+                            ? "text-red-600 dark:text-red-400"
+                            : isLowStock
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-green-600 dark:text-green-400"
+                        }`}
                       >
                         {available}
                       </span>
@@ -831,10 +854,16 @@ export default function AdminProductsPage() {
                             p.visibility
                               ? "bg-emerald-500"
                               : "bg-slate-300 dark:bg-slate-600"
-                          } ${togglingId === p._id ? "opacity-60 cursor-not-allowed" : ""}`}
+                          } ${
+                            togglingId === p._id
+                              ? "opacity-60 cursor-not-allowed"
+                              : ""
+                          }`}
                         >
                           <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${p.visibility ? "translate-x-6" : "translate-x-1"}`}
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${
+                              p.visibility ? "translate-x-6" : "translate-x-1"
+                            }`}
                           />
                           {togglingId === p._id && (
                             <span className="absolute inset-0 flex items-center justify-center">
@@ -843,7 +872,11 @@ export default function AdminProductsPage() {
                           )}
                         </button>
                         <span
-                          className={`text-sm font-medium ${p.visibility ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"}`}
+                          className={`text-sm font-medium ${
+                            p.visibility
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-slate-500"
+                          }`}
                         >
                           {p.visibility ? "Visible" : "Hidden"}
                         </span>
@@ -898,6 +931,126 @@ export default function AdminProductsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* ✅ PAGINATION FOOTER */}
+        {filteredProducts.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60">
+            <p className="text-sm text-slate-500">
+              Showing{' '}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                {totalItems === 0 ? 0 : startIndex + 1}–{endIndex}
+              </span>{' '}
+              of{' '}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                {totalItems}
+              </span>{' '}
+              products
+            </p>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Rows per page */}
+              <div className="flex items-center gap-2 mr-2">
+                <span className="text-sm text-slate-500 whitespace-nowrap">
+                  Rows per page:
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 flex items-center gap-1 text-sm"
+              >
+                <FiChevronLeft /> Prev
+              </button>
+
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const pages = [];
+                  const maxShown = 5;
+                  let startPage = Math.max(1, page - Math.floor(maxShown / 2));
+                  let endPage = Math.min(totalPages, startPage + maxShown - 1);
+                  if (endPage - startPage < maxShown - 1) {
+                    startPage = Math.max(1, endPage - maxShown + 1);
+                  }
+                  for (let i = startPage; i <= endPage; i++) pages.push(i);
+
+                  return (
+                    <>
+                      {startPage > 1 && (
+                        <>
+                          <button
+                            onClick={() => setPage(1)}
+                            className={`h-9 w-9 rounded-lg text-sm ${
+                              page === 1
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            1
+                          </button>
+                          {startPage > 2 && (
+                            <span className="px-1 text-slate-400">…</span>
+                          )}
+                        </>
+                      )}
+
+                      {pages.map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setPage(n)}
+                          className={`h-9 w-9 rounded-lg text-sm font-medium ${
+                            n === page
+                              ? "bg-indigo-600 text-white"
+                              : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+
+                      {endPage < totalPages && (
+                        <>
+                          {endPage < totalPages - 1 && (
+                            <span className="px-1 text-slate-400">…</span>
+                          )}
+                          <button
+                            onClick={() => setPage(totalPages)}
+                            className={`h-9 w-9 rounded-lg text-sm ${
+                              page === totalPages
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 flex items-center gap-1 text-sm"
+              >
+                Next <FiChevronRight />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
