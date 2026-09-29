@@ -85,13 +85,17 @@ function getOrderISTDate(order) {
 }
 
 // ✅ Get counter name
-const getCounterName = (counterId) => {
-  const names = {
-    "counter-1": "Counter 1",
-    "counter-2": "Counter 2",
-    "counter-3": "Counter 3",
-  };
-  return names[counterId] || counterId || "N/A";
+const getCounterName = (orderOrId) => {
+  if (!orderOrId) return "Counter 1";
+  if (typeof orderOrId === "object") {
+    if (orderOrId.counter?.name) return orderOrId.counter.name;
+    if (orderOrId.counterName && !orderOrId.counterName.match(/^[0-9a-fA-F]{24}$/)) return orderOrId.counterName;
+    return "Counter 1";
+  }
+  if (typeof orderOrId === "string" && !orderOrId.match(/^[0-9a-fA-F]{24}$/)) {
+    return orderOrId;
+  }
+  return "Counter 1";
 };
 
 // ✅ Order Card Component with Counter Display
@@ -112,7 +116,7 @@ const OrderCard = React.memo(
       }
     }, [onConfirm, order._id, isConfirming]);
 
-    const counterName = getCounterName(order.counterId);
+    const counterName = getCounterName(order);
 
     return (
       <motion.div
@@ -132,10 +136,10 @@ const OrderCard = React.memo(
                 {order.formattedTime}
               </div>
               {/* ✅ Counter Badge */}
-              {order.counterId && (
+              {(order.counter || order.counterName || order.counterId) && (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
                   <FiMonitor className="text-xs" />
-                  {counterName}
+                  <span>Counter: {counterName}</span>
                 </div>
               )}
             </div>
@@ -266,8 +270,9 @@ export default function StaffPage() {
   const uniqueCounters = useMemo(() => {
     const counters = new Set();
     allOrders.forEach((order) => {
-      if (order.counterId) {
-        counters.add(order.counterId);
+      const name = getCounterName(order);
+      if (name && name !== "N/A") {
+        counters.add(name);
       }
     });
     return Array.from(counters);
@@ -340,7 +345,7 @@ export default function StaffPage() {
   const counterFilteredOrders = useMemo(() => {
     if (filterCounter === "all") return dateFilteredOrders;
     return dateFilteredOrders.filter(
-      (order) => order.counterId === filterCounter,
+      (order) => getCounterName(order) === filterCounter,
     );
   }, [dateFilteredOrders, filterCounter]);
 
@@ -526,16 +531,6 @@ export default function StaffPage() {
     });
   }, [addDays]);
 
-  // ✅ Get counter name
-  const getCounterName = (counterId) => {
-    const names = {
-      "counter-1": "Counter 1",
-      "counter-2": "Counter 2",
-      "counter-3": "Counter 3",
-    };
-    return names[counterId] || counterId;
-  };
-
   // Show loading only on first load
   if (isInitialLoad) {
     return (
@@ -655,9 +650,9 @@ export default function StaffPage() {
                 className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
               >
                 <option value="all">All Counters</option>
-                {uniqueCounters.map((counter) => (
-                  <option key={counter} value={counter}>
-                    {getCounterName(counter)}
+                {uniqueCounters.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
               </select>

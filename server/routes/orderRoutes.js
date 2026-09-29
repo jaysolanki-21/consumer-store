@@ -3,7 +3,6 @@ import {
   createOrder, 
   getOrders, 
   confirmOrder, 
-  getSalesReport, 
   cancelOrder, 
   revertOrder, 
   bulkDeleteCancelledOrders, 
@@ -23,7 +22,6 @@ router.post('/', createOrder);
 
 // Protected routes
 router.get('/', protect, staffOrAdmin, getOrders);
-router.get('/sales-report', protect, adminOnly, getSalesReport);
 
 // Order status management
 router.put('/:id/confirm', protect, staffOrAdmin, confirmOrder);

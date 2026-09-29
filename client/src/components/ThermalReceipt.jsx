@@ -39,7 +39,15 @@ const ThermalReceipt = forwardRef(({ order, counter }, ref) => {
   };
 
   const billNo = `#${String(_id || "").slice(-6).toUpperCase() || "000000"}`;
-  const counterName = counter?.counterName || "Counter 1";
+  const resolveCounterName = () => {
+    if (order?.counter && typeof order.counter === "object" && order.counter.name) return order.counter.name;
+    if (order?.counterName && !order.counterName.match(/^[0-9a-fA-F]{24}$/)) return order.counterName;
+    if (counter?.name) return counter.name;
+    if (counter?.counterName) return counter.counterName;
+    if (typeof order?.counter === "string" && !order.counter.match(/^[0-9a-fA-F]{24}$/)) return order.counter;
+    return "Counter 1";
+  };
+  const counterName = resolveCounterName();
   const totalQty = items.reduce((s, i) => s + (i.quantity || 0), 0);
 
   return (

@@ -24,7 +24,6 @@ import {
 
 const emptyForm = {
   name: '',
-  counterId: '',
   email: '',
   password: '',
   description: ''
@@ -84,12 +83,57 @@ function formatFullDate(date) {
   });
 }
 
-// ✅ Online check — same 5-min rule as staff page
-const isCounterOnline = (counter) => {
-  const last = counter?.userId?.lastLogin;
-  if (!last) return false;
-  return Date.now() - new Date(last).getTime() < 5 * 60 * 1000;
+// ✅ Get real-time counter status: DISABLED (highest priority) -> OFFLINE -> ON BREAK -> ONLINE
+const getCounterStatus = (counter) => {
+  const isCounterDisabled = !counter?.isActive || (counter?.disabledUntil && new Date(counter.disabledUntil) > new Date());
+  const isUserDisabled = counter?.userId && (!counter.userId.isActive || (counter.userId.disabledUntil && new Date(counter.userId.disabledUntil) > new Date()));
+  if (isCounterDisabled || isUserDisabled) return 'DISABLED';
+  if (!counter?.userId?.isOnline) return 'OFFLINE';
+  if (counter?.userId?.isOnBreak) return 'ON BREAK';
+  return 'ONLINE';
 };
+
+const getStatusDotColor = (status) => {
+  switch (status) {
+    case 'ONLINE': return 'bg-emerald-500';
+    case 'ON BREAK': return 'bg-amber-500';
+    case 'DISABLED': return 'bg-rose-500';
+    case 'OFFLINE': default: return 'bg-gray-400';
+  }
+};
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m';
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function calculateWorkingTimes(user) {
+  if (!user) return { working: '0m', active: '0m', break: '0m' };
+  let totalWorking = user.totalWorkingTime || 0;
+  let totalBreak = user.totalBreakTime || 0;
+
+  if (user.isOnline && user.currentSessionStart) {
+    totalWorking += Math.max(0, Date.now() - new Date(user.currentSessionStart).getTime());
+  }
+
+  if (user.isOnline && user.isOnBreak && user.currentBreakStart) {
+    totalBreak += Math.max(0, Date.now() - new Date(user.currentBreakStart).getTime());
+  }
+
+  const totalActive = Math.max(0, totalWorking - totalBreak);
+
+  return {
+    working: formatDuration(totalWorking),
+    active: formatDuration(totalActive),
+    break: formatDuration(totalBreak)
+  };
+}
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
@@ -101,9 +145,16 @@ export default function AdminCountersPage() {
   const [formData, setFormData] = useState(emptyForm);
 
   const [search, setSearch] = useState('');
-  const [onlineFilter, setOnlineFilter] = useState('all'); // 'all' | 'online' | 'offline'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'online' | 'break' | 'offline' | 'disabled'
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [, setTick] = useState(0);
+
+  // Periodic tick every 30s to update live durations
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchCounters = async () => {
     try {
@@ -119,19 +170,33 @@ export default function AdminCountersPage() {
   useEffect(() => {
     fetchCounters();
     socket.on('countersUpdated', fetchCounters);
-    return () => socket.off('countersUpdated', fetchCounters);
+    socket.on('usersUpdated', fetchCounters);
+    return () => {
+      socket.off('countersUpdated', fetchCounters);
+      socket.off('usersUpdated', fetchCounters);
+    };
   }, []);
 
-  /* ---------- STATS ---------- */
+  /* ---------- STATS (4-State Realtime Presence) ---------- */
   const stats = useMemo(() => {
     const total = counters.length;
-    const active = counters.filter((c) => c.isActive).length;
-    const disabled = counters.filter((c) => !c.isActive).length;
-    const online = counters.filter(isCounterOnline).length;
-    return { total, active, disabled, online };
+    let online = 0;
+    let onBreak = 0;
+    let offline = 0;
+    let disabled = 0;
+
+    counters.forEach((c) => {
+      const st = getCounterStatus(c);
+      if (st === 'ONLINE') online++;
+      else if (st === 'ON BREAK') onBreak++;
+      else if (st === 'DISABLED') disabled++;
+      else offline++;
+    });
+
+    return { total, online, onBreak, offline, disabled };
   }, [counters]);
 
-  /* ---------- SEARCH + ONLINE FILTER ---------- */
+  /* ---------- SEARCH + STATUS FILTER ---------- */
   const filteredCounters = useMemo(() => {
     let list = counters;
 
@@ -140,19 +205,24 @@ export default function AdminCountersPage() {
       list = list.filter(
         (c) =>
           c.name?.toLowerCase().includes(term) ||
-          c.counterId?.toLowerCase().includes(term) ||
-          c.userId?.email?.toLowerCase().includes(term)
+          c.description?.toLowerCase().includes(term) ||
+          c.userId?.email?.toLowerCase().includes(term) ||
+          c._id?.toLowerCase().includes(term)
       );
     }
 
-    if (onlineFilter === 'online') {
-      list = list.filter(isCounterOnline);
-    } else if (onlineFilter === 'offline') {
-      list = list.filter((c) => !isCounterOnline(c));
+    if (statusFilter === 'online') {
+      list = list.filter(c => getCounterStatus(c) === 'ONLINE');
+    } else if (statusFilter === 'break') {
+      list = list.filter(c => getCounterStatus(c) === 'ON BREAK');
+    } else if (statusFilter === 'offline') {
+      list = list.filter(c => getCounterStatus(c) === 'OFFLINE');
+    } else if (statusFilter === 'disabled') {
+      list = list.filter(c => getCounterStatus(c) === 'DISABLED');
     }
 
     return list;
-  }, [counters, search, onlineFilter]);
+  }, [counters, search, statusFilter]);
 
   /* ---------- PAGINATION ---------- */
   const totalItems = filteredCounters.length;
@@ -180,7 +250,6 @@ export default function AdminCountersPage() {
     setEditing(counter._id);
     setFormData({
       name: counter.name || '',
-      counterId: counter.counterId || '',
       email: counter.userId?.email || '',
       password: '',
       description: counter.description || ''
@@ -281,60 +350,84 @@ export default function AdminCountersPage() {
         </button>
       </div>
 
-      {/* ---------- STATS CARDS ---------- */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-2">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+      {/* ---------- STATS CARDS (5 Realtime Presence Cards) ---------- */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-2">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-indigo-100 text-sm font-medium">
+              <p className="text-indigo-100 text-xs font-medium uppercase tracking-wider">
                 Total Counters
               </p>
-              <p className="text-3xl font-bold mt-1">{stats.total}</p>
+              <p className="text-2xl font-bold mt-1">{stats.total}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiMonitor className="text-2xl text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-100 text-sm font-medium">Active</p>
-              <p className="text-3xl font-bold mt-1">{stats.active}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiCheckCircle className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiMonitor className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-rose-100 text-sm font-medium">Disabled</p>
-              <p className="text-3xl font-bold mt-1">{stats.disabled}</p>
+              <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                Online
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.online}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiXCircle className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiActivity className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-amber-100 text-sm font-medium">Online now</p>
-              <p className="text-3xl font-bold mt-1">{stats.online}</p>
+              <p className="text-amber-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white" />
+                On Break
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.onBreak}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiActivity className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiClock className="text-xl text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-slate-500 to-slate-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-200 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-300" />
+                Offline
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.offline}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiMonitor className="text-xl text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200 col-span-2 sm:col-span-1">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-rose-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white" />
+                Disabled
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.disabled}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiXCircle className="text-xl text-white" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ---------- SEARCH + ONLINE FILTER ---------- */}
+      {/* ---------- SEARCH + STATUS FILTER ---------- */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
           <div className="relative flex-1">
@@ -347,7 +440,7 @@ export default function AdminCountersPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full h-11 pl-11 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full h-11 pl-11 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
             {search && (
               <button
@@ -359,30 +452,30 @@ export default function AdminCountersPage() {
             )}
           </div>
 
-          {/* ✅ Online / Offline / All filter */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          {/* ✅ 5 Filter Tabs */}
+          <div className="flex flex-wrap bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
             <button
               onClick={() => {
-                setOnlineFilter('all');
+                setStatusFilter('all');
                 setPage(1);
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-                onlineFilter === 'all'
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                statusFilter === 'all'
                   ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400'
-                  : 'text-slate-500'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               All ({stats.total})
             </button>
             <button
               onClick={() => {
-                setOnlineFilter('online');
+                setStatusFilter('online');
                 setPage(1);
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                onlineFilter === 'online'
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                statusFilter === 'online'
                   ? 'bg-white dark:bg-slate-700 shadow text-emerald-600'
-                  : 'text-slate-500'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -390,17 +483,45 @@ export default function AdminCountersPage() {
             </button>
             <button
               onClick={() => {
-                setOnlineFilter('offline');
+                setStatusFilter('break');
                 setPage(1);
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                onlineFilter === 'offline'
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                statusFilter === 'break'
+                  ? 'bg-white dark:bg-slate-700 shadow text-amber-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              On Break ({stats.onBreak})
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('offline');
+                setPage(1);
+              }}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                statusFilter === 'offline'
                   ? 'bg-white dark:bg-slate-700 shadow text-slate-700 dark:text-slate-300'
-                  : 'text-slate-500'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-slate-400" />
-              Offline ({stats.total - stats.online})
+              Offline ({stats.offline})
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('disabled');
+                setPage(1);
+              }}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                statusFilter === 'disabled'
+                  ? 'bg-white dark:bg-slate-700 shadow text-rose-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Disabled ({stats.disabled})
             </button>
           </div>
         </div>
@@ -416,8 +537,8 @@ export default function AdminCountersPage() {
           <p className="text-slate-500 mt-1 text-sm">
             {search
               ? 'Try a different search term.'
-              : onlineFilter !== 'all'
-                ? `No ${onlineFilter} counters found.`
+              : statusFilter !== 'all'
+                ? `No ${statusFilter} counters found.`
                 : 'Add your first counter to get started.'}
           </p>
         </div>
@@ -428,18 +549,23 @@ export default function AdminCountersPage() {
               <thead className="bg-slate-50 dark:bg-slate-800/60">
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                   <th className="px-5 py-3">Counter</th>
-                  <th className="px-5 py-3">Counter ID</th>
                   <th className="px-5 py-3">Login Email</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Disabled Until</th>
                   <th className="px-5 py-3">Last Login</th>
+                  <th className="px-5 py-3">Last Seen</th>
+                  <th className="px-5 py-3">Working Time</th>
+                  <th className="px-5 py-3">Active Time</th>
+                  <th className="px-5 py-3">Break Time</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {pagedCounters.map((counter) => {
+                  const status = getCounterStatus(counter);
+                  const dotColor = getStatusDotColor(status);
                   const lastLogin = counter.userId?.lastLogin || null;
-                  const isOnline = isCounterOnline(counter);
+                  const lastSeen = counter.userId?.lastSeen || lastLogin;
+                  const times = calculateWorkingTimes(counter.userId);
 
                   return (
                     <tr
@@ -452,16 +578,14 @@ export default function AdminCountersPage() {
                             <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
                               <FiMonitor />
                             </div>
-                            {isOnline && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
-                            )}
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 ${status === 'ONLINE' ? 'animate-pulse' : ''}`} />
                           </div>
                           <div className="flex flex-col">
                             <span className="font-semibold text-slate-900 dark:text-white text-sm">
                               {counter.name}
                             </span>
                             {counter.description && (
-                              <span className="text-xs text-slate-400">
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
                                 {counter.description}
                               </span>
                             )}
@@ -470,14 +594,8 @@ export default function AdminCountersPage() {
                       </td>
 
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                          {counter.counterId}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                          <FiMail className="text-slate-400" />
+                          <FiMail className="text-slate-400 text-xs" />
                           {counter.userId?.email || (
                             <span className="text-slate-400 italic">
                               No login account
@@ -486,63 +604,90 @@ export default function AdminCountersPage() {
                         </div>
                       </td>
 
+                      {/* Realtime Status */}
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                            counter.isActive
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {counter.isActive ? (
-                            <>
-                              <FiCheckCircle className="text-xs" />
-                              Enabled
-                            </>
-                          ) : (
-                            <>
-                              <FiXCircle className="text-xs" />
-                              Disabled
-                            </>
+                        <div className="flex flex-col items-start gap-1">
+                          {status === 'ONLINE' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/50">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              ONLINE
+                            </span>
                           )}
-                        </span>
+                          {status === 'ON BREAK' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50">
+                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                              ON BREAK
+                            </span>
+                          )}
+                          {status === 'OFFLINE' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                              <span className="w-2 h-2 rounded-full bg-slate-400" />
+                              OFFLINE
+                            </span>
+                          )}
+                          {status === 'DISABLED' && (
+                            <div className="flex flex-col">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-700/50">
+                                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                DISABLED
+                              </span>
+                              {(counter.disabledUntil || counter.userId?.disabledUntil) && (
+                                <span className="text-[10px] text-rose-500 mt-0.5">
+                                  Until {formatUntilTime(counter.disabledUntil || counter.userId?.disabledUntil)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        {!counter.isActive && counter.disabledUntil ? (
-                          <div className="flex flex-col">
-                            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
-                              <FiClock className="text-xs" />
-                              {formatUntilTime(counter.disabledUntil)}
-                            </span>
-                            <span className="text-[11px] text-slate-400 mt-0.5">
-                              {formatFullDate(counter.disabledUntil)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-sm">—</span>
-                        )}
-                      </td>
-
+                      {/* Last Login */}
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span
-                            className={`text-sm font-medium ${
-                              lastLogin
-                                ? isOnline
-                                  ? 'text-emerald-600'
-                                  : 'text-slate-700 dark:text-slate-300'
-                                : 'text-slate-400'
-                            }`}
-                          >
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                             {formatRelativeTime(lastLogin)}
                           </span>
                           {lastLogin && (
-                            <span className="text-[11px] text-slate-400 mt-0.5">
+                            <span className="text-[10px] text-slate-400 mt-0.5">
                               {formatFullDate(lastLogin)}
                             </span>
                           )}
                         </div>
+                      </td>
+
+                      {/* Last Seen */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                            {formatRelativeTime(lastSeen)}
+                          </span>
+                          {lastSeen && (
+                            <span className="text-[10px] text-slate-400 mt-0.5">
+                              {formatFullDate(lastSeen)}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Working Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-mono">
+                          {times.working}
+                        </span>
+                      </td>
+
+                      {/* Active Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-mono">
+                          {times.active}
+                        </span>
+                      </td>
+
+                      {/* Break Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-mono">
+                          {times.break}
+                        </span>
                       </td>
 
                       <td className="px-5 py-4 whitespace-nowrap text-right">
@@ -726,19 +871,16 @@ export default function AdminCountersPage() {
               {editing ? 'Edit Counter' : 'Add Counter'}
             </h2>
 
-            {['name', 'counterId', 'email', 'password', 'description'].map(
+            {['name', 'email', 'password', 'description'].map(
               (field) => (
                 <div key={field}>
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 block">
-                    {field === 'counterId' ? 'Counter ID' : field}
+                    {field === 'password' && editing ? 'New Password (leave blank to keep current)' : field}
                   </label>
                   <input
                     type={field === 'password' ? 'password' : 'text'}
-                    disabled={editing && field === 'counterId'}
                     placeholder={
-                      field === 'counterId'
-                        ? 'counter-1'
-                        : field[0].toUpperCase() + field.slice(1)
+                      field[0].toUpperCase() + field.slice(1)
                     }
                     value={formData[field]}
                     onChange={(e) =>

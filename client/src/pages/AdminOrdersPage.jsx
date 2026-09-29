@@ -84,6 +84,64 @@ export default function AdminOrdersPage() {
   const [filterDate, setFilterDate] = useState(() => getTodayLocal());
   const [filterCounter, setFilterCounter] = useState("all");
 
+  const [countersMap, setCountersMap] = useState({});
+  const [allCounters, setAllCounters] = useState([]);
+
+  useEffect(() => {
+    const fetchCounters = async () => {
+      try {
+        const { data } = await api.get("/counters").catch(() => ({ data: [] }));
+        const map = {};
+        const counterList = [];
+        if (Array.isArray(data)) {
+          data.forEach(c => {
+            if (c._id && c.name) {
+              map[c._id] = c.name;
+              if (c.userId) {
+                const uId = typeof c.userId === 'object' ? c.userId._id : c.userId;
+                map[uId] = c.name;
+              }
+              if (!counterList.some(item => item.name === c.name)) {
+                counterList.push({ name: c.name, id: c._id });
+              }
+            }
+          });
+        }
+        setCountersMap(map);
+        setAllCounters(counterList);
+      } catch (err) {
+        console.error("Failed to fetch counters", err);
+      }
+    };
+    fetchCounters();
+  }, []);
+
+  const getOrderCounterName = (order) => {
+    if (!order) return "N/A";
+    if (order.counter && typeof order.counter === "object" && order.counter.name) {
+      return order.counter.name;
+    }
+    if (order.counterName && !order.counterName.match(/^[0-9a-fA-F]{24}$/)) {
+      return order.counterName;
+    }
+    if (order.counterId && countersMap[order.counterId]) {
+      return countersMap[order.counterId];
+    }
+    if (typeof order.counter === "string" && countersMap[order.counter]) {
+      return countersMap[order.counter];
+    }
+    if (typeof order.counter === "string" && !order.counter.match(/^[0-9a-fA-F]{24}$/)) {
+      return order.counter;
+    }
+    return order.counterName || "Counter 1";
+  };
+
+  const getCounterName = (counterIdOrOrder) => {
+    if (typeof counterIdOrOrder === 'object') return getOrderCounterName(counterIdOrOrder);
+    if (countersMap[counterIdOrOrder]) return countersMap[counterIdOrOrder];
+    return "Counter 1";
+  };
+
   // ✅ Receipt state — order that should be printed
   const [printOrder, setPrintOrder] = useState(null);
 
@@ -197,6 +255,9 @@ export default function AdminOrdersPage() {
               Order Information
             </h2>
             <div className="space-y-3 mb-6 text-sm text-slate-600 dark:text-slate-300">
+              <p>
+                <strong>Counter:</strong> {getOrderCounterName(order)}
+              </p>
               <p>
                 <strong>Payment Method:</strong> {paymentMethod}
               </p>
@@ -535,7 +596,7 @@ export default function AdminOrdersPage() {
           ? true
           : order.status.toLowerCase() === filterStatus;
       const matchesCounter =
-        filterCounter === "all" ? true : order.counterId === filterCounter;
+        filterCounter === "all" ? true : getOrderCounterName(order) === filterCounter;
       return matchesDate && matchesStatus && matchesCounter;
     });
   }, [orders, filterStatus, filterDate, filterCounter]);
@@ -583,15 +644,6 @@ export default function AdminOrdersPage() {
       default:
         return null;
     }
-  };
-
-  const getCounterName = (counterId) => {
-    const names = {
-      "counter-1": "Counter 1",
-      "counter-2": "Counter 2",
-      "counter-3": "Counter 3",
-    };
-    return names[counterId] || counterId;
   };
 
   const ordersForDate = orders.filter((o) =>
@@ -872,18 +924,18 @@ export default function AdminOrdersPage() {
             >
               All
             </button>
-            {uniqueCounters.map((counter) => (
+            {allCounters.map((counter) => (
               <button
-                key={counter}
-                onClick={() => setFilterCounter(counter)}
+                key={counter.name}
+                onClick={() => setFilterCounter(counter.name)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
-                  filterCounter === counter
+                  filterCounter === counter.name
                     ? "bg-indigo-600 text-white shadow-md"
                     : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
                 <FiMonitor className="text-xs" />
-                {getCounterName(counter)}
+                {counter.name}
               </button>
             ))}
           </div>
@@ -905,7 +957,7 @@ export default function AdminOrdersPage() {
             {filteredOrders.map((order) => {
               const completionTime = getCompletionTime(order);
               const isExpanded = expandedOrderId === order._id;
-              const counterName = getCounterName(order.counterId);
+              const counterName = getOrderCounterName(order);
 
               const paymentMethodRaw =
                 order.payment?.method || order.paymentMethod || "Cash";
@@ -939,10 +991,10 @@ export default function AdminOrdersPage() {
                             {completionTime}
                           </div>
                         )}
-                        {order.counterId && (
+                        {(order.counter || order.counterName || order.counterId) && (
                           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">
                             <FiMonitor className="text-xs" />
-                            {counterName}
+                            <span>{counterName}</span>
                           </div>
                         )}
 
@@ -1139,7 +1191,7 @@ export default function AdminOrdersPage() {
       {/* ✅ Hidden ThermalReceipt — rendered only during print */}
       {printOrder && (
         <div className="hidden print:block">
-          <ThermalReceipt order={printOrder} counter={null} />
+          <ThermalReceipt order={printOrder} counter={printOrder?.counter || { name: getOrderCounterName(printOrder) }} />
         </div>
       )}
     </>

@@ -3,6 +3,7 @@ import api from "../services/api";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import AIInsights from "../components/AIInsights";
 import {
   FiCalendar,
   FiTrendingUp,
@@ -530,10 +531,10 @@ export default function InsightsPage() {
       {/* Header with Date Selector on top right */}
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Sales Insights
           </h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
             Analyze product sales performance & trends
           </p>
         </div>
@@ -542,8 +543,8 @@ export default function InsightsPage() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Date Selector */}
           {!useCustomRange && viewType === "daily" && (
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <button onClick={goPrevDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
+              <button onClick={goPrevDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronLeft className="text-base" />
               </button>
               <input
@@ -553,15 +554,15 @@ export default function InsightsPage() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
               />
-              <button onClick={goNextDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+              <button onClick={goNextDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronRight className="text-base" />
               </button>
             </div>
           )}
 
           {!useCustomRange && viewType === "monthly" && (
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <button onClick={goPrevMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
+              <button onClick={goPrevMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronLeft className="text-base" />
               </button>
               <input
@@ -571,15 +572,15 @@ export default function InsightsPage() {
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
               />
-              <button onClick={goNextMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+              <button onClick={goNextMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronRight className="text-base" />
               </button>
             </div>
           )}
 
           {!useCustomRange && viewType === "yearly" && (
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <button onClick={goPrevYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
+              <button onClick={goPrevYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronLeft className="text-base" />
               </button>
               <input
@@ -590,14 +591,14 @@ export default function InsightsPage() {
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 className="w-20 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none text-center"
               />
-              <button onClick={goNextYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+              <button onClick={goNextYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-slate-600 dark:text-slate-300 dark:text-gray-300">
                 <FiChevronRight className="text-base" />
               </button>
             </div>
           )}
 
           {/* View Type Toggle */}
-          <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex bg-white dark:bg-slate-900 p-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
             {["daily", "monthly", "yearly"].map((type) => (
               <button
                 key={type}
@@ -608,7 +609,7 @@ export default function InsightsPage() {
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
                   viewType === type && !useCustomRange
                     ? "bg-indigo-600 text-white shadow-md"
-                    : "text-gray-500 hover:text-indigo-600"
+                    : "text-slate-500 dark:text-slate-400 hover:text-indigo-600"
                 }`}
               >
                 {type}
@@ -619,7 +620,7 @@ export default function InsightsPage() {
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize flex items-center gap-1 ${
                 useCustomRange
                   ? "bg-indigo-600 text-white shadow-md"
-                  : "text-gray-500 hover:text-indigo-600"
+                  : "text-slate-500 dark:text-slate-400 hover:text-indigo-600"
               }`}
             >
               <FiCalendar className="text-sm" />
@@ -634,7 +635,7 @@ export default function InsightsPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">From:</label>
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-300 dark:text-gray-400">From:</label>
               <input
                 type="date"
                 value={customStartDate}
@@ -644,7 +645,7 @@ export default function InsightsPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">To:</label>
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-300 dark:text-gray-400">To:</label>
               <input
                 type="date"
                 value={customEndDate}
@@ -665,7 +666,7 @@ export default function InsightsPage() {
       )}
 
       {/* Period Display */}
-      <div className="flex items-center gap-2 text-sm text-gray-500">
+      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <FiCalendar className="text-indigo-500" />
         <span>Showing data for: <strong className="text-gray-700 dark:text-gray-300">{getDateRangeDisplay()}</strong></span>
         {selectedCategory && (
@@ -678,143 +679,122 @@ export default function InsightsPage() {
 
       {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-        {/* Total Revenue */}
         {showSummaryCards && (
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-emerald-200 uppercase tracking-wide font-medium">
-                  Total Revenue
-                </p>
-                <p className="text-2xl font-bold mt-2">
-                  ₹{Number(totalRevenue || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FaRupeeSign className="text-white text-xl" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FaRupeeSign className="text-5xl text-emerald-500" />
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Revenue</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mt-1">
+              ₹{Number(totalRevenue || 0).toLocaleString()}
+            </p>
           </div>
         )}
 
-        {/* Total Profit */}
         {showSummaryCards && (
-          <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-purple-200 uppercase tracking-wide font-medium">
-                  Total Profit
-                </p>
-                <p className="text-2xl font-bold mt-2">
-                  ₹{Number(orderProfit || 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiTrendingUp className="text-white text-xl" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FiTrendingUp className="text-5xl text-indigo-500" />
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Profit</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mt-1">
+              ₹{Number(orderProfit || 0).toLocaleString()}
+            </p>
           </div>
         )}
 
-        {/* Products Sold */}
         {showSummaryCards && (
-          <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-indigo-200 uppercase tracking-wide font-medium">
-                  Products Sold
-                </p>
-                <p className="text-2xl font-bold mt-2">{totalQuantity}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiShoppingCart className="text-white text-xl" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FiShoppingCart className="text-5xl text-blue-500" />
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Products Sold</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mt-1">
+              {totalQuantity}
+            </p>
           </div>
         )}
 
-        {/* Active Products */}
         {showSummaryCards && (
-          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-amber-200 uppercase tracking-wide font-medium">
-                  Active Products
-                </p>
-                <p className="text-2xl font-bold mt-2">{totalProducts}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiBox className="text-white text-xl" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FiBox className="text-5xl text-amber-500" />
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Active Products</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mt-1">
+              {totalProducts}
+            </p>
           </div>
         )}
 
-        {/* Peak Hour */}
         {showSummaryCards && (
-          <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-rose-200 uppercase tracking-wide font-medium">
-                  Peak Hour
-                </p>
-                <p className="text-2xl font-bold mt-2">{peakHour}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiClock className="text-white text-xl" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-5 opacity-5 group-hover:opacity-10 transition-opacity">
+              <FiClock className="text-5xl text-rose-500" />
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Peak Hour</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mt-1">
+              {peakHour}
+            </p>
           </div>
         )}
 
         {/* Loading skeletons */}
         {initialLoading && (
           <>
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="animate-pulse">
-                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
-                <div className="h-8 bg-white/30 rounded w-32"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-32"></div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 shadow-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="animate-pulse">
-                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
-                <div className="h-8 bg-white/30 rounded w-24"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-24"></div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 shadow-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="animate-pulse">
-                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
-                <div className="h-8 bg-white/30 rounded w-20"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-20"></div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 shadow-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="animate-pulse">
-                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
-                <div className="h-8 bg-white/30 rounded w-20"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-20"></div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 shadow-lg">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <div className="animate-pulse">
-                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
-                <div className="h-8 bg-white/30 rounded w-24"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-24"></div>
               </div>
             </div>
           </>
         )}
       </div>
 
+      <AIInsights 
+        data={filteredSalesData} 
+        totalRevenue={totalRevenue} 
+        orderProfit={orderProfit} 
+        totalQuantity={totalQuantity} 
+        peakHour={peakHour} 
+      />
+
       {/* Peak Hour Chart */}
       {!initialLoading && activeHourlyData.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center">
                 <FiClock className="text-rose-600 dark:text-rose-400 text-lg" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Hourly Sales Distribution</h3>
-                <p className="text-xs text-gray-500">Orders, revenue and profit by hour of day</p>
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white tracking-tight">Hourly Sales Distribution</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Orders, revenue and profit by hour of day</p>
               </div>
             </div>
             {peakHour !== "N/A" && (
@@ -829,7 +809,7 @@ export default function InsightsPage() {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.4} />
                 <XAxis dataKey="hour" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
                 <YAxis yAxisId="left" />
                 <YAxis yAxisId="right" orientation="right" />
@@ -855,16 +835,16 @@ export default function InsightsPage() {
       {!initialLoading && filteredSalesData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Product Sales Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Product Sales</h3>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-white tracking-tight">Product Sales</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => setChartType("bar")}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     chartType === "bar"
                       ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 dark:text-gray-400"
                   }`}
                 >
                   Bar
@@ -874,7 +854,7 @@ export default function InsightsPage() {
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     chartType === "line"
                       ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 dark:text-gray-400"
                   }`}
                 >
                   Line
@@ -884,7 +864,7 @@ export default function InsightsPage() {
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     chartType === "area"
                       ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 dark:text-gray-400"
                   }`}
                 >
                   Area
@@ -895,7 +875,7 @@ export default function InsightsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === "bar" && (
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.4} />
                     <XAxis dataKey="name" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
@@ -907,7 +887,7 @@ export default function InsightsPage() {
                 )}
                 {chartType === "line" && (
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.4} />
                     <XAxis dataKey="name" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
@@ -919,14 +899,20 @@ export default function InsightsPage() {
                 )}
                 {chartType === "area" && (
                   <ComposedChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
-                    <Legend />
-                    <Area yAxisId="left" type="monotone" dataKey="quantity" fill="#4f46e5" stroke="#4f46e5" name="Quantity Sold" />
-                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" name="Revenue (₹)" />
+                    <defs>
+                      <linearGradient id="colorQty" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.4} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(v) => `₹${v}`} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                    <Area yAxisId="left" type="monotone" dataKey="quantity" fill="url(#colorQty)" stroke="#4f46e5" strokeWidth={3} name="Quantity Sold" />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} name="Revenue (₹)" dot={{ r: 4 }} activeDot={{ r: 6 }} />
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
@@ -934,8 +920,8 @@ export default function InsightsPage() {
           </div>
 
           {/* Category Distribution Pie Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Category Distribution</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white tracking-tight mb-4">Category Distribution</h3>
             {categoryDistribution.length > 0 ? (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -960,15 +946,15 @@ export default function InsightsPage() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="h-80 flex items-center justify-center text-slate-500 dark:text-slate-400">
                 No category data available
               </div>
             )}
           </div>
 
           {/* Payment Method Distribution Pie Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Methods (Revenue)</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white tracking-tight mb-4">Payment Methods (Revenue)</h3>
             {paymentData.length > 0 && paymentData.some(p => p.value > 0) ? (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -993,15 +979,15 @@ export default function InsightsPage() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="h-80 flex items-center justify-center text-slate-500 dark:text-slate-400">
                 No payment data available
               </div>
             )}
           </div>
 
           {/* Top Products */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top 5 Products</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 lg:col-span-2">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white tracking-tight mb-4">Top 5 Products</h3>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {topProducts.map((product, index) => {
                 const prevQty = getProductPrevData(product.productId);
@@ -1010,8 +996,8 @@ export default function InsightsPage() {
                 return (
                   <div key={product.productId} className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-center">
                     <div className="text-2xl font-bold text-indigo-600 mb-1">#{index + 1}</div>
-                    <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">{product.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">Sold: {product.totalQuantity}</p>
+                    <p className="font-semibold text-slate-800 dark:text-white tracking-tight text-sm truncate">{product.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sold: {product.totalQuantity}</p>
                     <p className="text-xs text-green-600 font-semibold">₹{Number(product.totalRevenue || 0).toLocaleString()}</p>
                     <div className="mt-2">
                       {trend === "up" && (
@@ -1025,7 +1011,7 @@ export default function InsightsPage() {
                         </span>
                       )}
                       {trend === "neutral" && (
-                        <span className="text-xs text-gray-500">No change</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">No change</span>
                       )}
                     </div>
                   </div>
@@ -1041,7 +1027,7 @@ export default function InsightsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <FiLayers className="text-indigo-500 text-sm" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-300 dark:text-gray-400">
               Filter by Category:
             </span>
           </div>
@@ -1051,7 +1037,7 @@ export default function InsightsPage() {
               className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                 !selectedCategory
                   ? "bg-indigo-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  : "bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
               }`}
             >
               <FiTag className="inline mr-1 text-[10px]" />
@@ -1064,7 +1050,7 @@ export default function InsightsPage() {
                 className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                   selectedCategory === cat._id
                     ? "bg-indigo-600 text-white shadow-sm"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    : "bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
                 <FiTag className="inline mr-1 text-[10px]" />
@@ -1089,12 +1075,12 @@ export default function InsightsPage() {
           <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
         </div>
       ) : filteredSalesData.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-8 text-center">
-          <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-8 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
             <FiBarChart2 className="text-3xl text-gray-400" />
           </div>
           <h2 className="text-lg font-semibold mb-1">No Sales Data</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             No product sales found for the selected period
           </p>
           {selectedCategory && (
@@ -1107,7 +1093,7 @@ export default function InsightsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           <AnimatePresence mode="popLayout">
             {filteredSalesData.map((product) => {
               const prevQty = getProductPrevData(product.productId);
@@ -1122,7 +1108,7 @@ export default function InsightsPage() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ duration: 0.2 }}
-                  className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                  className="group bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-300"
                 >
                   <div className="relative w-full aspect-square overflow-hidden bg-slate-100 dark:bg-slate-900">
                     <img

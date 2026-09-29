@@ -1,5 +1,3 @@
-// backend/models/User.js
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -12,17 +10,38 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'staff', 'counter'],
     default: 'counter'
   },
-  counterId: {
-    type: String,
-    trim: true,
-    required: function () { return this.role === 'counter'; }
-  },
-  image: { type: String, default: '' },       // 👈 ImageKit URL
-  imageFileId: { type: String, default: '' }, // 👈 ImageKit fileId (for deletion)
+  image: { type: String, default: '' },
+  imageFileId: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   disabledUntil: { type: Date, default: null },
-  lastLogin: { type: Date }
-}, { timestamps: true });
+  lastLogin: { type: Date },
+  lastSeen: { type: Date, default: Date.now },
+  isOnline: { type: Boolean, default: false },
+  isOnBreak: { type: Boolean, default: false },
+  currentSessionStart: { type: Date, default: null },
+  currentBreakStart: { type: Date, default: null },
+  totalWorkingTime: { type: Number, default: 0 },
+  totalBreakTime: { type: Number, default: 0 },
+  totalActiveTime: { type: Number, default: 0 }
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Real-time status virtual with DISABLED as highest priority
+userSchema.virtual('status').get(function() {
+  if (!this.isActive || (this.disabledUntil && new Date(this.disabledUntil) > new Date())) {
+    return 'DISABLED';
+  }
+  if (!this.isOnline) {
+    return 'OFFLINE';
+  }
+  if (this.isOnBreak) {
+    return 'ON BREAK';
+  }
+  return 'ONLINE';
+});
 
 userSchema.pre('save', function (next) {
   if (!this.isModified('password')) return next();

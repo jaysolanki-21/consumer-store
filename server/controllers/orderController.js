@@ -1,18 +1,25 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import Counter from '../models/Counter.js';
+import User from '../models/User.js';
+import mongoose from 'mongoose';
 
 export const createOrder = async (req, res) => {
   try {
     const { 
       items, 
+      counter,
       counterId, 
+      counterName,
       staffId, 
       staffName,
       payment = {} 
     } = req.body;
 
-    if (!counterId) {
-      return res.status(400).json({ message: 'Counter ID is required' });
+    const rawCounter = (typeof counter === 'object' && counter?._id) ? counter._id : (counter || counterId);
+
+    if (!rawCounter) {
+      return res.status(400).json({ message: 'Counter is required' });
     }
 
     // 1. Validate availability (stock - reservedStock)
@@ -54,18 +61,28 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    const counterNames = {
-      'counter-1': 'Counter 1',
-      'counter-2': 'Counter 2',
-      'counter-3': 'Counter 3',
-      'counter-4': 'Counter 4',
-      'counter-5': 'Counter 5',
-      'counter-6': 'Counter 6',
-      'counter-7': 'Counter 7',
-      'counter-8': 'Counter 8',
-      'counter-9': 'Counter 9',
-      'counter-10': 'Counter 10'
-    };
+    // Resolve Counter document using current schema
+    let counterDoc = null;
+    if (mongoose.Types.ObjectId.isValid(rawCounter)) {
+      counterDoc = await Counter.findById(rawCounter);
+      if (!counterDoc) {
+        counterDoc = await Counter.findOne({ userId: rawCounter });
+      }
+    }
+    if (!counterDoc && typeof rawCounter === 'string') {
+      counterDoc = await Counter.findOne({ name: rawCounter });
+    }
+    if (!counterDoc && mongoose.Types.ObjectId.isValid(rawCounter)) {
+      const u = await User.findById(rawCounter);
+      if (u) {
+        counterDoc = await Counter.findOne({ userId: u._id });
+      }
+    }
+
+    const resolvedCounterId = counterDoc ? counterDoc._id : (mongoose.Types.ObjectId.isValid(rawCounter) ? rawCounter : null);
+    const resolvedCounterName = counterDoc 
+      ? counterDoc.name 
+      : (counterName || (typeof counter === 'object' ? counter.name : null) || 'Counter 1');
 
     // Prepare payment object
     const paymentData = {
@@ -84,8 +101,9 @@ export const createOrder = async (req, res) => {
       items: orderItems,
       totalAmount,
       status: 'Pending',
-      counterId: counterId,
-      counterName: counterNames[counterId] || counterId,
+      counter: resolvedCounterId || undefined,
+      counterId: resolvedCounterId ? resolvedCounterId.toString() : String(rawCounter),
+      counterName: resolvedCounterName,
       staffId: staffId || null,
       staffName: staffName || '',
       payment: paymentData,
@@ -102,7 +120,8 @@ export const createOrder = async (req, res) => {
     const populatedOrder = await Order.findById(order._id)
       .populate('items.productId')
       .populate('confirmedBy', 'name')
-      .populate('staffId', 'name');
+      .populate('staffId', 'name')
+      .populate('counter', 'name');
 
     const io = req.app.get('io');
     io.emit('newOrder', populatedOrder);
@@ -121,6 +140,7 @@ export const getOrders = async (req, res) => {
       .populate('items.productId')
       .populate('confirmedBy', 'name')
       .populate('staffId', 'name')
+      .populate('counter', 'name')
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
@@ -177,7 +197,8 @@ export const confirmOrder = async (req, res) => {
     const populatedOrder = await Order.findById(order._id)
       .populate('items.productId')
       .populate('confirmedBy', 'name')
-      .populate('staffId', 'name');
+      .populate('staffId', 'name')
+      .populate('counter', 'name');
 
     const io = req.app.get('io');
     io.emit('orderConfirmed', populatedOrder);
@@ -190,70 +211,6 @@ export const confirmOrder = async (req, res) => {
   }
 };
 
-export const getSalesReport = async (req, res) => {
-  try {
-    const { date } = req.query;
-    if (!date) {
-      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
-    }
-
-    const todayISTStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-
-    if (date > todayISTStr) {
-      return res.status(400).json({ message: 'Cannot fetch sales for a future date' });
-    }
-
-    const startDate = new Date(`${date}T00:00:00.000+05:30`);
-    const endDate = new Date(`${date}T23:59:59.999+05:30`);
-
-    const orders = await Order.find({
-      status: 'Confirmed',
-      createdAt: { $gte: startDate, $lte: endDate }
-    }).populate('items.productId');
-
-    let totalIncome = 0;
-    let totalCost = 0;
-    const productSales = {};
-
-    orders.forEach(order => {
-      totalIncome += order.totalAmount || 0;
-      order.items.forEach(item => {
-        const productName = item.productId?.name || item.name || 'Deleted Product';
-        const productId = item.productId?._id || item.productId || 'unknown';
-        const costPrice = item.costPrice || item.productId?.costPrice || 0;
-        
-        if (!productSales[productId]) {
-          productSales[productId] = {
-            productId,
-            name: productName,
-            quantity: 0,
-            revenue: 0,
-            cost: 0,
-            profit: 0
-          };
-        }
-        productSales[productId].quantity += item.quantity;
-        productSales[productId].revenue += item.quantity * (item.sellingPrice || item.price || 0);
-        productSales[productId].cost += item.quantity * costPrice;
-        productSales[productId].profit = productSales[productId].revenue - productSales[productId].cost;
-        totalCost += item.quantity * costPrice;
-      });
-    });
-
-    res.json({
-      date,
-      totalOrders: orders.length,
-      totalIncome,
-      totalCost,
-      grossProfit: totalIncome - totalCost,
-      profitMargin: totalIncome ? ((totalIncome - totalCost) / totalIncome) * 100 : 0,
-      productWise: Object.values(productSales)
-    });
-  } catch (error) {
-    console.error('Sales report error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
 export const cancelOrder = async (req, res) => {
   try {
@@ -288,11 +245,17 @@ export const cancelOrder = async (req, res) => {
     
     await order.save();
 
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name')
+      .populate('counter', 'name');
+
     const io = req.app.get('io');
-    io.emit('orderCancelled', order);
+    io.emit('orderCancelled', populatedOrder || order);
     io.emit('stockUpdated');
 
-    res.json({ message: 'Order cancelled', order });
+    res.json({ message: 'Order cancelled', order: populatedOrder || order });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -349,11 +312,17 @@ export const revertOrder = async (req, res) => {
     
     await order.save();
 
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name')
+      .populate('counter', 'name');
+
     const io = req.app.get('io');
-    io.emit('orderReverted', order);
+    io.emit('orderReverted', populatedOrder || order);
     io.emit('stockUpdated');
 
-    res.json({ message: 'Order reverted to Pending', order });
+    res.json({ message: 'Order reverted to Pending', order: populatedOrder || order });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
@@ -639,7 +608,9 @@ export const updatePaymentStatus = async (req, res) => {
 
     const populatedOrder = await Order.findById(order._id)
       .populate('items.productId')
-      .populate('confirmedBy', 'name');
+      .populate('confirmedBy', 'name')
+      .populate('staffId', 'name')
+      .populate('counter', 'name');
 
     const io = req.app.get('io');
     io.emit('orderUpdated', populatedOrder);

@@ -8,7 +8,7 @@ import {
   resetStaffPassword,
   deleteStaff
 } from '../controllers/userController.js';
-import { protect, adminOnly } from '../middleware/authMiddleware.js';
+import { protect, adminOnly, staffOrAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -23,7 +23,7 @@ const upload = multer({
 });
 
 // All routes are relative to /api/users (mounted in server.js)
-router.get('/staff', protect, adminOnly, getStaff);
+router.get('/staff', protect, staffOrAdmin, getStaff);
 router.post('/staff', protect, adminOnly, upload.single('image'), createStaff);
 router.put('/staff/:id', protect, adminOnly, upload.single('image'), updateStaff);
 router.put('/staff/:id/status', protect, adminOnly, setStaffStatus);

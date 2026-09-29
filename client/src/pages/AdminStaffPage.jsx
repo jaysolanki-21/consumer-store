@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../services/api';
+import socket from '../services/socket';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import {
@@ -90,11 +91,56 @@ const sortByOldest = (list) =>
     (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
   );
 
-// ✅ Online check (< 5 min since lastLogin)
-const isMemberOnline = (member) => {
-  if (!member?.lastLogin) return false;
-  return Date.now() - new Date(member.lastLogin).getTime() < 5 * 60 * 1000;
+// ✅ Get real-time status: DISABLED (highest priority) -> OFFLINE -> ON BREAK -> ONLINE
+const getMemberStatus = (member) => {
+  const isDisabled = !member?.isActive || (member?.disabledUntil && new Date(member.disabledUntil) > new Date());
+  if (isDisabled) return 'DISABLED';
+  if (!member?.isOnline) return 'OFFLINE';
+  if (member?.isOnBreak) return 'ON BREAK';
+  return 'ONLINE';
 };
+
+const getStatusDotColor = (status) => {
+  switch (status) {
+    case 'ONLINE': return 'bg-emerald-500';
+    case 'ON BREAK': return 'bg-amber-500';
+    case 'DISABLED': return 'bg-rose-500';
+    case 'OFFLINE': default: return 'bg-gray-400';
+  }
+};
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m';
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function calculateWorkingTimes(user) {
+  if (!user) return { working: '0m', active: '0m', break: '0m' };
+  let totalWorking = user.totalWorkingTime || 0;
+  let totalBreak = user.totalBreakTime || 0;
+
+  if (user.isOnline && user.currentSessionStart) {
+    totalWorking += Math.max(0, Date.now() - new Date(user.currentSessionStart).getTime());
+  }
+
+  if (user.isOnline && user.isOnBreak && user.currentBreakStart) {
+    totalBreak += Math.max(0, Date.now() - new Date(user.currentBreakStart).getTime());
+  }
+
+  const totalActive = Math.max(0, totalWorking - totalBreak);
+
+  return {
+    working: formatDuration(totalWorking),
+    active: formatDuration(totalActive),
+    break: formatDuration(totalBreak)
+  };
+}
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
@@ -102,8 +148,15 @@ export default function AdminStaffPage() {
   const [staff, setStaff] = useState([]);
   const [filteredStaff, setFilteredStaff] = useState([]);
   const [search, setSearch] = useState('');
-  const [onlineFilter, setOnlineFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
+
+  // Re-render every 30s to keep durations live
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -132,9 +185,11 @@ export default function AdminStaffPage() {
 
   useEffect(() => {
     fetchStaff();
+    socket.on('usersUpdated', fetchStaff);
+    return () => socket.off('usersUpdated', fetchStaff);
   }, []);
 
-  // ✅ SEARCH + ONLINE FILTER
+  // ✅ SEARCH + STATUS FILTER
   useEffect(() => {
     let list = staff;
 
@@ -142,20 +197,25 @@ export default function AdminStaffPage() {
       const term = search.toLowerCase();
       list = list.filter(
         member =>
-          member.name.toLowerCase().includes(term) ||
-          member.email.toLowerCase().includes(term)
+          member.name?.toLowerCase().includes(term) ||
+          member.email?.toLowerCase().includes(term) ||
+          member._id?.toLowerCase().includes(term)
       );
     }
 
-    if (onlineFilter === 'online') {
-      list = list.filter(isMemberOnline);
-    } else if (onlineFilter === 'offline') {
-      list = list.filter(m => !isMemberOnline(m));
+    if (statusFilter === 'online') {
+      list = list.filter(m => getMemberStatus(m) === 'ONLINE');
+    } else if (statusFilter === 'break') {
+      list = list.filter(m => getMemberStatus(m) === 'ON BREAK');
+    } else if (statusFilter === 'offline') {
+      list = list.filter(m => getMemberStatus(m) === 'OFFLINE');
+    } else if (statusFilter === 'disabled') {
+      list = list.filter(m => getMemberStatus(m) === 'DISABLED');
     }
 
     setFilteredStaff(sortByOldest(list));
     setPage(1);
-  }, [search, staff, onlineFilter]);
+  }, [search, staff, statusFilter]);
 
   const fetchStaff = async () => {
     try {
@@ -170,13 +230,23 @@ export default function AdminStaffPage() {
     }
   };
 
-  // ✅ Stats
+  // ✅ Stats with 4 statuses
   const stats = useMemo(() => {
     const total = staff.length;
-    const active = staff.filter(s => s.isActive).length;
-    const disabled = staff.filter(s => !s.isActive).length;
-    const online = staff.filter(isMemberOnline).length;
-    return { total, active, disabled, online };
+    let online = 0;
+    let onBreak = 0;
+    let offline = 0;
+    let disabled = 0;
+
+    staff.forEach(s => {
+      const st = getMemberStatus(s);
+      if (st === 'ONLINE') online++;
+      else if (st === 'ON BREAK') onBreak++;
+      else if (st === 'DISABLED') disabled++;
+      else offline++;
+    });
+
+    return { total, online, onBreak, offline, disabled };
   }, [staff]);
 
   // ✅ PAGINATION
@@ -378,104 +448,150 @@ export default function AdminStaffPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+      {/* Stats - 5 Realtime Presence Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-indigo-100 text-sm font-medium">Total Staff</p>
-              <p className="text-3xl font-bold mt-1">{stats.total}</p>
+              <p className="text-indigo-100 text-xs font-medium uppercase tracking-wider">Total Staff</p>
+              <p className="text-2xl font-bold mt-1">{stats.total}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiUser className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiUser className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-emerald-100 text-sm font-medium">Active</p>
-              <p className="text-3xl font-bold mt-1">{stats.active}</p>
+              <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                Online
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.online}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiCheckCircle className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiActivity className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-rose-100 text-sm font-medium">Disabled</p>
-              <p className="text-3xl font-bold mt-1">{stats.disabled}</p>
+              <p className="text-amber-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white" />
+                On Break
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.onBreak}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiXCircle className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiClock className="text-xl text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+        <div className="bg-gradient-to-br from-slate-500 to-slate-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-amber-100 text-sm font-medium">Online now</p>
-              <p className="text-3xl font-bold mt-1">{stats.online}</p>
+              <p className="text-slate-200 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-300" />
+                Offline
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.offline}</p>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiActivity className="text-2xl text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiUser className="text-xl text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200 col-span-2 sm:col-span-1">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-rose-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-white" />
+                Disabled
+              </p>
+              <p className="text-2xl font-bold mt-1">{stats.disabled}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FiXCircle className="text-xl text-white" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search + Online Filter (Rows per page moved to footer) */}
+      {/* Search + Status Filter */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
           <div className="relative flex-1">
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
             <input
               type="text"
-              placeholder="Search by staff name or email..."
+              placeholder="Search by staff name, email or ID..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
           </div>
 
-          {/* ✅ Online / Offline / All filter */}
-          <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl">
+          {/* ✅ 5 Filter Tabs */}
+          <div className="flex flex-wrap bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl gap-1">
             <button
-              onClick={() => setOnlineFilter('all')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                onlineFilter === 'all'
+              onClick={() => setStatusFilter('all')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                statusFilter === 'all'
                   ? 'bg-white dark:bg-gray-700 shadow text-indigo-600 dark:text-indigo-400'
-                  : 'text-gray-500'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               All ({stats.total})
             </button>
             <button
-              onClick={() => setOnlineFilter('online')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                onlineFilter === 'online'
+              onClick={() => setStatusFilter('online')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'online'
                   ? 'bg-white dark:bg-gray-700 shadow text-emerald-600'
-                  : 'text-gray-500'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Online ({stats.online})
             </button>
             <button
-              onClick={() => setOnlineFilter('offline')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                onlineFilter === 'offline'
+              onClick={() => setStatusFilter('break')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'break'
+                  ? 'bg-white dark:bg-gray-700 shadow text-amber-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              On Break ({stats.onBreak})
+            </button>
+            <button
+              onClick={() => setStatusFilter('offline')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'offline'
                   ? 'bg-white dark:bg-gray-700 shadow text-gray-700 dark:text-gray-300'
-                  : 'text-gray-500'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-gray-400" />
-              Offline ({stats.total - stats.online})
+              Offline ({stats.offline})
+            </button>
+            <button
+              onClick={() => setStatusFilter('disabled')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'disabled'
+                  ? 'bg-white dark:bg-gray-700 shadow text-rose-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Disabled ({stats.disabled})
             </button>
           </div>
         </div>
@@ -487,8 +603,8 @@ export default function AdminStaffPage() {
           <FiUser className="mx-auto text-5xl text-gray-300 mb-4" />
           <h2 className="text-xl font-semibold mb-2">No Staff Found</h2>
           <p className="text-gray-500">
-            {onlineFilter !== 'all'
-              ? `No ${onlineFilter} staff found`
+            {statusFilter !== 'all'
+              ? `No ${statusFilter} staff found`
               : 'Try changing your search or add new staff members'}
           </p>
         </div>
@@ -499,18 +615,21 @@ export default function AdminStaffPage() {
               <thead className="bg-gray-50 dark:bg-gray-900/60">
                 <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold">
                   <th className="px-5 py-3">Staff</th>
-                  <th className="px-5 py-3">Contact</th>
-                  <th className="px-5 py-3">Role</th>
+                  <th className="px-5 py-3">Email</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Disabled Until</th>
                   <th className="px-5 py-3">Last Login</th>
-                  <th className="px-5 py-3">Joined</th>
+                  <th className="px-5 py-3">Last Seen</th>
+                  <th className="px-5 py-3">Working Time</th>
+                  <th className="px-5 py-3">Active Time</th>
+                  <th className="px-5 py-3">Break Time</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {pagedStaff.map(member => {
-                  const isOnline = isMemberOnline(member);
+                  const status = getMemberStatus(member);
+                  const dotColor = getStatusDotColor(status);
+                  const times = calculateWorkingTimes(member);
 
                   return (
                     <tr
@@ -531,9 +650,7 @@ export default function AdminStaffPage() {
                                 <FiUser className="text-indigo-600 text-lg" />
                               )}
                             </div>
-                            {isOnline && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white dark:border-gray-800" />
-                            )}
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ${dotColor} border-2 border-white dark:border-gray-800 ${status === 'ONLINE' ? 'animate-pulse' : ''}`} />
                           </div>
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-800 dark:text-white text-sm">
@@ -548,89 +665,97 @@ export default function AdminStaffPage() {
 
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                          <FiMail className="text-gray-400" />
+                          <FiMail className="text-gray-400 text-xs" />
                           {member.email}
                         </div>
                       </td>
 
+                      {/* Realtime Status Badge */}
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                          Staff
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                            member.isActive
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {member.isActive ? (
-                            <>
-                              <FiCheckCircle className="text-xs" />
-                              Enabled
-                            </>
-                          ) : (
-                            <>
-                              <FiXCircle className="text-xs" />
-                              Disabled
-                            </>
+                        <div className="flex flex-col items-start gap-1">
+                          {status === 'ONLINE' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/50">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              ONLINE
+                            </span>
                           )}
-                        </span>
+                          {status === 'ON BREAK' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50">
+                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                              ON BREAK
+                            </span>
+                          )}
+                          {status === 'OFFLINE' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700">
+                              <span className="w-2 h-2 rounded-full bg-gray-400" />
+                              OFFLINE
+                            </span>
+                          )}
+                          {status === 'DISABLED' && (
+                            <div className="flex flex-col">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-700/50">
+                                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                DISABLED
+                              </span>
+                              {member.disabledUntil && (
+                                <span className="text-[10px] text-rose-500 mt-0.5">
+                                  Until {formatUntilTime(member.disabledUntil)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        {!member.isActive && member.disabledUntil ? (
-                          <div className="flex flex-col">
-                            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
-                              <FiClock className="text-xs" />
-                              {formatUntilTime(member.disabledUntil)}
-                            </span>
-                            <span className="text-[11px] text-gray-400 mt-0.5">
-                              {formatFullDate(member.disabledUntil)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-sm">—</span>
-                        )}
-                      </td>
-
+                      {/* Last Login */}
                       <td className="px-5 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span
-                            className={`inline-flex items-center gap-1.5 text-sm font-medium ${
-                              member.lastLogin
-                                ? isOnline
-                                  ? 'text-emerald-600'
-                                  : 'text-gray-700 dark:text-gray-300'
-                                : 'text-gray-400'
-                            }`}
-                          >
-                            <FiLogIn className="text-xs" />
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+                            <FiLogIn className="text-xs text-gray-400" />
                             {formatRelativeTime(member.lastLogin)}
                           </span>
                           {member.lastLogin && (
-                            <span className="text-[11px] text-gray-400 mt-0.5">
+                            <span className="text-[10px] text-gray-400 mt-0.5">
                               {formatFullDate(member.lastLogin)}
                             </span>
                           )}
                         </div>
                       </td>
 
+                      {/* Last Seen */}
                       <td className="px-5 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                          <FiCalendar className="text-xs" />
-                          {new Date(member.createdAt).toLocaleDateString(
-                            'en-IN',
-                            {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric'
-                            }
+                        <div className="flex flex-col">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+                            <FiClock className="text-xs text-gray-400" />
+                            {formatRelativeTime(member.lastSeen || member.lastLogin)}
+                          </span>
+                          {(member.lastSeen || member.lastLogin) && (
+                            <span className="text-[10px] text-gray-400 mt-0.5">
+                              {formatFullDate(member.lastSeen || member.lastLogin)}
+                            </span>
                           )}
                         </div>
+                      </td>
+
+                      {/* Working Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-mono">
+                          {times.working}
+                        </span>
+                      </td>
+
+                      {/* Active Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-mono">
+                          {times.active}
+                        </span>
+                      </td>
+
+                      {/* Break Time */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-mono">
+                          {times.break}
+                        </span>
                       </td>
 
                       <td className="px-5 py-4 whitespace-nowrap text-right">

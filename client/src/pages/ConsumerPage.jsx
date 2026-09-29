@@ -152,10 +152,30 @@ function ConsumerPageContent() {
     };
   }, [fetchProducts, fetchCategories]);
 
+  const [isOnBreak, setIsOnBreak] = useState(user?.isOnBreak || false);
+
+  useEffect(() => {
+    if (user) {
+      setIsOnBreak(user.isOnBreak || false);
+    }
+  }, [user]);
+
+  const toggleBreak = () => {
+    const newStatus = !isOnBreak;
+    setIsOnBreak(newStatus);
+    if (user && user._id) {
+      socket.emit("setBreakStatus", { userId: user._id, isOnBreak: newStatus });
+    }
+  };
+
   const handleLogout = () => {
     if (cartItems.length > 0) {
       toast.error("Please clear cart before logging out");
       return;
+    }
+
+    if (user && user._id) {
+      socket.emit("userDisconnected", user._id);
     }
 
     localStorage.removeItem("counterToken");
@@ -174,7 +194,7 @@ function ConsumerPageContent() {
       return;
     }
 
-    if (!user || !user.counterId) {
+    if (!user || (!user.counterId && !user._id)) {
       toast.error("Counter not identified. Please login again.");
       return;
     }
@@ -194,14 +214,18 @@ function ConsumerPageContent() {
         price: item.price,
       }));
 
+      const counterDisplayName = user?.counter?.name || user?.counterName || user?.name || "Counter 1";
+
       const { data } = await api.post("/orders", {
         items: orderItems,
-        counterId: user.counterId,
+        counter: user.counter?._id || user.counterId || user._id,
+        counterId: user.counter?._id || user.counterId || user._id,
+        counterName: counterDisplayName,
         payment: {
           method: "Cash",
           receivedAmount: cash,
           changeReturned: changeAmount,
-          status: "Paid" // Default for cash in consumer? Or leave default.
+          status: "Paid"
         }
       });
 
@@ -214,6 +238,8 @@ function ConsumerPageContent() {
         paymentMethod: "CASH",
         createdAt: new Date().toISOString(),
         customerName: null,
+        counter: data?.counter || user?.counter || { name: counterDisplayName },
+        counterName: data?.counterName || counterDisplayName,
       };
 
       setLastOrder(receiptOrder);
@@ -245,7 +271,7 @@ function ConsumerPageContent() {
       return;
     }
 
-    if (!user || !user.counterId) {
+    if (!user || (!user.counterId && !user._id)) {
       toast.error("Counter not identified. Please login again.");
       return;
     }
@@ -260,12 +286,16 @@ function ConsumerPageContent() {
         price: item.price,
       }));
 
+      const counterDisplayName = user?.counter?.name || user?.counterName || user?.name || "Counter 1";
+
       // Step 1: Create order + Cashfree session (backend calculates amount)
       const { data: sessionData } = await api.post(
         "/payments/cashfree/create-session",
         {
           items: orderItems,
-          counterId: user.counterId,
+          counter: user.counter?._id || user.counterId || user._id,
+          counterId: user.counter?._id || user.counterId || user._id,
+          counterName: counterDisplayName,
           staffId: user._id || null,
           staffName: user.name || "",
         }
@@ -330,6 +360,8 @@ function ConsumerPageContent() {
           paymentStatus: "PAID",
           createdAt: order.createdAt,
           customerName: null,
+          counter: order.counter || user?.counter || { name: counterDisplayName },
+          counterName: order.counterName || counterDisplayName,
         };
 
         setLastOrder(receiptOrder);
@@ -414,7 +446,7 @@ function ConsumerPageContent() {
     return null;
   }
 
-  const counterNumber = user?.counterId ? user.counterId.split("-")[1] : "1";
+  const counterDisplayName = user?.counter?.name || user?.counterName || user?.name || "Counter 1";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
@@ -450,13 +482,18 @@ function ConsumerPageContent() {
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20">
                 <FiMonitor className="text-indigo-500 text-sm" />
-                <span className="text-xs text-gray-600 dark:text-gray-400">
-                  Counter
-                </span>
+                
                 <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                  {counterNumber}
+                  {counterDisplayName}
                 </span>
               </div>
+
+              <button
+                onClick={toggleBreak}
+                className={`h-10 px-3 rounded-xl border ${isOnBreak ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700/50" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800"} font-semibold flex items-center gap-1 transition-all`}
+              >
+                <span className="hidden sm:inline text-sm">{isOnBreak ? "Resume Work" : "Take Break"}</span>
+              </button>
 
               <button
                 onClick={handleLogout}
@@ -634,7 +671,7 @@ function ConsumerPageContent() {
       {/* ✅ Silent print target — invisible on screen, only prints */}
       {lastOrder && (
         <div className="hidden print:block">
-          <ThermalReceipt order={lastOrder} counter={user} />
+          <ThermalReceipt order={lastOrder} counter={user?.counter || { counterName: counterDisplayName, name: counterDisplayName }} />
         </div>
       )}
 

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useSelector } from "react-redux";
 import { useEffect, useState } from "react";
+import socket from "./services/socket";
 
 import ConsumerPage from "./pages/ConsumerPage";
 import StaffPage from "./pages/StaffPage";
@@ -12,7 +13,6 @@ import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import StockRefillPage from "./pages/StockRefillPage";
-import SalesReportPage from "./pages/SalesReportPage";
 import AdminOrdersPage from "./pages/AdminOrdersPage";
 import AdminStaffPage from "./pages/AdminStaffPage";
 import AdminAlertsPage from "./pages/AdminAlertsPage";
@@ -28,6 +28,85 @@ function App() {
     const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
     setIsPWA(standalone);
   }, []);
+
+  // Global presence: Connect, Heartbeat (every 25s), Force Logout & Beacon Disconnect
+  useEffect(() => {
+    const getActiveUserId = () => {
+      if (isAuthenticated && user?._id) return user._id;
+      const counterUserData = localStorage.getItem('counterUser');
+      if (counterUserData) {
+        try {
+          const parsed = JSON.parse(counterUserData);
+          if (parsed._id) return parsed._id;
+        } catch (e) {}
+      }
+      return null;
+    };
+
+    const activeUserId = getActiveUserId();
+
+    if (activeUserId) {
+      socket.emit('userConnected', activeUserId);
+      const handleConnect = () => socket.emit('userConnected', activeUserId);
+      socket.on('connect', handleConnect);
+
+      // Heartbeat every 25 seconds
+      const heartbeatTimer = setInterval(() => {
+        const currentId = getActiveUserId();
+        if (currentId) {
+          socket.emit('heartbeat', currentId);
+        }
+      }, 25000);
+
+      // Send beacon disconnect on tab/window close
+      const handleBeforeUnload = () => {
+        const id = getActiveUserId();
+        if (id && navigator.sendBeacon) {
+          const beaconUrl = `${import.meta.env.VITE_API_URL || '/api'}/auth/beacon-disconnect`;
+          const blob = new Blob([JSON.stringify({ userId: id })], { type: 'application/json' });
+          navigator.sendBeacon(beaconUrl, blob);
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      return () => {
+        socket.off('connect', handleConnect);
+        clearInterval(heartbeatTimer);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
+    }
+  }, [isAuthenticated, user]);
+
+  // Global Force Logout listener
+  useEffect(() => {
+    const handleForceLogout = (data) => {
+      const targetUserId = typeof data === 'object' ? data?.userId : data;
+      const currentAuthId = user?._id;
+      let counterUserId = null;
+      try {
+        const parsed = JSON.parse(localStorage.getItem('counterUser') || '{}');
+        counterUserId = parsed._id;
+      } catch (e) {}
+
+      if (
+        !targetUserId ||
+        targetUserId === currentAuthId ||
+        targetUserId === counterUserId
+      ) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('counterToken');
+        localStorage.removeItem('counterUser');
+        window.location.href = '/login';
+      }
+    };
+
+    socket.on('userForceLogout', handleForceLogout);
+    return () => {
+      socket.off('userForceLogout', handleForceLogout);
+    };
+  }, [user]);
 
   // ✅ Check if counter user is logged in
   const isCounterLoggedIn = !!localStorage.getItem('counterToken');
@@ -113,14 +192,6 @@ function App() {
           element={
             <ProtectedRoute roles={["admin", "staff"]}>
               <Layout><StockRefillPage /></Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/sales-report"
-          element={
-            <ProtectedRoute roles={["admin", "staff"]}>
-              <Layout><SalesReportPage /></Layout>
             </ProtectedRoute>
           }
         />

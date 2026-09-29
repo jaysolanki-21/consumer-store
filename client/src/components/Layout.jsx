@@ -21,6 +21,7 @@ import {
   FiFileText,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronDown,
 } from "react-icons/fi";
 
 export default function Layout({ children }) {
@@ -34,6 +35,16 @@ export default function Layout({ children }) {
   // REALTIME COUNTERS
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
+  
+  const [isOnBreak, setIsOnBreak] = useState(user?.isOnBreak || false);
+
+  const toggleBreak = () => {
+    const newStatus = !isOnBreak;
+    setIsOnBreak(newStatus);
+    if (user && user._id) {
+      socket.emit("setBreakStatus", { userId: user._id, isOnBreak: newStatus });
+    }
+  };
 
   // =========================
   // FETCH PENDING ORDERS
@@ -134,6 +145,9 @@ export default function Layout({ children }) {
   // LOGOUT
   // =========================
   const handleLogout = () => {
+    if (user && user._id) {
+      socket.emit("userDisconnected", user._id);
+    }
     dispatch(logout());
     navigate("/login");
   };
@@ -178,13 +192,15 @@ export default function Layout({ children }) {
     { path: "/admin", label: "Dashboard", icon: FiGrid },
     { path: "/admin/products", label: "Products", icon: FiBox },
     { path: "/admin/categories", label: "Categories", icon: FiLayers },
-    { path: "/admin/stock-refill", label: "Stock", icon: FiDatabase },
-    { path: "/admin/sales-report", label: "Report", icon: FiFileText },
     { path: "/admin/orders", label: "Orders", icon: FiShoppingBag },
+    { path: "/admin/stock-refill", label: "Stock", icon: FiDatabase },
+    { path: "/admin/alerts", label: "Alerts", icon: FiBell, badge: lowStockCount },
     { path: "/admin/staff", label: "Staff", icon: FiUsers },
     { path: "/admin/counters", label: "Counters", icon: FiGrid },
     { path: "/admin/insights", label: "Insights", icon: FiBarChart2 },
   ];
+
+
 
   // =========================
   // MOBILE SIDEBAR
@@ -269,7 +285,7 @@ export default function Layout({ children }) {
         </div>
 
         {/* NAVIGATION */}
-        <div className="p-4">
+        <div className="p-4 overflow-y-auto max-h-[calc(100vh-140px)]">
           {!sidebarCollapsed && (
             <p className="px-3 mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
               Management
@@ -280,6 +296,7 @@ export default function Layout({ children }) {
             {adminNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
+
 
               return (
                 <Link
@@ -309,6 +326,11 @@ export default function Layout({ children }) {
                     `}
                   />
                   {!sidebarCollapsed && <span>{item.label}</span>}
+                  {!sidebarCollapsed && item.badge > 0 && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -472,6 +494,20 @@ export default function Layout({ children }) {
               </p>
             </div>
           </div>
+
+          {/* BREAK TOGGLE */}
+          {user?.role === "staff" && (
+            <button
+              onClick={toggleBreak}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                isOnBreak 
+                  ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700/50" 
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800"
+              }`}
+            >
+              {isOnBreak ? "Resume Work" : "Take Break"}
+            </button>
+          )}
 
           {/* LOGOUT */}
           <button

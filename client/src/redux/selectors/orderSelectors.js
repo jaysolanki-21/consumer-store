@@ -58,8 +58,11 @@ export const selectFilteredOrdersBySearch = (filterDate, searchQuery) =>
     const q = searchQuery.toLowerCase();
     return orders.filter(
       (o) =>
-        o.rollNumber.toLowerCase().includes(q) ||
-        o._id.toLowerCase().includes(q)
+        (o.counter?.name && o.counter.name.toLowerCase().includes(q)) ||
+        (o.counterName && o.counterName.toLowerCase().includes(q)) ||
+        (o.billNumber && o.billNumber.toLowerCase().includes(q)) ||
+        (o.invoiceNumber && o.invoiceNumber.toLowerCase().includes(q)) ||
+        (o._id && o._id.toLowerCase().includes(q))
     );
   });
 

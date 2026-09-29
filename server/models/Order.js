@@ -17,8 +17,9 @@ const orderSchema = new mongoose.Schema({
   status: { type: String, enum: ['Pending', 'Processing', 'Confirmed', 'Cancelled'], default: 'Pending' },
   confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   confirmedAt: { type: Date },
-  counterId: { type: String, required: true, trim: true },
-  counterName: { type: String },
+  counter: { type: mongoose.Schema.Types.ObjectId, ref: 'Counter' },
+  counterId: { type: String, trim: true },
+  counterName: { type: String, trim: true },
   staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   staffName: { type: String },
   payment: {
@@ -42,7 +43,51 @@ const orderSchema = new mongoose.Schema({
     by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     at: { type: Date, default: Date.now }
   }]
-}, { timestamps: true });
+}, {
+  timestamps: true,
+  toJSON: {
+    virtuals: true,
+    transform: (doc, ret) => {
+      if (ret.counter && typeof ret.counter === 'object' && ret.counter._id) {
+        if (!ret.counterName && ret.counter.name) {
+          ret.counterName = ret.counter.name;
+        }
+      } else if (!ret.counter && (ret.counterId || ret.counterName)) {
+        ret.counter = {
+          _id: ret.counterId || '',
+          name: ret.counterName || 'Counter 1'
+        };
+      } else if (typeof ret.counter === 'string') {
+        ret.counter = {
+          _id: ret.counter,
+          name: ret.counterName || 'Counter 1'
+        };
+      }
+      return ret;
+    }
+  },
+  toObject: {
+    virtuals: true,
+    transform: (doc, ret) => {
+      if (ret.counter && typeof ret.counter === 'object' && ret.counter._id) {
+        if (!ret.counterName && ret.counter.name) {
+          ret.counterName = ret.counter.name;
+        }
+      } else if (!ret.counter && (ret.counterId || ret.counterName)) {
+        ret.counter = {
+          _id: ret.counterId || '',
+          name: ret.counterName || 'Counter 1'
+        };
+      } else if (typeof ret.counter === 'string') {
+        ret.counter = {
+          _id: ret.counter,
+          name: ret.counterName || 'Counter 1'
+        };
+      }
+      return ret;
+    }
+  }
+});
 
 orderSchema.pre('save', function(next) {
   if (!this.invoiceNumber) {
@@ -55,6 +100,7 @@ orderSchema.pre('save', function(next) {
 });
 
 orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ counter: 1, createdAt: -1 });
 orderSchema.index({ counterId: 1, createdAt: -1 });
 orderSchema.index({ staffId: 1, createdAt: -1 });
 orderSchema.index({ 'payment.method': 1, createdAt: -1 });

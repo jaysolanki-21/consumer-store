@@ -6,8 +6,11 @@
 
 import { Cashfree, CFEnvironment } from 'cashfree-pg';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import Counter from '../models/Counter.js';
+import User from '../models/User.js';
 
 // ─── Cashfree SDK Configuration ───────────────────────────────────────────────
 // Configured once at module load from environment variables.
@@ -39,7 +42,7 @@ const generateCfOrderId = () => {
 /**
  * POST /api/payments/cashfree/create-session
  *
- * Accepts: { items, counterId, staffId, staffName }
+ * Accepts: { items, counter, counterId, counterName, staffId, staffName }
  * Returns: { orderId (MongoDB), cfOrderId, paymentSessionId, amount }
  *
  * Security:
@@ -49,15 +52,17 @@ const generateCfOrderId = () => {
  */
 export const createCashfreeSession = async (req, res) => {
   try {
-    const { items, counterId, staffId, staffName } = req.body;
+    const { items, counter, counterId, counterName, staffId, staffName } = req.body;
 
     // ── Validate input ────────────────────────────────────────────────────────
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Cart is empty' });
     }
 
-    if (!counterId) {
-      return res.status(400).json({ message: 'Counter ID is required' });
+    const rawCounter = (typeof counter === 'object' && counter?._id) ? counter._id : (counter || counterId);
+
+    if (!rawCounter) {
+      return res.status(400).json({ message: 'Counter is required' });
     }
 
     // ── Verify stock availability ─────────────────────────────────────────────
@@ -104,14 +109,28 @@ export const createCashfreeSession = async (req, res) => {
       });
     }
 
-    // ── Counter name map ──────────────────────────────────────────────────────
-    const counterNames = {
-      'counter-1': 'Counter 1', 'counter-2': 'Counter 2',
-      'counter-3': 'Counter 3', 'counter-4': 'Counter 4',
-      'counter-5': 'Counter 5', 'counter-6': 'Counter 6',
-      'counter-7': 'Counter 7', 'counter-8': 'Counter 8',
-      'counter-9': 'Counter 9', 'counter-10': 'Counter 10'
-    };
+    // ── Resolve Counter document dynamically ────────────────────────────────
+    let counterDoc = null;
+    if (mongoose.Types.ObjectId.isValid(rawCounter)) {
+      counterDoc = await Counter.findById(rawCounter);
+      if (!counterDoc) {
+        counterDoc = await Counter.findOne({ userId: rawCounter });
+      }
+    }
+    if (!counterDoc && typeof rawCounter === 'string') {
+      counterDoc = await Counter.findOne({ name: rawCounter });
+    }
+    if (!counterDoc && mongoose.Types.ObjectId.isValid(rawCounter)) {
+      const u = await User.findById(rawCounter);
+      if (u) {
+        counterDoc = await Counter.findOne({ userId: u._id });
+      }
+    }
+
+    const resolvedCounterId = counterDoc ? counterDoc._id : (mongoose.Types.ObjectId.isValid(rawCounter) ? rawCounter : null);
+    const resolvedCounterName = counterDoc 
+      ? counterDoc.name 
+      : (counterName || (typeof counter === 'object' ? counter.name : null) || 'Counter 1');
 
     // ── Generate unique Cashfree order ID ─────────────────────────────────────
     const cfOrderId = generateCfOrderId();
@@ -121,8 +140,9 @@ export const createCashfreeSession = async (req, res) => {
       items: orderItems,
       totalAmount,
       status: 'Pending',
-      counterId,
-      counterName: counterNames[counterId] || counterId,
+      counter: resolvedCounterId || undefined,
+      counterId: resolvedCounterId ? resolvedCounterId.toString() : String(rawCounter),
+      counterName: resolvedCounterName,
       staffId: staffId || null,
       staffName: staffName || '',
       payment: {
@@ -150,18 +170,15 @@ export const createCashfreeSession = async (req, res) => {
       order_amount: Number(totalAmount.toFixed(2)),
       order_currency: 'INR',
       customer_details: {
-        // Counter-based POS — no customer email/phone required by Cashfree sandbox
-        // For production, collect actual customer details if needed.
-        customer_id: `counter_${counterId}_${Date.now()}`,
-        customer_name: counterNames[counterId] || counterId,
-        customer_email: `pos_${counterId}@apcstore.local`,
-        customer_phone: '9999999999' // placeholder — update if collecting real phone
+        customer_id: `counter_${resolvedCounterId ? resolvedCounterId.toString().slice(-8) : 'pos'}_${Date.now()}`,
+        customer_name: resolvedCounterName,
+        customer_email: `pos_${resolvedCounterId ? resolvedCounterId.toString().slice(-6) : 'pos'}@apcstore.local`,
+        customer_phone: '9999999999'
       },
       order_meta: {
-        // No return_url needed for SDK popup integration
         notify_url: `${process.env.CLIENT_URL?.replace('http://localhost:5173', `http://localhost:${process.env.PORT || 5000}`)}/api/payments/cashfree/webhook`
       },
-      order_note: `Counter POS Order — ${counterNames[counterId] || counterId}`
+      order_note: `Counter POS Order — ${resolvedCounterName}`
     };
 
     let cfResponse;
@@ -262,7 +279,8 @@ export const verifyCashfreePayment = async (req, res) => {
       const populatedOrder = await Order.findById(order._id)
         .populate('items.productId')
         .populate('confirmedBy', 'name')
-        .populate('staffId', 'name');
+        .populate('staffId', 'name')
+        .populate('counter', 'name');
       return res.json({ success: true, order: populatedOrder });
     }
 
@@ -305,7 +323,8 @@ export const verifyCashfreePayment = async (req, res) => {
       const populatedOrder = await Order.findById(order._id)
         .populate('items.productId')
         .populate('confirmedBy', 'name')
-        .populate('staffId', 'name');
+        .populate('staffId', 'name')
+        .populate('counter', 'name');
 
       const io = req.app.get('io');
       io.emit('newOrder', populatedOrder);
@@ -442,7 +461,8 @@ export const cashfreeWebhook = async (req, res) => {
       const populatedOrder = await Order.findById(order._id)
         .populate('items.productId')
         .populate('confirmedBy', 'name')
-        .populate('staffId', 'name');
+        .populate('staffId', 'name')
+        .populate('counter', 'name');
 
       // Emit socket event
       // Note: io is not on req here (webhook hits before any middleware that sets it)

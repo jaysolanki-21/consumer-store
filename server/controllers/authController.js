@@ -1,5 +1,8 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import User from '../models/User.js';
+import Counter from '../models/Counter.js';
+import { disconnectUserBeacon } from '../sockets/socketHandler.js';
 
 const generateToken = (id) => {
   if (!process.env.JWT_SECRET) {
@@ -11,64 +14,89 @@ const generateToken = (id) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     // Validate input
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
-    
+
     const user = await User.findOne({ email });
-    
+
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
-    
+
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
-    
-    // Check if user is active
-    if (!user.isActive || (user.disabledUntil && user.disabledUntil > new Date())) {
+
+    // Check if user is active / disabled
+    if (!user.isActive || (user.disabledUntil && new Date(user.disabledUntil) > new Date())) {
       return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
     }
-    
-    // ✅ Build response with all fields
+
+    // Build response with all fields
     const response = {
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
       isActive: user.isActive,
-      token: generateToken(user._id)
+      token: generateToken(user._id),
+      status: 'ONLINE',
     };
-    
-    // ✅ Always include counterId if role is counter
+
     if (user.role === 'counter') {
-      response.counterId = user.counterId;
-      // Generate counter name if not exists
-      const counterNames = {
-        'counter-1': 'Counter 1',
-        'counter-2': 'Counter 2',
-        'counter-3': 'Counter 3',
-        'counter-4': 'Counter 4',
-        'counter-5': 'Counter 5',
-        'counter-6': 'Counter 6',
-        'counter-7': 'Counter 7',
-        'counter-8': 'Counter 8',
-        'counter-9': 'Counter 9',
-        'counter-10': 'Counter 10',
+      const counterDoc = await Counter.findOne({ userId: user._id });
+      const cId = counterDoc ? counterDoc._id.toString() : user._id.toString();
+      const cName = counterDoc ? counterDoc.name : user.name;
+      response.counter = {
+        _id: cId,
+        name: cName
       };
-      response.counterName = counterNames[user.counterId] || `Counter ${user.counterId?.split('-')[1] || '1'}`;
+      response.counterId = cId;
+      response.counterName = cName;
     }
-    
-    // ✅ Update last login
+
+    // Create session / mark Online
     user.lastLogin = new Date();
+    user.lastSeen = new Date();
+    user.isOnline = true;
+    user.isOnBreak = false;
+    if (!user.currentSessionStart) {
+      user.currentSessionStart = new Date();
+    }
     await user.save();
-     
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('usersUpdated');
+      io.emit('countersUpdated');
+    }
+
     res.json(response);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+/**
+ * Endpoint for navigator.sendBeacon when closing browser/tab
+ */
+export const beaconDisconnect = async (req, res) => {
+  try {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch {}
+    }
+    const userId = body?.userId;
+    if (userId) {
+      await disconnectUserBeacon(userId);
+    }
+    res.status(200).send('OK');
+  } catch (err) {
+    res.status(200).send('OK');
   }
 };

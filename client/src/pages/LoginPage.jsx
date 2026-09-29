@@ -25,9 +25,6 @@ export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // ✅ Always remember me = true (automatic)
-  const rememberMe = true;
-
   // Load saved email if available
   useEffect(() => {
     const savedEmail = localStorage.getItem('savedEmail');
@@ -72,10 +69,10 @@ export default function LoginPage() {
         // ✅ Save counter token separately for consumer page
         localStorage.setItem('counterToken', data.token);
         localStorage.setItem('counterUser', JSON.stringify(data));
-        
+
         console.log('🔄 Counter user detected, counterId:', data.counterId);
         console.log('📋 Full user data:', data);
-        
+
         // ✅ Small delay to ensure localStorage is set
         setTimeout(() => {
           navigate('/consumer');
@@ -107,7 +104,7 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl p-8"
       >
-        
+
         {/* LOGO */}
         <div className="flex justify-center mb-6">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
