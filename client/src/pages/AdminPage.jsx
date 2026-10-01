@@ -1,334 +1,90 @@
-import { useEffect, useState } from 'react';
-import api from '../services/api';
-import socket from '../services/socket';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { FiPackage, FiDollarSign, FiShoppingBag, FiUsers, FiCalendar, FiChevronLeft, FiChevronRight, FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
-import { FaRupeeSign } from 'react-icons/fa';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import api from "../services/api";
+import socket from "../services/socket";
+import { aggregateSales, addDays, dateKeyIST, formatINR, getTodayIST, orderCounter } from "../utils/posAnalytics";
+
+const card = "border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950";
+const datePeriod = (orders, from, to) => orders.filter(o => { const d=dateKeyIST(o.confirmedAt||o.createdAt); return o.status==="Confirmed"&&d>=from&&d<=to; });
+const percentDelta = (current, previous) => previous ? `${current >= previous ? "+" : ""}${((current-previous)/previous*100).toFixed(1)}% vs prior` : "No prior period data";
+
+function Metric({ label, value, note, tone = "slate" }) {
+  const tones = { slate:"text-slate-900 dark:text-white", green:"text-emerald-700 dark:text-emerald-400", amber:"text-amber-700 dark:text-amber-400", red:"text-red-700 dark:text-red-400" };
+  return <div className={`${card} min-w-0 p-4`}><p className="text-xs font-medium text-slate-500">{label}</p><p className={`mt-2 truncate text-2xl font-semibold ${tones[tone]}`}>{value}</p><p className="mt-1 truncate text-xs text-slate-500">{note}</p></div>;
+}
 
 export default function AdminPage() {
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
+  const [records, setRecords] = useState({ orders: [], products: [], categories: [], staff: [], counters: [] });
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ totalProducts: 0, totalOrders: 0, totalRevenue: 0, todayRevenue: 0, todayProfit: 0, pendingOrders: 0 });
-
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState(null);
-  const [monthlyIncome, setMonthlyIncome] = useState(Array(12).fill(0));
-  const [monthlyProfit, setMonthlyProfit] = useState(Array(12).fill(0));
-  const [dailyIncome, setDailyIncome] = useState([]);
-
-  useEffect(() => {
-    fetchData();
-    socket.on('newOrder', fetchData);
-    socket.on('orderConfirmed', fetchData);
-    socket.on('orderCancelled', fetchData);
-    return () => {
-      socket.off('newOrder');
-      socket.off('orderConfirmed');
-      socket.off('orderCancelled');
-    };
+  const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    const results = await Promise.allSettled([api.get("/orders"), api.get("/products"), api.get("/categories"), api.get("/users/staff"), api.get("/counters")]);
+    const keys = ["orders", "products", "categories", "staff", "counters"];
+    const failed = results.some(result => result.status === "rejected");
+    setRecords(current => Object.fromEntries(keys.map((key, i) => [key, results[i].status === "fulfilled" ? results[i].value.data || [] : current[key]])));
+    setError(failed ? "Some live data could not be refreshed. Showing the latest available records." : "");
+    setLastUpdated(new Date());
+    setLoading(false);
   }, []);
-
   useEffect(() => {
-    computeMonthlyIncome();
-    if (selectedMonth !== null) {
-      computeDailyIncome(selectedMonth);
-    }
-  }, [orders, selectedYear, selectedMonth]);
+    load();
+    const events = ["newOrder", "orderConfirmed", "orderCancelled", "orderReverted", "orderUpdated", "stockUpdated", "stockRefilled", "productCreated", "productUpdated", "productDeleted", "usersUpdated", "countersUpdated"];
+    const refresh = () => load(true);
+    events.forEach(event => socket.on(event, refresh));
+    return () => events.forEach(event => socket.off(event, refresh));
+  }, [load]);
 
-  const getOrderProfit = (order) => {
-    if (order.profitAmount != null) return Number(order.profitAmount) || 0;
-    if (order.profit != null) return Number(order.profit) || 0;
+  const today = getTodayIST();
+  const yesterday = addDays(today, -1);
+  const sales = useMemo(() => aggregateSales(records.orders.filter(o => dateKeyIST(o.confirmedAt || o.createdAt) === today), records.products, records.categories), [records, today]);
+  const yesterdaySales = useMemo(() => aggregateSales(datePeriod(records.orders, yesterday, yesterday), records.products, records.categories), [records, yesterday]);
+  const todaysOrders = records.orders.filter(o => dateKeyIST(o.createdAt) === today);
+  const pendingCount = records.orders.filter(o => ["Pending", "Processing"].includes(o.status)).length;
+  const lowStock = records.products.filter(p => Number(p.stock) > 0 && Number(p.stock) - Number(p.reservedStock || 0) <= Number(p.lowStockThreshold ?? 5));
+  const outOfStock = records.products.filter(p => Number(p.stock) - Number(p.reservedStock || 0) <= 0);
+  const liveStatus = (record) => record.status || (!record.isActive || (record.disabledUntil && new Date(record.disabledUntil) > new Date()) ? "DISABLED" : record.isOnline ? (record.isOnBreak ? "ON BREAK" : "ONLINE") : "OFFLINE");
+  const inventory = { total: records.products.length, inStock: records.products.filter(p => Number(p.stock) - Number(p.reservedStock || 0) > Number(p.lowStockThreshold ?? 5)).length, low: lowStock.length, out: outOfStock.length };
+  const chartHours = sales.hours;
+  const peak = [...chartHours].sort((a, b) => b.revenue - a.revenue)[0];
+  const comparisonRanges = useMemo(() => {
+    const [y, m] = today.split("-").map(Number);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const prevMonthLast = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+    const prevMonthStart = `${prevMonthLast.slice(0, 7)}-01`;
+    const weekStart = (() => { const d = new Date(`${today}T00:00:00Z`); const day=d.getUTCDay(); d.setUTCDate(d.getUTCDate()-(day===0?6:day-1)); return d.toISOString().slice(0,10); })();
+    const daysSoFar = Math.floor((new Date(`${today}T00:00:00Z`) - new Date(`${weekStart}T00:00:00Z`))/86400000);
+    const priorMonthDays = new Date(Date.UTC(y,m-1,0)).getUTCDate();
+    const currentDay = Number(today.slice(8,10));
+    return [
+      { label: "Today", from: today, to: today, priorFrom: yesterday, priorTo: yesterday },
+      { label: "This week", from: weekStart, to: today, priorFrom: addDays(weekStart,-7), priorTo: addDays(weekStart,daysSoFar-7) },
+      { label: "This month", from: monthStart, to: today, priorFrom: prevMonthStart, priorTo: addDays(prevMonthStart, Math.min(currentDay, priorMonthDays)-1) },
+    ];
+  }, [today, yesterday]);
+  const comparisons = comparisonRanges.map(range => {
+    const current=aggregateSales(datePeriod(records.orders,range.from,range.to),records.products,records.categories);
+    const previous=aggregateSales(datePeriod(records.orders,range.priorFrom,range.priorTo),records.products,records.categories);
+    return {...range,current,previous};
+  });
+  const topProducts = [...sales.products].sort((a,b)=>b.quantity-a.quantity).slice(0,6);
+  const attention = [
+    ...outOfStock.slice(0,5).map(p=>({tone:"red",title:`${p.name} is out of stock`, detail:`Available: ${Math.max(0,Number(p.stock)-Number(p.reservedStock||0))}`})),
+    ...lowStock.filter(p=>!outOfStock.includes(p)).slice(0,5).map(p=>({tone:"amber",title:`${p.name} is running low`,detail:`${Math.max(0,Number(p.stock)-Number(p.reservedStock||0))} available`})),
+    ...(pendingCount?[{tone:"amber",title:`${pendingCount} orders need attention`,detail:"Pending or processing"}]:[]),
+  ].slice(0,8);
+  const statusClass = (status) => ({ ONLINE:"text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300", "ON BREAK":"text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300", OFFLINE:"text-slate-600 bg-slate-100 dark:bg-slate-900 dark:text-slate-300", DISABLED:"text-red-700 bg-red-50 dark:bg-red-950 dark:text-red-300" }[status] || "text-slate-600 bg-slate-100");
 
-    const items = order.items || order.products || order.orderItems || [];
-    if (!Array.isArray(items) || items.length === 0) return 0;
-
-    return items.reduce((sum, item) => {
-      const quantity = Number(item.quantity ?? item.qty ?? 1) || 1;
-      const sellingPrice = Number(
-        item.sellingPrice ?? item.price ?? item.salePrice ?? (item.totalPrice ? item.totalPrice / quantity : 0)
-      ) || 0;
-      const product = item.product || item.productId || {};
-      const costPrice = Number(
-        item.costPrice ?? item.purchasePrice ?? item.buyingPrice ?? item.buyPrice ??
-        product.costPrice ?? product.purchasePrice ?? product.buyingPrice ?? product.buyPrice ?? 0
-      ) || 0;
-
-      return sum + ((sellingPrice - costPrice) * quantity);
-    }, 0);
-  };
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [productsRes, ordersRes] = await Promise.all([
-        api.get('/products'),
-        api.get('/orders')
-      ]);
-      const productsData = productsRes.data;
-      const ordersData = ordersRes.data;
-
-      const confirmedOrders = ordersData.filter(o => o.status === 'Confirmed');
-      const totalRevenue = confirmedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-
-      const today = new Date();
-      const todayConfirmedOrders = confirmedOrders.filter(o => {
-        const d = new Date(o.createdAt);
-        return d.toDateString() === today.toDateString();
-      });
-
-      const todayRevenue = todayConfirmedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-      const todayProfit = todayConfirmedOrders.reduce((sum, o) => sum + getOrderProfit(o), 0);
-
-      setProducts(productsData);
-      setOrders(ordersData);
-      setStats({
-        totalProducts: productsData.length,
-        totalOrders: ordersData.length,
-        totalRevenue,
-        todayRevenue,
-        todayProfit,
-        pendingOrders: ordersData.filter(o => o.status === 'Pending').length
-      });
-    } catch (err) {
-      console.error('Failed to load admin data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const computeMonthlyIncome = () => {
-    const confirmed = orders.filter(o => o.status === 'Confirmed');
-    const monthlyRevenue = Array(12).fill(0);
-    const monthlyProfitData = Array(12).fill(0);
-
-    confirmed.forEach(order => {
-      const date = new Date(order.createdAt);
-      if (date.getFullYear() === selectedYear) {
-        const month = date.getMonth();
-        monthlyRevenue[month] += Number(order.totalAmount) || 0;
-        monthlyProfitData[month] += getOrderProfit(order);
-      }
-    });
-
-    setMonthlyIncome(monthlyRevenue);
-    setMonthlyProfit(monthlyProfitData);
-  };
-
-  const computeDailyIncome = (monthIndex) => {
-    const confirmed = orders.filter(o => o.status === 'Confirmed');
-    const daysInMonth = new Date(selectedYear, monthIndex + 1, 0).getDate();
-    const dailyRevenue = Array(daysInMonth).fill(0);
-    const dailyProfitData = Array(daysInMonth).fill(0);
-
-    confirmed.forEach(order => {
-      const date = new Date(order.createdAt);
-      if (date.getFullYear() === selectedYear && date.getMonth() === monthIndex) {
-        const day = date.getDate() - 1;
-        dailyRevenue[day] += Number(order.totalAmount) || 0;
-        dailyProfitData[day] += getOrderProfit(order);
-      }
-    });
-
-    const chartData = dailyRevenue.map((revenue, idx) => ({
-      day: idx + 1,
-      revenue,
-      profit: dailyProfitData[idx]
-    }));
-
-    setDailyIncome(chartData);
-  };
-
-  const handleMonthClick = (monthIndex) => {
-    if (selectedYear === currentYear && monthIndex > currentMonth) return;
-    setSelectedMonth(monthIndex);
-  };
-
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  const isMonthClickable = (monthIndex) => {
-    if (selectedYear < currentYear) return true;
-    if (selectedYear === currentYear && monthIndex <= currentMonth) return true;
-    return false;
-  };
-
-  const yearlyConfirmedOrders = orders.filter(o => o.status === 'Confirmed' && new Date(o.createdAt).getFullYear() === selectedYear);
-  const yearlyRevenue = yearlyConfirmedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  const yearlyProfit = yearlyConfirmedOrders.reduce((sum, o) => sum + getOrderProfit(o), 0);
-  
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto flex justify-center items-center h-96">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto pb-12">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Financial Overview</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Monitor your store's performance and revenue metrics in real-time.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="bg-white dark:bg-slate-900 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Live Data
-          </div>
-        </div>
-      </div>
-
-      {/* FINTECH STAT CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-            <FaRupeeSign className="text-6xl text-emerald-500" />
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold tracking-wide uppercase mb-1">Yearly Revenue</p>
-          <h3 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mb-4">₹{yearlyRevenue.toLocaleString()}</h3>
-          <div className="flex items-center text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 w-max px-2.5 py-1 rounded-md">
-            <FiTrendingUp className="mr-1.5" /> +12.5% vs Last Year
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-            <FiTrendingUp className="text-6xl text-indigo-500" />
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold tracking-wide uppercase mb-1">Yearly Profit</p>
-          <h3 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mb-4">₹{yearlyProfit.toLocaleString()}</h3>
-          <div className="flex items-center text-xs font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 w-max px-2.5 py-1 rounded-md">
-            <FiTrendingUp className="mr-1.5" /> +8.2% vs Last Year
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-            <FiShoppingBag className="text-6xl text-blue-500" />
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold tracking-wide uppercase mb-1">Today's Revenue</p>
-          <h3 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mb-4">₹{stats.todayRevenue.toLocaleString()}</h3>
-          <div className="flex items-center text-xs font-semibold text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 w-max px-2.5 py-1 rounded-md">
-            <FiShoppingBag className="mr-1.5" /> ₹{stats.todayProfit.toLocaleString()} Profit
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-            <FiUsers className="text-6xl text-rose-500" />
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold tracking-wide uppercase mb-1">Pending Orders</p>
-          <h3 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mb-4">{stats.pendingOrders}</h3>
-          <div className="flex items-center text-xs font-semibold text-rose-600 bg-rose-50 dark:bg-rose-500/10 dark:text-rose-400 w-max px-2.5 py-1 rounded-md">
-            <FiUsers className="mr-1.5" /> Action Required
-          </div>
-        </div>
-      </div>
-
-      {/* CHART & CALENDAR SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* LEFT COLUMN: MONTHLY CALENDAR GRID */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex-1">
-            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <FiCalendar className="text-indigo-500" /> Fiscal {selectedYear}
-              </h2>
-              <div className="flex items-center bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                <button onClick={() => setSelectedYear(prev => prev - 1)} className="p-2 text-slate-400 hover:text-indigo-600 transition"><FiChevronLeft size={16}/></button>
-                <span className="text-sm font-bold px-2">{selectedYear}</span>
-                <button onClick={() => selectedYear < currentYear && setSelectedYear(prev => prev + 1)} className={`p-2 transition ${selectedYear < currentYear ? 'text-slate-400 hover:text-indigo-600' : 'text-slate-200 dark:text-slate-700'}`}><FiChevronRight size={16}/></button>
-              </div>
-            </div>
-            
-            <div className="p-4 grid grid-cols-3 gap-2">
-              {monthlyIncome.map((inc, idx) => {
-                const clickable = isMonthClickable(idx);
-                const isSelected = selectedMonth === idx;
-                const profit = monthlyProfit[idx] || 0;
-                
-                return (
-                  <div 
-                    key={idx}
-                    onClick={() => clickable && handleMonthClick(idx)}
-                    className={`p-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all duration-200 ${
-                      !clickable ? "opacity-30 cursor-not-allowed" : 
-                      isSelected ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none" : 
-                      "hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-                    }`}
-                  >
-                    <span className={`text-xs font-bold uppercase ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>{monthNames[idx]}</span>
-                    <span className={`text-sm font-bold mt-1 ${isSelected ? "text-white" : "text-slate-700 dark:text-slate-200"}`}>
-                      {inc > 0 ? `₹${(inc/1000).toFixed(1)}k` : '-'}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: CHART AREA */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 flex-1 flex flex-col">
-            {selectedMonth === null ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                <FiTrendingUp className="text-6xl mb-4 opacity-20" />
-                <p>Select a month from the calendar to view daily performance</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">Daily Performance</h2>
-                    <p className="text-sm text-slate-500">{monthNames[selectedMonth]} {selectedYear}</p>
-                  </div>
-                  <button onClick={() => setSelectedMonth(null)} className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-3 py-1.5 rounded-lg transition">Close</button>
-                </div>
-                
-                <div className="flex-1 w-full min-h-[350px]">
-                  {dailyIncome.every(d => d.revenue === 0) ? (
-                     <div className="h-full flex items-center justify-center text-slate-400 text-sm">No data for this month</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dailyIncome} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                          </linearGradient>
-                          <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} tickFormatter={(v) => `₹${v}`} />
-                        <Tooltip 
-                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          formatter={(val) => [`₹${val.toLocaleString()}`]}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
-                        <Area type="monotone" name="Revenue" dataKey="revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                        <Area type="monotone" name="Profit" dataKey="profit" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProf)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
+  if (loading && !records.products.length && !records.orders.length) return <div className="grid min-h-72 place-items-center text-sm text-slate-500"><RefreshCw size={20} className="animate-spin"/>Loading store activity…</div>;
+  return <div className="space-y-5 pb-8">
+    <header className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">Store Dashboard</h1><p className="mt-1 text-sm text-slate-500">Live store activity for {new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",dateStyle:"full"}).format(new Date())}</p></div><button onClick={()=>load()} className="inline-flex h-9 items-center gap-2 rounded border border-slate-300 px-3 text-sm dark:border-slate-700"><RefreshCw size={15}/>Refresh</button></header>
+    {error&&<p role="status" className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-6"><Metric label="Today's Revenue" value={formatINR(sales.revenue)} note={percentDelta(sales.revenue,yesterdaySales.revenue)} tone="green"/><Metric label="Today's Orders" value={todaysOrders.length} note={`${percentDelta(todaysOrders.length,records.orders.filter(o=>dateKeyIST(o.createdAt)===yesterday).length)} · all statuses`}/><Metric label="Today's Profit" value={formatINR(sales.profit)} note={`${sales.margin.toFixed(1)}% margin`} tone="green"/><Metric label="Pending Orders" value={pendingCount} note="Pending + processing" tone={pendingCount?"amber":"slate"}/><Metric label="Low Stock" value={lowStock.length} note="At or below threshold" tone={lowStock.length?"amber":"slate"}/><Metric label="Out of Stock" value={outOfStock.length} note="No available units" tone={outOfStock.length?"red":"slate"}/></div>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]"><section className={`${card} p-4`}><div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><h2 className="font-semibold">Today's Sales</h2><p className="text-xs text-slate-500">Hourly revenue, order count and profit · IST</p></div><p className="text-xs text-slate-500">Peak: {peak?.hour} · {formatINR(peak?.revenue)}</p></div><div className="h-[280px]">{sales.confirmed.length?<ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartHours}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="hour" interval={2}/><YAxis yAxisId="money" tickFormatter={v=>`₹${Math.round(v/1000)}k`}/><YAxis yAxisId="orders" orientation="right" allowDecimals={false}/><Tooltip formatter={(v,name)=>name==="Orders"?v:formatINR(v)}/><Legend/><Area yAxisId="money" type="monotone" dataKey="revenue" name="Revenue" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.1}/><Area yAxisId="money" type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" fill="#16a34a" fillOpacity={0.08}/><Line yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke="#0f766e" dot={false}/></ComposedChart></ResponsiveContainer>:<div className="grid h-full place-items-center text-sm text-slate-500">No confirmed sales today</div>}</div></section><section className={`${card} p-4`}><h2 className="font-semibold">Sales Comparison</h2><p className="mb-3 text-xs text-slate-500">Current period compared with equivalent previous period</p><div className="divide-y divide-slate-100 dark:divide-slate-800">{comparisons.map(row=><div key={row.label} className="grid grid-cols-[1fr_auto] gap-1 py-3"><div className="text-sm font-medium">{row.label}<span className="ml-2 text-xs font-normal text-slate-500">{formatINR(row.current.revenue)}</span></div><span className={`text-xs font-medium ${row.current.revenue>=row.previous.revenue?"text-emerald-700":"text-red-700"}`}>{percentDelta(row.current.revenue,row.previous.revenue)}</span><div className="col-span-2 text-xs text-slate-500">{row.current.confirmed.length} orders · profit {formatINR(row.current.profit)}</div></div>)}</div></section></div>
+    <div className="grid gap-4 lg:grid-cols-2"><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Top Selling Products</h2>{topProducts.length?<div className="divide-y divide-slate-100 dark:divide-slate-800">{topProducts.map((p,i)=><div key={p.id} className="grid grid-cols-[24px_1fr_auto] items-center gap-x-2 py-2.5 text-sm"><span className="text-xs text-slate-400">{i+1}</span><div className="min-w-0"><p className="truncate font-medium">{p.name}</p><p className="text-xs text-slate-500">{p.quantity} units · {p.category}</p></div><div className="text-right"><p>{formatINR(p.revenue)}</p><p className="text-xs text-emerald-700">Profit {formatINR(p.profit)}</p></div></div>)}</div>:<p className="py-8 text-center text-sm text-slate-500">No product sales today</p>}</section><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Category Performance</h2>{sales.categories.length?<div className="divide-y divide-slate-100 dark:divide-slate-800">{[...sales.categories].sort((a,b)=>b.revenue-a.revenue).slice(0,6).map(c=><div key={c.name} className="flex items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{c.name}</p><p className="text-xs text-slate-500">{c.quantity} units · {c.productCount} products</p></div><div className="text-right"><p>{formatINR(c.revenue)}</p><p className="text-xs text-emerald-700">{c.margin.toFixed(1)}% margin</p></div></div>)}</div>:<p className="py-8 text-center text-sm text-slate-500">No category sales today</p>}</section></div>
+    <div className="grid gap-4 lg:grid-cols-3"><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Inventory Overview</h2><div className="grid grid-cols-2 gap-2">{[["Products",inventory.total,"slate"],["In Stock",inventory.inStock,"green"],["Low Stock",inventory.low,"amber"],["Out of Stock",inventory.out,"red"]].map(([label,value,tone])=><div key={label} className="border border-slate-100 p-3 dark:border-slate-800"><p className="text-xs text-slate-500">{label}</p><p className={`mt-1 text-xl font-semibold ${tone==="red"?"text-red-700":tone==="amber"?"text-amber-700":tone==="green"?"text-emerald-700":""}`}>{value}</p></div>)}</div></section><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Payment Summary</h2>{["Cash","Online"].map(method=>{const amount=sales.payment[method], share=sales.revenue?amount/sales.revenue*100:0;return <div key={method} className="mb-4"><div className="mb-1 flex justify-between text-sm"><span>{method}</span><span>{formatINR(amount)} · {share.toFixed(0)}%</span></div><div className="h-2 bg-slate-100 dark:bg-slate-800"><div className={`h-full ${method==="Cash"?"bg-indigo-600":"bg-emerald-600"}`} style={{width:`${share}%`}}/></div></div>})}</section><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Attention Required</h2>{attention.length?<div className="max-h-48 divide-y divide-slate-100 overflow-auto dark:divide-slate-800">{attention.map((item,i)=><div key={`${item.title}-${i}`} className="flex gap-2 py-2"><AlertTriangle size={16} className={item.tone==="red"?"mt-0.5 text-red-600":"mt-0.5 text-amber-600"}/><div className="min-w-0"><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-slate-500">{item.detail}</p></div></div>)}</div>:<p className="py-6 text-sm text-slate-500">No urgent actions</p>}</section></div>
+    <div className="grid gap-4 xl:grid-cols-2"><section className={`${card} overflow-hidden`}><div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800"><h2 className="font-semibold">Recent Orders</h2><a href="/admin/orders" className="text-xs font-medium text-indigo-700">View orders</a></div><div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500 dark:bg-slate-900"><tr>{["Order","Time","Counter","Payment","Amount","Status"].map(x=><th key={x} className="px-3 py-2.5 font-medium">{x}</th>)}</tr></thead><tbody>{[...records.orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,7).map(o=><tr key={o._id} className="border-t border-slate-100 dark:border-slate-800"><td className="px-3 py-2.5">{o.invoiceNumber||o.billNumber||String(o._id).slice(-7)}</td><td className="px-3 py-2.5">{new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit"}).format(new Date(o.createdAt))}</td><td className="px-3 py-2.5">{orderCounter(o)}</td><td className="px-3 py-2.5">{o.payment?.method||"Cash"}</td><td className="px-3 py-2.5">{formatINR(o.totalAmount)}</td><td className="px-3 py-2.5">{o.status}</td></tr>)}{!records.orders.length&&<tr><td colSpan="6" className="px-3 py-8 text-center text-slate-500">No recent orders</td></tr>}</tbody></table></div></section><section className={`${card} p-4`}><h2 className="mb-3 font-semibold">Staff & Counter Status</h2><div className="grid gap-4 sm:grid-cols-2"><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Staff</h3><div className="space-y-2">{records.staff.slice(0,6).map(person=>{const status=liveStatus(person);return <div key={person._id} className="flex items-center justify-between gap-2 text-sm"><span className="truncate">{person.name}</span><span className={`rounded px-2 py-0.5 text-[10px] font-medium ${statusClass(status)}`}>{status}</span></div>})}{!records.staff.length&&<p className="text-xs text-slate-500">No staff records</p>}</div></div><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Counters</h3><div className="space-y-2">{records.counters.slice(0,6).map(counter=>{const status=liveStatus(counter);return <div key={counter._id} className="flex items-center justify-between gap-2 text-sm"><span className="truncate">{counter.name}</span><span className={`rounded px-2 py-0.5 text-[10px] font-medium ${statusClass(status)}`}>{status}</span></div>})}{!records.counters.length&&<p className="text-xs text-slate-500">No counter records</p>}</div></div></div><p className="mt-4 text-right text-[10px] text-slate-400">{lastUpdated?`Updated ${new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(lastUpdated)} IST`:""}</p></section></div>
+  </div>;
 }

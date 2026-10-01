@@ -1,162 +1,46 @@
-import { useState } from 'react';
-import { FiCpu, FiMessageSquare, FiRefreshCw } from 'react-icons/fi';
-import axios from 'axios';
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Bot, RefreshCw, Sparkles } from "lucide-react";
+import api from "../services/api";
 
-export default function AIInsights({ data, totalRevenue, orderProfit, totalQuantity, peakHour }) {
-  const [insight, setInsight] = useState('');
+const cache = new Map();
+const cacheDuration = 5 * 60 * 1000;
+
+export default function AIInsights({ filters }) {
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const filterKey = useMemo(() => JSON.stringify(filters), [filters]);
+  useEffect(() => {
+    setResult(null);
+    setError("");
+  }, [filterKey]);
 
-  const generateInsight = async () => {
+  const generate = async () => {
     setLoading(true);
-    setError('');
-    
-    // Prepare a small data summary to send to AI
-    const summaryData = {
-      totalRevenue,
-      orderProfit,
-      totalQuantity,
-      peakHour,
-      topProducts: (data || []).slice().sort((a, b) => b.totalQuantity - a.totalQuantity).slice(0, 5).map(p => ({ name: p.name, qty: p.totalQuantity, revenue: p.totalRevenue }))
-    };
-
-    const prompt = `You are a professional retail and fintech business analyst. Analyze this POS sales data and provide a short, highly professional, 3-bullet-point insight highlighting performance, concerns, and one strategic recommendation. Do not use markdown other than bolding. Data: ${JSON.stringify(summaryData)}`;
-
+    setError("");
+    const cached = cache.get(filterKey);
+    const canUseCache = cached && Date.now() < cached.expires;
     try {
-      const groqKey = import.meta.env.VITE_GROQ_API_KEY;
-      const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      const anyKey = groqKey || geminiKey || import.meta.env.VITE_AI_API_KEY;
-
-      if (!anyKey) {
-        throw new Error("AI API key not found. Please add VITE_GROQ_API_KEY (starting with gsk_) or VITE_GEMINI_API_KEY to client/.env and restart the Vite dev server.");
+      if (canUseCache && !result) {
+        setResult(cached.value);
+        setLoading(false);
+        return;
       }
-
-      // Check if we have a valid Groq key (starts with gsk_)
-      const isGroqKey = groqKey && groqKey.startsWith('gsk_');
-      const isGeminiKey = (geminiKey && geminiKey.startsWith('AIzaSy')) || (groqKey && groqKey.startsWith('AIzaSy'));
-
-      if (isGroqKey) {
-        // Groq API with active fast model
-        const response = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: "qwen/qwen3.8-27b",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 300
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${groqKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (response.data?.choices?.[0]?.message?.content) {
-          setInsight(response.data.choices[0].message.content);
-          return;
-        }
-      }
-
-      if (isGeminiKey) {
-        const keyToUse = (geminiKey && geminiKey.startsWith('AIzaSy')) ? geminiKey : groqKey;
-        // Google Gemini API with gemini-3.8-flash
-        const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${keyToUse}`,
-          {
-            contents: [{ parts: [{ text: prompt }] }]
-          },
-          {
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-
-        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          setInsight(text);
-          return;
-        }
-      }
-
-      // Fallback: try Groq if key exists
-      if (groqKey) {
-        const response = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: "qwen/qwen3.8-27b",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 300
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${groqKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        if (response.data?.choices?.[0]?.message?.content) {
-          setInsight(response.data.choices[0].message.content);
-          return;
-        }
-      }
-
-      throw new Error("Unable to retrieve insight from AI provider. Please verify your API key in client/.env.");
-    } catch (err) {
-      console.error(err);
-      const apiMsg = err.response?.data?.error?.message || err.message;
-      setError(apiMsg || 'Failed to fetch AI insights. Check API key and network.');
+      const { data } = await api.post("/insights/ai", { ...filters, forceRefresh: Boolean(result) });
+      cache.set(filterKey, { value: data, expires: Date.now() + cacheDuration });
+      setResult(data);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not generate AI insights. Please retry.");
     } finally {
       setLoading(false);
     }
   };
 
-
-  return (
-    <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-3xl p-6 shadow-xl border border-indigo-900/50 relative overflow-hidden group mb-8">
-      {/* Background glow */}
-      <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all"></div>
-      
-      <div className="relative z-10 flex flex-col md:flex-row gap-6 items-start md:items-center">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <FiCpu className="text-indigo-400 text-xl" />
-            <h2 className="text-xl font-bold text-white tracking-tight">AI Financial Analyst</h2>
-          </div>
-          <p className="text-indigo-200/80 text-sm mb-4 leading-relaxed">
-            Get instant, actionable insights on your current performance metrics powered by AI.
-          </p>
-          
-          <button 
-            onClick={generateInsight} 
-            disabled={loading}
-            className="bg-indigo-500 hover:bg-indigo-400 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50"
-          >
-            {loading ? <><FiRefreshCw className="animate-spin" /> Analyzing Data...</> : <><FiMessageSquare /> Generate Insights</>}
-          </button>
-        </div>
-
-        <div className="flex-1 w-full bg-slate-900/50 rounded-2xl p-5 border border-white/5 min-h-[140px] flex items-center justify-center">
-          {loading ? (
-             <div className="flex items-center gap-3 text-indigo-300 font-medium animate-pulse">
-                <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animation-delay-150"></span>
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animation-delay-300"></span>
-             </div>
-          ) : error ? (
-            <div className="text-rose-400 text-sm text-center px-4">{error}</div>
-          ) : insight ? (
-            <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
-              {insight}
-            </div>
-          ) : (
-            <div className="text-slate-500 text-sm text-center">
-              Click generate to analyze current active dataset.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <section className="border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900 dark:bg-indigo-950/30">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-start gap-3"><span className="mt-0.5 text-indigo-700 dark:text-indigo-300"><Bot size={20}/></span><div><h2 className="font-semibold">AI Business Insights</h2><p className="text-xs text-slate-500">AI-generated observations from aggregated store data</p></div></div><button onClick={generate} disabled={loading} className="inline-flex h-9 items-center gap-2 rounded bg-indigo-700 px-3 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-60"><RefreshCw size={15} className={loading?"animate-spin":""}/>{loading?"Analyzing…":"Refresh AI Insights"}</button></div>
+    {loading&&<div role="status" className="mt-4 flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300"><Sparkles size={16}/>Analyzing summarized business data…</div>}
+    {error&&<div role="alert" className="mt-4 flex items-start gap-2 text-sm text-red-700 dark:text-red-300"><AlertCircle size={16} className="mt-0.5 shrink-0"/><p>{error}</p></div>}
+    {result&&!loading&&<div className="mt-4"><p className="whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-200">{result.insights}</p>{result.generatedAt&&<p className="mt-3 text-[11px] text-slate-500">Generated {new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",dateStyle:"medium",timeStyle:"short"}).format(new Date(result.generatedAt))} IST{result.cached?" · cached":""}</p>}</div>}
+    {!result&&!error&&!loading&&<p className="mt-4 text-sm text-slate-500">Refresh to request a concise analysis. The AI receives aggregated metrics only.</p>}
+  </section>;
 }

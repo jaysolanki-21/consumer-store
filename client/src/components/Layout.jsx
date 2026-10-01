@@ -167,8 +167,8 @@ export default function Layout({ children }) {
   // ACTIVE NAV
   // =========================
   const isActive = (path) => {
-    if (path === "/admin") {
-      return location.pathname === "/admin";
+    if (path === "/admin/dashboard") {
+      return location.pathname === "/admin" || location.pathname === "/admin/dashboard";
     }
     return location.pathname === path;
   };
@@ -189,7 +189,7 @@ export default function Layout({ children }) {
   // ADMIN NAV ITEMS
   // =========================
   const adminNavItems = [
-    { path: "/admin", label: "Dashboard", icon: FiGrid },
+    { path: "/admin/dashboard", label: "Dashboard", icon: FiGrid },
     { path: "/admin/products", label: "Products", icon: FiBox },
     { path: "/admin/categories", label: "Categories", icon: FiLayers },
     { path: "/admin/orders", label: "Orders", icon: FiShoppingBag },
@@ -198,6 +198,7 @@ export default function Layout({ children }) {
     { path: "/admin/staff", label: "Staff", icon: FiUsers },
     { path: "/admin/counters", label: "Counters", icon: FiGrid },
     { path: "/admin/insights", label: "Insights", icon: FiBarChart2 },
+    { path: "/admin/reports", label: "Reports", icon: FiFileText },
   ];
 
 

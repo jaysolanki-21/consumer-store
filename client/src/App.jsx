@@ -18,6 +18,7 @@ import AdminStaffPage from "./pages/AdminStaffPage";
 import AdminAlertsPage from "./pages/AdminAlertsPage";
 import InsightsPage from "./pages/InsightsPage";
 import AdminCountersPage from "./pages/AdminCountersPage";
+import SalesReportPage from "./pages/SalesReportPage";
 
 function App() {
   const { user, token } = useSelector((state) => state.auth);
@@ -172,6 +173,14 @@ function App() {
           }
         />
         <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <Layout><AdminPage /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/products"
           element={
             <ProtectedRoute roles={["admin"]}>
@@ -224,6 +233,14 @@ function App() {
           element={
             <ProtectedRoute roles={["admin"]}>
               <Layout><InsightsPage /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <Layout><SalesReportPage /></Layout>
             </ProtectedRoute>
           }
         />

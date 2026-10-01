@@ -11,6 +11,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import counterRoutes from './routes/counterRoutes.js';
 import cashfreeRoutes from './routes/cashfreeRoutes.js';
+import insightsRoutes from './routes/insightsRoutes.js';
 import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './sockets/ioInstance.js';
@@ -21,6 +22,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
+if (!process.env.GROQ_API_KEY && !process.env.VITE_GROQ_API_KEY) {
+  dotenv.config({ path: path.resolve(__dirname, '../client/.env'), override: false });
+}
 connectDB();
 
 const app = express();
@@ -63,6 +67,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/counters', counterRoutes);
 app.use('/api/payments/cashfree', cashfreeRoutes);
+app.use('/api/insights', insightsRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });
