@@ -138,9 +138,13 @@ export const getOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .populate('items.productId')
-      .populate('confirmedBy', 'name')
-      .populate('staffId', 'name')
-      .populate('counter', 'name')
+      .populate('confirmedBy', 'name email')
+      .populate('staffId', 'name email')
+      .populate({
+        path: 'counter',
+        select: 'name description userId',
+        populate: { path: 'userId', select: 'name email isOnline isOnBreak lastLogin lastSeen totalWorkingTime totalActiveTime totalBreakTime' }
+      })
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {

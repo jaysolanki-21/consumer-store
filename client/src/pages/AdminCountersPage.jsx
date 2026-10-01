@@ -103,18 +103,22 @@ const getStatusDotColor = (status) => {
 };
 
 function formatDuration(ms) {
-  if (!ms || ms <= 0) return '0m';
+  if (!ms || ms <= 0) return '0s';
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
-  return `${minutes}m`;
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
 }
 
 function calculateWorkingTimes(user) {
-  if (!user) return { working: '0m', active: '0m', break: '0m' };
+  if (!user) return { working: '0s', active: '0s', break: '0s' };
   let totalWorking = user.totalWorkingTime || 0;
   let totalBreak = user.totalBreakTime || 0;
 
@@ -150,9 +154,9 @@ export default function AdminCountersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [, setTick] = useState(0);
 
-  // Periodic tick every 30s to update live durations
+  // Periodic tick every 1s to update live durations without refresh
   useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -206,8 +210,7 @@ export default function AdminCountersPage() {
         (c) =>
           c.name?.toLowerCase().includes(term) ||
           c.description?.toLowerCase().includes(term) ||
-          c.userId?.email?.toLowerCase().includes(term) ||
-          c._id?.toLowerCase().includes(term)
+          c.userId?.email?.toLowerCase().includes(term)
       );
     }
 
@@ -261,7 +264,8 @@ export default function AdminCountersPage() {
     e.preventDefault();
     try {
       if (editing) {
-        await api.put(`/counters/${editing}`, formData);
+        const { password, ...updateData } = formData;
+        await api.put(`/counters/${editing}`, updateData);
         toast.success('Counter updated');
       } else {
         await api.post('/counters', formData);
@@ -434,7 +438,7 @@ export default function AdminCountersPage() {
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name, counter ID or email..."
+              placeholder="Search by counter name or login email..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -871,11 +875,11 @@ export default function AdminCountersPage() {
               {editing ? 'Edit Counter' : 'Add Counter'}
             </h2>
 
-            {['name', 'email', 'password', 'description'].map(
+            {(editing ? ['name', 'email', 'description'] : ['name', 'email', 'password', 'description']).map(
               (field) => (
                 <div key={field}>
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 block">
-                    {field === 'password' && editing ? 'New Password (leave blank to keep current)' : field}
+                    {field === 'description' ? 'Description (optional)' : field}
                   </label>
                   <input
                     type={field === 'password' ? 'password' : 'text'}

@@ -185,3 +185,32 @@ export const deleteStaff = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+export const getLoginHistory = async (req, res) => {
+  try {
+    const users = await User.find({ role: { $in: ['staff', 'counter', 'admin'] } })
+      .select('name email role loginHistory lastLogin lastSeen isOnline isOnBreak totalWorkingTime totalActiveTime totalBreakTime currentSessionStart currentBreakStart')
+      .lean();
+
+    const history = [];
+    users.forEach(u => {
+      (u.loginHistory || []).forEach(h => {
+        history.push({
+          userId: u._id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          loginAt: h.loginAt,
+          logoutAt: h.logoutAt,
+          ip: h.ip,
+          userAgent: h.userAgent
+        });
+      });
+    });
+
+    history.sort((a, b) => new Date(b.loginAt) - new Date(a.loginAt));
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

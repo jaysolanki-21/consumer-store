@@ -22,7 +22,13 @@ const userSchema = new mongoose.Schema({
   currentBreakStart: { type: Date, default: null },
   totalWorkingTime: { type: Number, default: 0 },
   totalBreakTime: { type: Number, default: 0 },
-  totalActiveTime: { type: Number, default: 0 }
+  totalActiveTime: { type: Number, default: 0 },
+  loginHistory: [{
+    loginAt: { type: Date, default: Date.now },
+    logoutAt: { type: Date, default: null },
+    ip: { type: String, default: '' },
+    userAgent: { type: String, default: '' }
+  }]
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

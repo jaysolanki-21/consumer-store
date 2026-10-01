@@ -6,7 +6,8 @@ import {
   updateStaff,
   setStaffStatus,
   resetStaffPassword,
-  deleteStaff
+  deleteStaff,
+  getLoginHistory
 } from '../controllers/userController.js';
 import { protect, adminOnly, staffOrAdmin } from '../middleware/authMiddleware.js';
 
@@ -23,6 +24,7 @@ const upload = multer({
 });
 
 // All routes are relative to /api/users (mounted in server.js)
+router.get('/login-history', protect, staffOrAdmin, getLoginHistory);
 router.get('/staff', protect, staffOrAdmin, getStaff);
 router.post('/staff', protect, adminOnly, upload.single('image'), createStaff);
 router.put('/staff/:id', protect, adminOnly, upload.single('image'), updateStaff);

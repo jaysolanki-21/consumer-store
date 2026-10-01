@@ -110,18 +110,22 @@ const getStatusDotColor = (status) => {
 };
 
 function formatDuration(ms) {
-  if (!ms || ms <= 0) return '0m';
+  if (!ms || ms <= 0) return '0s';
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
-  return `${minutes}m`;
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
 }
 
 function calculateWorkingTimes(user) {
-  if (!user) return { working: '0m', active: '0m', break: '0m' };
+  if (!user) return { working: '0s', active: '0s', break: '0s' };
   let totalWorking = user.totalWorkingTime || 0;
   let totalBreak = user.totalBreakTime || 0;
 
@@ -152,9 +156,9 @@ export default function AdminStaffPage() {
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
 
-  // Re-render every 30s to keep durations live
+  // Re-render every 1s to keep durations live in real-time
   useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -198,8 +202,7 @@ export default function AdminStaffPage() {
       list = list.filter(
         member =>
           member.name?.toLowerCase().includes(term) ||
-          member.email?.toLowerCase().includes(term) ||
-          member._id?.toLowerCase().includes(term)
+          member.email?.toLowerCase().includes(term)
       );
     }
 
@@ -530,7 +533,7 @@ export default function AdminStaffPage() {
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
             <input
               type="text"
-              placeholder="Search by staff name, email or ID..."
+              placeholder="Search by staff name or email..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
@@ -656,8 +659,8 @@ export default function AdminStaffPage() {
                             <span className="font-bold text-gray-800 dark:text-white text-sm">
                               {member.name}
                             </span>
-                            <span className="text-xs text-gray-400 font-mono">
-                              #{member._id.slice(-6)}
+                            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                              {member.email}
                             </span>
                           </div>
                         </div>

@@ -36,6 +36,9 @@ import {
   FiVolume2,
   FiVolumeX,
   FiMonitor,
+  FiCoffee,
+  FiUser,
+  FiMail,
 } from "react-icons/fi";
 
 // ✅ Notification sound URL
@@ -280,6 +283,81 @@ export default function StaffPage() {
 
   // ✅ Counter filter state
   const [filterCounter, setFilterCounter] = useState("all");
+
+  // ✅ Staff Real-time Presence, Break & Working Hours Tracking
+  const authUser = useSelector((state) => state.auth?.user);
+  const [currentStaff, setCurrentStaff] = useState(authUser || null);
+  const [isOnBreak, setIsOnBreak] = useState(authUser?.isOnBreak || false);
+  const [liveTick, setLiveTick] = useState(0);
+
+  // Sync staff profile & status
+  const fetchMyStaffData = useCallback(async () => {
+    try {
+      const { data } = await api.get("/users/staff");
+      const me = data.find((s) => s._id === authUser?._id || s.email === authUser?.email);
+      if (me) {
+        setCurrentStaff(me);
+        setIsOnBreak(Boolean(me.isOnBreak));
+      }
+    } catch (e) {}
+  }, [authUser]);
+
+  useEffect(() => {
+    fetchMyStaffData();
+    socket.on("usersUpdated", fetchMyStaffData);
+    return () => socket.off("usersUpdated", fetchMyStaffData);
+  }, [fetchMyStaffData]);
+
+  // Tick every 1 second for live active/work duration calculation
+  useEffect(() => {
+    const timer = setInterval(() => setLiveTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const toggleBreak = () => {
+    const nextStatus = !isOnBreak;
+    setIsOnBreak(nextStatus);
+    const targetId = currentStaff?._id || authUser?._id;
+    if (targetId) {
+      socket.emit("setBreakStatus", { userId: targetId, isOnBreak: nextStatus });
+    }
+    toast.success(nextStatus ? "Status set to ON BREAK ☕ Take your time!" : "Status set to ONLINE 🚀 Welcome back!");
+  };
+
+  const staffTimes = useMemo(() => {
+    const u = currentStaff || authUser;
+    if (!u) return { working: "0s", active: "0s", break: "0s", lastLogin: "Just now" };
+    let totalWorking = u.totalWorkingTime || 0;
+    let totalBreak = u.totalBreakTime || 0;
+
+    if (u.currentSessionStart) {
+      totalWorking += Math.max(0, Date.now() - new Date(u.currentSessionStart).getTime());
+    }
+    if (isOnBreak && u.currentBreakStart) {
+      totalBreak += Math.max(0, Date.now() - new Date(u.currentBreakStart).getTime());
+    } else if (isOnBreak && !u.currentBreakStart) {
+      totalBreak += 1000;
+    }
+    const totalActive = Math.max(0, totalWorking - totalBreak);
+
+    const format = (ms) => {
+      if (!ms || ms <= 0) return "0s";
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    };
+
+    return {
+      working: format(totalWorking),
+      active: format(totalActive),
+      break: format(totalBreak),
+      lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "Today"
+    };
+  }, [currentStaff, authUser, isOnBreak, liveTick]);
 
   // ✅ Initialize audio element
   useEffect(() => {
@@ -658,6 +736,77 @@ export default function StaffPage() {
               </select>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ✅ REALTIME STAFF STATUS & WORK HOURS TRACKER BANNER */}
+      <div className="mb-6 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-lg">
+              <FiUser />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900 dark:text-white text-base">
+                  {currentStaff?.name || authUser?.name || "Staff Member"}
+                </span>
+                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <FiMail className="text-[11px]" />
+                  {currentStaff?.email || authUser?.email || "staff@store.com"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                {isOnBreak ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    ON BREAK
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/50">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    ONLINE & ACTIVE
+                  </span>
+                )}
+                <span className="text-xs text-slate-400">
+                  Last login: {staffTimes.lastLogin}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Live Metrics */}
+            <div className="flex items-center gap-2 sm:gap-4 bg-slate-50 dark:bg-slate-800/60 p-2 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-700/60">
+              <div className="text-center px-2">
+                <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Working</p>
+                <p className="text-sm sm:text-base font-bold font-mono text-indigo-600 dark:text-indigo-400">{staffTimes.working}</p>
+              </div>
+              <div className="h-7 w-px bg-slate-200 dark:bg-slate-700" />
+              <div className="text-center px-2">
+                <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Active</p>
+                <p className="text-sm sm:text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">{staffTimes.active}</p>
+              </div>
+              <div className="h-7 w-px bg-slate-200 dark:bg-slate-700" />
+              <div className="text-center px-2">
+                <p className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Break</p>
+                <p className="text-sm sm:text-base font-bold font-mono text-amber-600 dark:text-amber-400">{staffTimes.break}</p>
+              </div>
+            </div>
+
+            {/* Break Toggle Button */}
+            <button
+              onClick={toggleBreak}
+              className={`h-11 px-5 rounded-xl font-semibold text-sm flex items-center gap-2 shadow transition-all ${
+                isOnBreak
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"
+                  : "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+              }`}
+            >
+              <FiCoffee className="text-base" />
+              {isOnBreak ? "Resume Work" : "Take Break"}
+            </button>
+          </div>
         </div>
       </div>
 

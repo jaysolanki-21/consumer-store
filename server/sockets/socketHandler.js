@@ -9,6 +9,30 @@ const userLastHeartbeat = new Map();
 
 let globalIo = null;
 
+const endUserSession = (user) => {
+  if (!user) return;
+  user.isOnline = false;
+  user.lastSeen = new Date();
+  if (user.currentSessionStart) {
+    const sessionDuration = new Date() - new Date(user.currentSessionStart);
+    user.totalWorkingTime = (user.totalWorkingTime || 0) + sessionDuration;
+    user.currentSessionStart = null;
+  }
+  if (user.isOnBreak && user.currentBreakStart) {
+    const breakDuration = new Date() - new Date(user.currentBreakStart);
+    user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
+    user.currentBreakStart = null;
+    user.isOnBreak = false;
+  }
+  user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
+  if (user.loginHistory && user.loginHistory.length > 0) {
+    const lastEntry = user.loginHistory[user.loginHistory.length - 1];
+    if (lastEntry && !lastEntry.logoutAt) {
+      lastEntry.logoutAt = new Date();
+    }
+  }
+};
+
 export const disconnectUserBeacon = async (userId) => {
   if (!userId) return;
   const uId = String(userId);
@@ -24,20 +48,7 @@ export const disconnectUserBeacon = async (userId) => {
   try {
     const user = await User.findById(uId);
     if (user && user.isOnline) {
-      user.isOnline = false;
-      user.lastSeen = new Date();
-      if (user.currentSessionStart) {
-        const sessionDuration = new Date() - new Date(user.currentSessionStart);
-        user.totalWorkingTime = (user.totalWorkingTime || 0) + sessionDuration;
-        user.currentSessionStart = null;
-      }
-      if (user.isOnBreak && user.currentBreakStart) {
-        const breakDuration = new Date() - new Date(user.currentBreakStart);
-        user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
-        user.currentBreakStart = null;
-        user.isOnBreak = false;
-      }
-      user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
+      endUserSession(user);
       await user.save();
       if (globalIo) {
         globalIo.emit('usersUpdated');
@@ -68,17 +79,7 @@ export const socketHandler = (io) => {
         const isStale = (!sockets || sockets.size === 0) && (now - lastHb > 40000);
 
         if (isStale) {
-          user.isOnline = false;
-          user.isOnBreak = false;
-          if (user.currentSessionStart) {
-            user.totalWorkingTime = (user.totalWorkingTime || 0) + (new Date() - new Date(user.currentSessionStart));
-            user.currentSessionStart = null;
-          }
-          if (user.currentBreakStart) {
-            user.totalBreakTime = (user.totalBreakTime || 0) + (new Date() - new Date(user.currentBreakStart));
-            user.currentBreakStart = null;
-          }
-          user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
+          endUserSession(user);
           await user.save();
           userSocketsMap.delete(uId);
           userLastHeartbeat.delete(uId);
@@ -190,20 +191,7 @@ export const socketHandler = (io) => {
       try {
         const user = await User.findById(uId);
         if (user) {
-          user.isOnline = false;
-          user.lastSeen = new Date();
-          if (user.currentSessionStart) {
-            const sessionDuration = new Date() - new Date(user.currentSessionStart);
-            user.totalWorkingTime = (user.totalWorkingTime || 0) + sessionDuration;
-            user.currentSessionStart = null;
-          }
-          if (user.isOnBreak && user.currentBreakStart) {
-            const breakDuration = new Date() - new Date(user.currentBreakStart);
-            user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
-            user.currentBreakStart = null;
-            user.isOnBreak = false;
-          }
-          user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
+          endUserSession(user);
           await user.save();
           io.emit('usersUpdated');
           io.emit('countersUpdated');
@@ -229,7 +217,7 @@ export const socketHandler = (io) => {
           userSocketsMap.delete(uId);
         }
 
-        // Grace period (3.5 seconds) in case of rapid page navigation
+        // Grace period (2 seconds) in case of rapid page navigation
         setTimeout(async () => {
           const currentSockets = userSocketsMap.get(uId);
           if (currentSockets && currentSockets.size > 0) {
@@ -239,20 +227,7 @@ export const socketHandler = (io) => {
           try {
             const user = await User.findById(uId);
             if (user && user.isOnline) {
-              user.isOnline = false;
-              user.lastSeen = new Date();
-              if (user.currentSessionStart) {
-                const sessionDuration = new Date() - new Date(user.currentSessionStart);
-                user.totalWorkingTime = (user.totalWorkingTime || 0) + sessionDuration;
-                user.currentSessionStart = null;
-              }
-              if (user.isOnBreak && user.currentBreakStart) {
-                const breakDuration = new Date() - new Date(user.currentBreakStart);
-                user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
-                user.currentBreakStart = null;
-                user.isOnBreak = false;
-              }
-              user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
+              endUserSession(user);
               await user.save();
               io.emit('usersUpdated');
               io.emit('countersUpdated');
@@ -260,7 +235,7 @@ export const socketHandler = (io) => {
           } catch (err) {
             console.error('Socket disconnect error:', err);
           }
-        }, 3500);
+        }, 2000);
       }
     });
   });

@@ -67,6 +67,16 @@ export const login = async (req, res) => {
     if (!user.currentSessionStart) {
       user.currentSessionStart = new Date();
     }
+    if (!user.loginHistory) user.loginHistory = [];
+    user.loginHistory.push({
+      loginAt: new Date(),
+      logoutAt: null,
+      ip: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || ''
+    });
+    if (user.loginHistory.length > 50) {
+      user.loginHistory = user.loginHistory.slice(-50);
+    }
     await user.save();
 
     const io = req.app.get('io');
