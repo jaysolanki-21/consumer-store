@@ -1,122 +1,1194 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import api from "../services/api";
 import socket from "../services/socket";
-import AIInsights from "../components/AIInsights";
-import { aggregateSales, addDays, dateKeyIST, formatINR, getTodayIST, getWeekStartIST, inDateRange, itemName, orderCounter, orderStaff } from "../utils/posAnalytics";
-
-const panel = "border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950";
-const palette = { revenue: "#4f46e5", orders: "#0f766e", cost: "#d97706", profit: "#16a34a" };
-const moneyTip = value => formatINR(value);
-
-function Stat({ label, value, detail, tone = "slate" }) {
-  const colors = { slate: "text-slate-900 dark:text-white", green: "text-emerald-700 dark:text-emerald-400", amber: "text-amber-700 dark:text-amber-400", red: "text-red-700 dark:text-red-400" };
-  return <div className={`${panel} p-3.5`}><p className="text-xs text-slate-500">{label}</p><p className={`mt-1 text-xl font-semibold ${colors[tone]}`}>{value}</p>{detail&&<p className="mt-1 text-xs text-slate-500">{detail}</p>}</div>;
-}
+import toast from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FiCalendar,
+  FiTrendingUp,
+  FiTrendingDown,
+  FiPackage,
+  FiShoppingCart,
+  FiBarChart2,
+  FiBox,
+  FiChevronLeft,
+  FiChevronRight,
+  FiLayers,
+  FiTag,
+  FiX,
+  FiRefreshCw,
+  FiFilter,
+  FiDollarSign,
+  FiClock,
+  FiCreditCard,
+} from "react-icons/fi";
+import { FaRupeeSign } from "react-icons/fa";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  ComposedChart,
+} from "recharts";
 
 export default function InsightsPage() {
-  const today = getTodayIST();
-  const [period, setPeriod] = useState("today");
-  const [customFrom, setCustomFrom] = useState(today);
-  const [customTo, setCustomTo] = useState(today);
-  const [counter, setCounter] = useState("all");
-  const [category, setCategory] = useState("all");
-  const [payment, setPayment] = useState("all");
-  const [staffName, setStaffName] = useState("all");
-  const [records, setRecords] = useState({ orders: [], products: [], categories: [], staff: [], counters: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
-    const results = await Promise.allSettled([api.get("/orders"), api.get("/products"), api.get("/categories"), api.get("/users/staff"), api.get("/counters")]);
-    const keys = ["orders", "products", "categories", "staff", "counters"];
-    const failed = results.some(result => result.status === "rejected");
-    setRecords(prev => Object.fromEntries(keys.map((key, i) => [key, results[i].status === "fulfilled" ? results[i].value.data || [] : prev[key]])));
-    setError(failed ? "Some analysis data could not be refreshed. Showing the latest available records." : "");
-    setLoading(false);
-  }, []);
+  const [viewType, setViewType] = useState("daily");
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  });
+
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Custom Date Range
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const today = new Date();
+    today.setDate(today.getDate() - 30);
+    return today.toISOString().split("T")[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
+  const [useCustomRange, setUseCustomRange] = useState(false);
+
+  const [salesData, setSalesData] = useState([]);
+  const [previousSalesData, setPreviousSalesData] = useState([]);
+  const [paymentData, setPaymentData] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [chartType, setChartType] = useState("bar");
+
+  // Total revenue straight from orders (reliable)
+  const [orderRevenue, setOrderRevenue] = useState(0);
+
+  // Total profit from orders (based on costPrice snapshots)
+  const [orderProfit, setOrderProfit] = useState(0);
+
+  // Peak hour timing
+  const [peakHour, setPeakHour] = useState("N/A");
+
+  // Hourly distribution for chart
+  const [hourlyData, setHourlyData] = useState([]);
+
+  // Two loading states
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refs for stable socket handlers
+  const salesDataRef = useRef(salesData);
+  const previousSalesDataRef = useRef(previousSalesData);
+
+  // Update refs when data changes
   useEffect(() => {
-    load();
-    const events = ["newOrder", "orderConfirmed", "orderCancelled", "orderReverted", "orderUpdated", "stockUpdated", "stockRefilled", "productCreated", "productUpdated", "productDeleted", "usersUpdated", "countersUpdated"];
-    const refresh = () => load(true);
-    events.forEach(event => socket.on(event, refresh));
-    return () => events.forEach(event => socket.off(event, refresh));
-  }, [load]);
+    salesDataRef.current = salesData;
+  }, [salesData]);
 
-  const range = useMemo(() => {
-    if (period === "today") return { from: today, to: today };
-    if (period === "yesterday") return { from: addDays(today, -1), to: addDays(today, -1) };
-    if (period === "week") return { from: getWeekStartIST(today), to: today };
-    if (period === "month") return { from: `${today.slice(0, 7)}-01`, to: today };
-    return { from: customFrom, to: customTo };
-  }, [period, today, customFrom, customTo]);
-  const productsById = useMemo(() => new Map(records.products.map(product => [String(product._id), product])), [records.products]);
-  const categoriesById = useMemo(() => new Map(records.categories.map(item => [String(item._id), item])), [records.categories]);
-  const scopedOrders = useMemo(() => records.orders.filter(order => {
-    const when = order.confirmedAt || order.createdAt;
-    if (!inDateRange({ createdAt: when }, range.from, range.to)) return false;
-    if (counter !== "all" && orderCounter(order) !== counter) return false;
-    if (staffName !== "all" && orderStaff(order) !== staffName) return false;
-    if (payment !== "all" && ((order.payment?.method || "Cash").toLowerCase() === "cash" ? "cash" : "online") !== payment) return false;
-    if (category !== "all") {
-      return (order.items || []).some(item => {
-        const product = productsById.get(String(item.productId?._id || item.productId)) || item.productId || {};
-        const categoryId = String(product.categoryId?._id || product.categoryId || "");
-        return categoryId === category || product.categoryId?.name === category || categoriesById.get(categoryId)?.name === category;
-      });
+  useEffect(() => {
+    previousSalesDataRef.current = previousSalesData;
+  }, [previousSalesData]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchCategories();
+    fetchProducts();
+  }, []);
+
+  // Fetch on view/date change
+  useEffect(() => {
+    fetchAnalytics(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewType, selectedDate, selectedMonth, selectedYear, customStartDate, customEndDate, useCustomRange]);
+
+  // Stable socket listeners
+  useEffect(() => {
+    const handleOrderChange = () => {
+      fetchAnalytics(true);
+    };
+    const handleStockUpdate = () => fetchAnalytics(true);
+
+    socket.on("orderConfirmed", handleOrderChange);
+    socket.on("orderCancelled", handleOrderChange);
+    socket.on("newOrder", handleOrderChange);
+    socket.on("stockUpdated", handleStockUpdate);
+
+    return () => {
+      socket.off("orderConfirmed", handleOrderChange);
+      socket.off("orderCancelled", handleOrderChange);
+      socket.off("newOrder", handleOrderChange);
+      socket.off("stockUpdated", handleStockUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data } = await api.get("/categories");
+      setCategories(data);
+    } catch (err) {
+      console.error("Failed to load categories");
     }
-    return true;
-  }), [records.orders, range, counter, staffName, payment, category, productsById, categoriesById]);
-  const aggregationOrders = useMemo(() => category === "all" ? scopedOrders : scopedOrders.map(order => {
-    const matchedItems = (order.items || []).filter(item => {
-      const product = productsById.get(String(item.productId?._id || item.productId)) || item.productId || {};
-      const categoryId = String(product.categoryId?._id || product.categoryId || "");
-      return categoryId === category || product.categoryId?.name === category || categoriesById.get(categoryId)?.name === category;
-    });
-    const amount = matchedItems.reduce((sum, item) => sum + Number(item.price ?? item.sellingPrice ?? 0) * Number(item.quantity || 0), 0);
-    return { ...order, items: matchedItems, totalAmount: amount };
-  }), [scopedOrders, category, productsById, categoriesById]);
-  const stats = useMemo(() => aggregateSales(aggregationOrders, records.products, records.categories), [aggregationOrders, records.products, records.categories]);
-  const days = Math.max(1, Math.ceil((new Date(`${range.to}T00:00:00Z`) - new Date(`${range.from}T00:00:00Z`)) / 86400000) + 1);
-  const trend = useMemo(() => {
-    const result = new Map(stats.days.map(day => [day.date, day]));
-    const startAt = Math.max(0, days - 89);
-    return Array.from({ length: days - startAt }, (_, index) => {
-      const date = addDays(range.from, startAt + index);
-      const item = result.get(date) || { date, revenue: 0, cost: 0, profit: 0, orders: 0 };
-      return { ...item, day: date.slice(5) };
-    });
-  }, [stats.days, range.from, days]);
-  const bestHour = [...stats.hours].sort((a,b)=>b.revenue-a.revenue)[0];
-  const inventoryRows = useMemo(() => records.products.map(product => {
-    const sold = stats.products.find(item => item.id === String(product._id))?.quantity || 0;
-    const available = Math.max(0, Number(product.stock || 0) - Number(product.reservedStock || 0));
-    return { ...product, sold, available, avgDaily: sold / days, daysRemaining: sold ? available / (sold / days) : null };
-  }), [records.products, stats.products, days]);
-  const lowStock = inventoryRows.filter(p => p.available > 0 && p.available <= Number(p.lowStockThreshold ?? 5)).sort((a,b)=>a.available-b.available);
-  const outOfStock = inventoryRows.filter(p => p.available <= 0);
-  const lowMargin = stats.products.filter(p => p.revenue > 0 && p.margin < 15).sort((a,b)=>a.margin-b.margin).slice(0,8);
-  const leastProducts = [...inventoryRows].sort((a,b)=>a.sold-b.sold).slice(0,8);
-  const fastest = [...inventoryRows].filter(p=>p.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,8);
-  const stockRisk = [...inventoryRows].filter(p=>p.sold>0).sort((a,b)=>(a.daysRemaining??Infinity)-(b.daysRemaining??Infinity)).slice(0,8);
-  const filters = { from: range.from, to: range.to, counter, category, payment, staff: staffName };
-  const options = (values) => [...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
-  const selectClass = "h-9 w-full rounded border border-slate-300 bg-white px-2.5 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
-  const moneyTooltip = value => moneyTip(value);
+  };
 
-  return <div className="space-y-5 pb-8">
-    <header className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">Business Insights</h1><p className="mt-1 text-sm text-slate-500">Sales, profitability and operating patterns · all dates in IST</p></div><button onClick={()=>load()} className="inline-flex h-9 items-center gap-2 rounded border border-slate-300 px-3 text-sm dark:border-slate-700"><RefreshCw size={15}/>Refresh data</button></header>
-    {error&&<p role="status" className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">{error}</p>}
-    <section className={`${panel} p-3.5`}><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"><label className="grid gap-1 text-xs font-medium text-slate-500">Period<select className={selectClass} value={period} onChange={e=>setPeriod(e.target.value)}><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="week">This Week</option><option value="month">This Month</option><option value="custom">Custom Date</option></select></label>{period==="custom"&&<><label className="grid gap-1 text-xs font-medium text-slate-500">From<input type="date" className={selectClass} max={today} value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label className="grid gap-1 text-xs font-medium text-slate-500">To<input type="date" className={selectClass} max={today} value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></>}
-      <label className="grid gap-1 text-xs font-medium text-slate-500">Counter<select className={selectClass} value={counter} onChange={e=>setCounter(e.target.value)}><option value="all">All counters</option>{options(records.counters.map(c=>c.name)).map(x=><option key={x}>{x}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-slate-500">Category<select className={selectClass} value={category} onChange={e=>setCategory(e.target.value)}><option value="all">All categories</option>{records.categories.map(c=><option key={c._id} value={c.name}>{c.name}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-slate-500">Payment<select className={selectClass} value={payment} onChange={e=>setPayment(e.target.value)}><option value="all">All payments</option><option value="cash">Cash</option><option value="online">Online (UPI included)</option></select></label><label className="grid gap-1 text-xs font-medium text-slate-500">Staff<select className={selectClass} value={staffName} onChange={e=>setStaffName(e.target.value)}><option value="all">All staff</option>{options(records.staff.map(s=>s.name)).map(x=><option key={x}>{x}</option>)}</select></label></div><p className="mt-2 text-xs text-slate-500">{range.from} to {range.to} · {scopedOrders.length} matching orders</p></section>
-    {loading&&<div className="text-sm text-slate-500">Loading analytics…</div>}
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6"><Stat label="Revenue" value={formatINR(stats.revenue)} tone="green"/><Stat label="COGS" value={formatINR(stats.cost)} tone="amber"/><Stat label="Profit" value={formatINR(stats.profit)} tone="green"/><Stat label="Margin" value={`${stats.margin.toFixed(1)}%`}/><Stat label="Orders" value={stats.confirmed.length}/><Stat label="Average Order Value" value={formatINR(stats.averageOrder)}/></div>
-    <div className="grid gap-4 xl:grid-cols-2"><section className={`${panel} p-4`}><div className="mb-3"><h2 className="font-semibold">Revenue & Orders Trend</h2><p className="text-xs text-slate-500">Daily sales in the selected period</p></div><div className="h-[270px]">{stats.confirmed.length?<ResponsiveContainer width="100%" height="100%"><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="day" minTickGap={20}/><YAxis yAxisId="revenue" tickFormatter={v=>`₹${Math.round(v/1000)}k`}/><YAxis yAxisId="orders" orientation="right" allowDecimals={false}/><Tooltip labelFormatter={label=>`Date ${label}`} formatter={(value,name)=>name==="Orders"?value:formatINR(value)}/><Legend/><Line yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke={palette.revenue} dot={false}/><Line yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke={palette.orders} dot={false}/></LineChart></ResponsiveContainer>:<div className="grid h-full place-items-center text-sm text-slate-500">No confirmed orders in this period</div>}</div></section><section className={`${panel} p-4`}><div className="mb-3"><h2 className="font-semibold">Revenue vs Cost vs Profit</h2><p className="text-xs text-slate-500">Based on immutable cost snapshots in order items</p></div><div className="h-[270px]">{stats.confirmed.length?<ResponsiveContainer width="100%" height="100%"><ComposedChart data={trend}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="day" minTickGap={20}/><YAxis tickFormatter={v=>`₹${Math.round(v/1000)}k`}/><Tooltip formatter={moneyTooltip}/><Legend/><Bar dataKey="revenue" name="Revenue" fill={palette.revenue}/><Bar dataKey="cost" name="COGS" fill={palette.cost}/><Line dataKey="profit" name="Profit" stroke={palette.profit} strokeWidth={2}/></ComposedChart></ResponsiveContainer>:<div className="grid h-full place-items-center text-sm text-slate-500">No confirmed orders in this period</div>}</div></section></div>
-    <div className="grid gap-4 xl:grid-cols-2"><section className={`${panel} p-4`}><div className="mb-3 flex items-end justify-between"><div><h2 className="font-semibold">Product Performance</h2><p className="text-xs text-slate-500">Top sellers, profitable products and low margins</p></div></div><div className="grid gap-4 md:grid-cols-2"><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Top by Quantity</h3><div className="space-y-2">{[...stats.products].sort((a,b)=>b.quantity-a.quantity).slice(0,7).map(p=><div key={p.id} className="flex justify-between gap-2 text-sm"><span className="truncate">{p.name}<span className="ml-1 text-xs text-slate-500">×{p.quantity}</span></span><span className="shrink-0 text-slate-600 dark:text-slate-300">{formatINR(p.revenue)}</span></div>)}</div></div><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Most Profitable</h3><div className="space-y-2">{[...stats.products].sort((a,b)=>b.profit-a.profit).slice(0,7).map(p=><div key={p.id} className="flex justify-between gap-2 text-sm"><span className="truncate">{p.name}<span className="ml-1 text-xs text-slate-500">{p.margin.toFixed(1)}%</span></span><span className="shrink-0 text-emerald-700">{formatINR(p.profit)}</span></div>)}</div></div></div>{lowMargin.length>0&&<div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800"><h3 className="mb-2 text-xs font-semibold uppercase text-amber-700">Low Margin · under 15%</h3><div className="flex flex-wrap gap-x-5 gap-y-2">{lowMargin.map(p=><span key={p.id} className="text-sm">{p.name} <span className="text-amber-700">{p.margin.toFixed(1)}%</span></span>)}</div></div>}</section>
-      <section className={`${panel} p-4`}><h2 className="mb-3 font-semibold">Category Performance</h2>{stats.categories.length?<div className="h-[260px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={[...stats.categories].sort((a,b)=>b.revenue-a.revenue).slice(0,8)} layout="vertical" margin={{left:12,right:14}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" tickFormatter={v=>`₹${Math.round(v/1000)}k`}/><YAxis type="category" dataKey="name" width={105}/><Tooltip formatter={moneyTooltip}/><Bar dataKey="revenue" name="Revenue" fill={palette.revenue}/><Bar dataKey="profit" name="Profit" fill={palette.profit}/></BarChart></ResponsiveContainer></div>:<p className="py-10 text-center text-sm text-slate-500">No category sales in this period</p>}<div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">{[...stats.categories].sort((a,b)=>b.revenue-a.revenue).slice(0,4).map(c=><div key={c.name} className="flex justify-between gap-3 py-2 text-xs"><span>{c.name} · {c.quantity} units</span><span>{formatINR(c.profit)} profit · {c.margin.toFixed(1)}%</span></div>)}</div></section></div>
-    <div className="grid gap-4 xl:grid-cols-3"><section className={`${panel} p-4`}><h2 className="font-semibold">Peak Hours</h2><p className="mb-3 text-xs text-slate-500">{bestHour?.orders?`${bestHour.hour}:00 · ${bestHour.orders} orders · ${formatINR(bestHour.revenue)}`:"No hourly sales data"}</p><div className="h-48">{stats.confirmed.length?<ResponsiveContainer width="100%" height="100%"><BarChart data={stats.hours.filter(h=>h.orders)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="hour"/><YAxis tickFormatter={v=>`₹${Math.round(v/1000)}k`}/><Tooltip formatter={moneyTooltip}/><Bar dataKey="revenue" name="Revenue" fill={palette.revenue}/></BarChart></ResponsiveContainer>:<div className="grid h-full place-items-center text-sm text-slate-500">Insufficient data</div>}</div></section><section className={`${panel} p-4`}><h2 className="font-semibold">Counter & Staff Performance</h2><div className="mt-3 grid gap-4 sm:grid-cols-2"><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Counters</h3>{[...stats.counters].sort((a,b)=>b.revenue-a.revenue).slice(0,6).map(c=><div key={c.name} className="flex justify-between gap-2 py-1.5 text-xs"><span className="truncate">{c.name} · {c.orders}</span><span>{formatINR(c.revenue)}</span></div>)}</div><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Staff</h3>{[...stats.staff].sort((a,b)=>b.revenue-a.revenue).slice(0,6).map(s=><div key={s.name} className="flex justify-between gap-2 py-1.5 text-xs"><span className="truncate">{s.name} · {s.orders}</span><span>{formatINR(s.revenue)}</span></div>)}</div></div></section><section className={`${panel} p-4`}><h2 className="font-semibold">Payment Performance</h2><p className="mt-1 text-xs text-slate-500">Cash vs digital payments (UPI included in online)</p>{["Cash","Online"].map(method=>{const amount=stats.payment[method];const share=stats.revenue?amount/stats.revenue*100:0;return <div key={method} className="mt-4"><div className="mb-1 flex justify-between text-sm"><span>{method}</span><span>{formatINR(amount)} · {share.toFixed(1)}%</span></div><div className="h-2 bg-slate-100 dark:bg-slate-800"><div className={`h-full ${method==="Cash"?"bg-indigo-600":"bg-emerald-600"}`} style={{width:`${share}%`}}/></div></div>})}</section></div>
-    <div className="grid gap-4 lg:grid-cols-2"><section className={`${panel} p-4`}><h2 className="font-semibold">Inventory Movement & Stock Risk</h2><p className="mb-3 text-xs text-slate-500">Units sold in period compared with current available units</p><div className="grid gap-4 md:grid-cols-2"><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Fast Moving</h3>{fastest.map(p=><div key={p._id} className="flex justify-between gap-2 py-1.5 text-sm"><span className="truncate">{p.name} · {p.sold} sold</span><span className={p.daysRemaining!==null&&p.daysRemaining<7?"text-red-700":""}>{p.daysRemaining===null?`${p.available} available`:`${p.daysRemaining.toFixed(1)} days left`}</span></div>)}{!fastest.length&&<p className="text-sm text-slate-500">Insufficient sales data</p>}</div><div><h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Low & Out of Stock</h3>{[...outOfStock,...lowStock].slice(0,8).map(p=><div key={p._id} className="flex justify-between gap-2 py-1.5 text-sm"><span className="truncate">{p.name}</span><span className={p.available<=0?"text-red-700":"text-amber-700"}>{p.available<=0?"Out of stock":`${p.available} left`}</span></div>)}{!outOfStock.length&&!lowStock.length&&<p className="text-sm text-slate-500">No stock alerts</p>}</div></div></section><section className={`${panel} p-4`}><h2 className="font-semibold">Slow Moving Products</h2><p className="mb-3 text-xs text-slate-500">Lowest unit sales in the selected period, including no-sale products</p><div className="overflow-x-auto"><table className="w-full min-w-[400px] text-left text-sm"><thead className="text-xs text-slate-500"><tr><th className="py-2">Product</th><th className="py-2">Units Sold</th><th className="py-2">Available</th><th className="py-2">Margin</th></tr></thead><tbody>{leastProducts.map(p=><tr key={p._id} className="border-t border-slate-100 dark:border-slate-800"><td className="py-2">{p.name}</td><td className="py-2">{p.sold}</td><td className="py-2">{p.available}</td><td className="py-2">{stats.products.find(x=>x.id===String(p._id))?.margin.toFixed(1) ?? "-"}%</td></tr>)}{!leastProducts.length&&<tr><td colSpan="4" className="py-8 text-center text-slate-500">No product records</td></tr>}</tbody></table></div></section></div>
-    <AIInsights filters={filters}/>
-  </div>;
+  const fetchProducts = async () => {
+    try {
+      const { data } = await api.get("/products");
+      setProducts(data);
+    } catch (err) {
+      console.error("Failed to load products");
+    }
+  };
+
+  // Updated fetchAnalytics with profit and hourly distribution
+  const fetchAnalytics = async (silent = false) => {
+    try {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setInitialLoading(true);
+      }
+
+      let startDate, endDate, prevStartDate, prevEndDate;
+
+      if (useCustomRange) {
+        startDate = customStartDate;
+        endDate = customEndDate;
+        const start = new Date(customStartDate);
+        const end = new Date(customEndDate);
+        const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        const prevStart = new Date(start);
+        prevStart.setDate(prevStart.getDate() - diffDays - 1);
+        const prevEnd = new Date(end);
+        prevEnd.setDate(prevEnd.getDate() - diffDays - 1);
+        prevStartDate = prevStart.toISOString().split("T")[0];
+        prevEndDate = prevEnd.toISOString().split("T")[0];
+      } else if (viewType === "daily") {
+        startDate = selectedDate;
+        endDate = selectedDate;
+        const prev = new Date(selectedDate);
+        prev.setDate(prev.getDate() - 1);
+        prevStartDate = prev.toISOString().split("T")[0];
+        prevEndDate = prevStartDate;
+      } else if (viewType === "monthly") {
+        const [year, month] = selectedMonth.split("-");
+        startDate = `${year}-${month}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        endDate = `${year}-${month}-${lastDay}`;
+        let prevYear = parseInt(year);
+        let prevMonth = parseInt(month) - 1;
+        if (prevMonth === 0) {
+          prevMonth = 12;
+          prevYear--;
+        }
+        const prevMonthStr = String(prevMonth).padStart(2, "0");
+        prevStartDate = `${prevYear}-${prevMonthStr}-01`;
+        const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+        prevEndDate = `${prevYear}-${prevMonthStr}-${prevLastDay}`;
+      } else {
+        startDate = `${selectedYear}-01-01`;
+        endDate = `${selectedYear}-12-31`;
+        prevStartDate = `${selectedYear - 1}-01-01`;
+        prevEndDate = `${selectedYear - 1}-12-31`;
+      }
+
+      const [currentRes, prevRes, ordersRes] = await Promise.all([
+        api.get(`/products/sales-analytics?startDate=${startDate}&endDate=${endDate}`),
+        api.get(`/products/sales-analytics?startDate=${prevStartDate}&endDate=${prevEndDate}`),
+        api.get('/orders')
+      ]);
+
+      const currentData = currentRes.data?.sales || currentRes.data || [];
+      const prevData = prevRes.data?.sales || prevRes.data || [];
+      const allOrders = ordersRes.data || [];
+
+      let cashRevenue = 0;
+      let onlineRevenue = 0;
+      let totalFromOrders = 0;
+      let totalProfitFromOrders = 0;
+      const hourCounts = {};
+      const hourRevenue = {};
+      const hourProfit = {};
+
+      // Initialize all 24 hours
+      for (let h = 0; h < 24; h++) {
+        hourCounts[h] = 0;
+        hourRevenue[h] = 0;
+        hourProfit[h] = 0;
+      }
+
+      allOrders.forEach(order => {
+        if (order.status !== 'Confirmed') return;
+        const orderDate = new Date(order.createdAt).toISOString().split("T")[0];
+        if (orderDate >= startDate && orderDate <= endDate) {
+          const method = (order.payment?.method || order.paymentMethod || "Cash").toLowerCase();
+          const amount = Number(order.totalAmount) || 0;
+          totalFromOrders += amount;
+
+          // Track peak hour
+          const orderHour = new Date(order.createdAt).getHours();
+          hourCounts[orderHour] = (hourCounts[orderHour] || 0) + 1;
+          hourRevenue[orderHour] = (hourRevenue[orderHour] || 0) + amount;
+
+          // Profit calculation using costPrice snapshot per item
+          let orderProfitValue = 0;
+          if (Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const selling = Number(item.price ?? item.sellingPrice ?? 0);
+              const cost = Number(item.costPrice ?? 0);
+              const qty = Number(item.quantity ?? 0);
+              orderProfitValue += (selling - cost) * qty;
+            });
+          }
+          hourProfit[orderHour] = (hourProfit[orderHour] || 0) + orderProfitValue;
+          totalProfitFromOrders += orderProfitValue;
+
+          if (method === 'online') {
+            onlineRevenue += amount;
+          } else {
+            cashRevenue += amount;
+          }
+        }
+      });
+
+      // Build hourly chart data
+      const hourlyChartData = [];
+      for (let h = 0; h < 24; h++) {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const formattedH = h % 12 || 12;
+        hourlyChartData.push({
+          hour: `${formattedH} ${ampm}`,
+          hour24: h,
+          orders: hourCounts[h],
+          revenue: hourRevenue[h],
+          profit: hourProfit[h],
+        });
+      }
+      setHourlyData(hourlyChartData);
+
+      // Calculate the peak hour
+      let maxCount = 0;
+      let peakH = null;
+      for (const [hourStr, count] of Object.entries(hourCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          peakH = parseInt(hourStr, 10);
+        }
+      }
+
+      if (peakH !== null && maxCount > 0) {
+        const formatHour = (h) => {
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const formattedH = h % 12 || 12;
+          return `${formattedH} ${ampm}`;
+        };
+        const nextH = (peakH + 1) % 24;
+        setPeakHour(`${formatHour(peakH)} - ${formatHour(nextH)}`);
+      } else {
+        setPeakHour("N/A");
+      }
+
+      setOrderRevenue(totalFromOrders);
+      setOrderProfit(totalProfitFromOrders);
+
+      setPaymentData([
+        { name: 'Cash', value: cashRevenue },
+        { name: 'Online', value: onlineRevenue }
+      ]);
+
+      setSalesData(Array.isArray(currentData) ? currentData : []);
+      setPreviousSalesData(Array.isArray(prevData) ? prevData : []);
+    } catch (err) {
+      if (!silent) {
+        toast.error("Failed to load insights");
+      }
+      console.error("Analytics error:", err);
+      setSalesData([]);
+      setPreviousSalesData([]);
+      setPaymentData([]);
+      setOrderRevenue(0);
+      setOrderProfit(0);
+      setHourlyData([]);
+    } finally {
+      if (silent) {
+        setRefreshing(false);
+      } else {
+        setInitialLoading(false);
+      }
+    }
+  };
+
+  // Navigation functions with useCallback
+  const goPrevDay = useCallback(() => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() - 1);
+    setSelectedDate(date.toISOString().split("T")[0]);
+  }, [selectedDate]);
+
+  const goNextDay = useCallback(() => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() + 1);
+    const today = new Date().toISOString().split("T")[0];
+    if (date.toISOString().split("T")[0] <= today) {
+      setSelectedDate(date.toISOString().split("T")[0]);
+    } else {
+      toast.error("Cannot go beyond today");
+    }
+  }, [selectedDate]);
+
+  const goPrevMonth = useCallback(() => {
+    const [year, month] = selectedMonth.split("-");
+    let newYear = parseInt(year);
+    let newMonth = parseInt(month) - 1;
+    if (newMonth === 0) {
+      newMonth = 12;
+      newYear--;
+    }
+    setSelectedMonth(`${newYear}-${String(newMonth).padStart(2, "0")}`);
+  }, [selectedMonth]);
+
+  const goNextMonth = useCallback(() => {
+    const [year, month] = selectedMonth.split("-");
+    let newYear = parseInt(year);
+    let newMonth = parseInt(month) + 1;
+    if (newMonth === 13) {
+      newMonth = 1;
+      newYear++;
+    }
+    const todayYear = new Date().getFullYear();
+    const todayMonth = new Date().getMonth() + 1;
+    if (newYear < todayYear || (newYear === todayYear && newMonth <= todayMonth)) {
+      setSelectedMonth(`${newYear}-${String(newMonth).padStart(2, "0")}`);
+    } else {
+      toast.error("Cannot go beyond current month");
+    }
+  }, [selectedMonth]);
+
+  const goPrevYear = useCallback(() => {
+    setSelectedYear((prev) => prev - 1);
+  }, []);
+
+  const goNextYear = useCallback(() => {
+    const currentYear = new Date().getFullYear();
+    if (selectedYear < currentYear) {
+      setSelectedYear((prev) => prev + 1);
+    } else {
+      toast.error("Cannot go beyond current year");
+    }
+  }, [selectedYear]);
+
+  const getProductPrevData = useCallback((productId) => {
+    const prev = previousSalesData.find((p) => p.productId === productId);
+    return prev ? prev.totalQuantity : 0;
+  }, [previousSalesData]);
+
+  const getTrend = useCallback((current, previous) => {
+    if (previous === 0) return current > 0 ? "up" : "neutral";
+    if (current > previous) return "up";
+    if (current < previous) return "down";
+    return "neutral";
+  }, []);
+
+  const getTrendPercent = useCallback((current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  }, []);
+
+  const getProductCategoryId = useCallback((productId) => {
+    const product = products.find((p) => p._id === productId);
+    return product?.categoryId?._id || product?.categoryId || null;
+  }, [products]);
+
+  // Memoized filters
+  const filteredSalesData = useMemo(() => {
+    const data = Array.isArray(salesData) ? salesData : [];
+    if (!selectedCategory) return data;
+    return data.filter((item) => {
+      const catId = getProductCategoryId(item.productId);
+      return catId === selectedCategory;
+    });
+  }, [salesData, selectedCategory, getProductCategoryId]);
+
+  // Chart Data
+  const chartData = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.map((item) => ({
+      name: item.name || "Unknown",
+      quantity: item.totalQuantity || 0,
+      revenue: item.totalRevenue || 0,
+    }));
+  }, [filteredSalesData]);
+
+  // Category Distribution for Pie Chart
+  const categoryDistribution = useMemo(() => {
+    const dist = {};
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+
+    data.forEach((item) => {
+      const catId = getProductCategoryId(item.productId);
+      const category = categories.find((c) => c._id === catId);
+      const catName = category?.name || "Uncategorized";
+      if (!dist[catName]) {
+        dist[catName] = 0;
+      }
+      dist[catName] += item.totalQuantity || 0;
+    });
+    return Object.entries(dist).map(([name, value]) => ({ name, value }));
+  }, [filteredSalesData, categories, getProductCategoryId]);
+
+  // Colors for Pie Chart
+  const COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+
+  const totalRevenueFromProducts = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.reduce((sum, item) => sum + (Number(item.totalRevenue) || 0), 0);
+  }, [filteredSalesData]);
+
+  const totalRevenue = useMemo(() => {
+    if (!selectedCategory) {
+      return orderRevenue || totalRevenueFromProducts;
+    }
+    return totalRevenueFromProducts;
+  }, [selectedCategory, orderRevenue, totalRevenueFromProducts]);
+
+  const totalQuantity = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.reduce((sum, item) => sum + (item.totalQuantity || 0), 0);
+  }, [filteredSalesData]);
+
+  const totalProducts = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return data.length;
+  }, [filteredSalesData]);
+
+  // Top 5 products
+  const topProducts = useMemo(() => {
+    const data = Array.isArray(filteredSalesData) ? filteredSalesData : [];
+    return [...data]
+      .sort((a, b) => (b.totalQuantity || 0) - (a.totalQuantity || 0))
+      .slice(0, 5);
+  }, [filteredSalesData]);
+
+  // Filter hourly data to only show hours with activity for cleaner chart
+  const activeHourlyData = useMemo(() => {
+    return hourlyData.filter(h => h.orders > 0);
+  }, [hourlyData]);
+
+  // Format date range display
+  const getDateRangeDisplay = () => {
+    if (useCustomRange) {
+      return `${customStartDate} to ${customEndDate}`;
+    }
+    if (viewType === "daily") {
+      return selectedDate;
+    }
+    if (viewType === "monthly") {
+      const [year, month] = selectedMonth.split("-");
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    return selectedYear.toString();
+  };
+
+  const showSummaryCards = !initialLoading && (filteredSalesData.length > 0 || orderRevenue > 0);
+
+  return (
+    <div className="space-y-6 relative">
+      {/* Refresh Indicator */}
+      <AnimatePresence>
+        {refreshing && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-20 right-6 z-50"
+          >
+            <div className="bg-indigo-600 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Updating insights...
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header with Date Selector on top right */}
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+            Sales Insights
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Analyze product sales performance & trends
+          </p>
+        </div>
+
+        {/* Top Right Controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Date Selector */}
+          {!useCustomRange && viewType === "daily" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="date"
+                value={selectedDate}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
+              />
+              <button onClick={goNextDay} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {!useCustomRange && viewType === "monthly" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="month"
+                value={selectedMonth}
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none"
+              />
+              <button onClick={goNextMonth} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {!useCustomRange && viewType === "yearly" && (
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <button onClick={goPrevYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronLeft className="text-base" />
+              </button>
+              <input
+                type="number"
+                min="2020"
+                max={new Date().getFullYear()}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="w-20 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-200 bg-transparent outline-none text-center"
+              />
+              <button onClick={goNextYear} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-300">
+                <FiChevronRight className="text-base" />
+              </button>
+            </div>
+          )}
+
+          {/* View Type Toggle */}
+          <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            {["daily", "monthly", "yearly"].map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setViewType(type);
+                  setUseCustomRange(false);
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize ${
+                  viewType === type && !useCustomRange
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "text-gray-500 hover:text-indigo-600"
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+            <button
+              onClick={() => setUseCustomRange(!useCustomRange)}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 capitalize flex items-center gap-1 ${
+                useCustomRange
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "text-gray-500 hover:text-indigo-600"
+              }`}
+            >
+              <FiCalendar className="text-sm" />
+              Custom
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Custom Date Range */}
+      {useCustomRange && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">From:</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                max={customEndDate}
+                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">To:</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                min={customStartDate}
+                max={new Date().toISOString().split("T")[0]}
+                className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <button
+              onClick={() => fetchAnalytics(false)}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Period Display */}
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <FiCalendar className="text-indigo-500" />
+        <span>Showing data for: <strong className="text-gray-700 dark:text-gray-300">{getDateRangeDisplay()}</strong></span>
+        {selectedCategory && (
+          <span className="flex items-center gap-1 ml-2">
+            <FiTag className="text-indigo-500" />
+            <span className="text-indigo-600 dark:text-indigo-400">{categories.find(c => c._id === selectedCategory)?.name}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Summary Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+        {/* Total Revenue */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-emerald-200 uppercase tracking-wide font-medium">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold mt-2">
+                  ₹{Number(totalRevenue || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FaRupeeSign className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Total Profit */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-purple-200 uppercase tracking-wide font-medium">
+                  Total Profit
+                </p>
+                <p className="text-2xl font-bold mt-2">
+                  ₹{Number(orderProfit || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiTrendingUp className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Products Sold */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-indigo-200 uppercase tracking-wide font-medium">
+                  Products Sold
+                </p>
+                <p className="text-2xl font-bold mt-2">{totalQuantity}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiShoppingCart className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Products */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-200 uppercase tracking-wide font-medium">
+                  Active Products
+                </p>
+                <p className="text-2xl font-bold mt-2">{totalProducts}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiBox className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Peak Hour */}
+        {showSummaryCards && (
+          <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-rose-200 uppercase tracking-wide font-medium">
+                  Peak Hour
+                </p>
+                <p className="text-2xl font-bold mt-2">{peakHour}</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                <FiClock className="text-white text-xl" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading skeletons */}
+        {initialLoading && (
+          <>
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-32"></div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-24"></div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-20"></div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-20"></div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 shadow-lg">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/30 rounded w-24 mb-3"></div>
+                <div className="h-8 bg-white/30 rounded w-24"></div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Peak Hour Chart */}
+      {!initialLoading && activeHourlyData.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center">
+                <FiClock className="text-rose-600 dark:text-rose-400 text-lg" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Hourly Sales Distribution</h3>
+                <p className="text-xs text-gray-500">Orders, revenue and profit by hour of day</p>
+              </div>
+            </div>
+            {peakHour !== "N/A" && (
+              <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-500/10 px-3 py-1.5 rounded-xl">
+                <FiClock className="text-rose-500 text-sm" />
+                <span className="text-xs font-semibold text-rose-700 dark:text-rose-400">
+                  Peak: {peakHour}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={60} />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip
+                  formatter={(value, name) => {
+                    if (name === "Revenue (₹)" || name === "Profit (₹)") {
+                      return `₹${Number(value).toLocaleString()}`;
+                    }
+                    return value;
+                  }}
+                />
+                <Legend />
+                <Bar yAxisId="left" dataKey="orders" fill="#f43f5e" name="Orders" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue (₹)" dot={{ r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="profit" stroke="#6366f1" strokeWidth={2} name="Profit (₹)" dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Charts Section */}
+      {!initialLoading && filteredSalesData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Product Sales Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Product Sales</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setChartType("bar")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "bar"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Bar
+                </button>
+                <button
+                  onClick={() => setChartType("line")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "line"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Line
+                </button>
+                <button
+                  onClick={() => setChartType("area")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    chartType === "area"
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Area
+                </button>
+              </div>
+            </div>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === "bar" && (
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="quantity" fill="#4f46e5" name="Quantity Sold" />
+                    <Bar yAxisId="right" dataKey="revenue" fill="#10b981" name="Revenue (₹)" />
+                  </BarChart>
+                )}
+                {chartType === "line" && (
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Line yAxisId="left" type="monotone" dataKey="quantity" stroke="#4f46e5" name="Quantity Sold" />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" name="Revenue (₹)" />
+                  </LineChart>
+                )}
+                {chartType === "area" && (
+                  <ComposedChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Area yAxisId="left" type="monotone" dataKey="quantity" fill="#4f46e5" stroke="#4f46e5" name="Quantity Sold" />
+                    <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" name="Revenue (₹)" />
+                  </ComposedChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Category Distribution Pie Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Category Distribution</h3>
+            {categoryDistribution.length > 0 ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryDistribution}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categoryDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-gray-500">
+                No category data available
+              </div>
+            )}
+          </div>
+
+          {/* Payment Method Distribution Pie Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Payment Methods (Revenue)</h3>
+            {paymentData.length > 0 && paymentData.some(p => p.value > 0) ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paymentData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {paymentData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index === 0 ? "#10b981" : "#4f46e5"} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `₹${Number(value).toLocaleString()}`} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-gray-500">
+                No payment data available
+              </div>
+            )}
+          </div>
+
+          {/* Top Products */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 lg:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top 5 Products</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {topProducts.map((product, index) => {
+                const prevQty = getProductPrevData(product.productId);
+                const trend = getTrend(product.totalQuantity, prevQty);
+                const trendPercent = getTrendPercent(product.totalQuantity, prevQty);
+                return (
+                  <div key={product.productId} className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-center">
+                    <div className="text-2xl font-bold text-indigo-600 mb-1">#{index + 1}</div>
+                    <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">{product.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">Sold: {product.totalQuantity}</p>
+                    <p className="text-xs text-green-600 font-semibold">₹{Number(product.totalRevenue || 0).toLocaleString()}</p>
+                    <div className="mt-2">
+                      {trend === "up" && (
+                        <span className="text-xs text-green-500 flex items-center justify-center gap-1">
+                          <FiTrendingUp /> +{trendPercent}%
+                        </span>
+                      )}
+                      {trend === "down" && (
+                        <span className="text-xs text-red-500 flex items-center justify-center gap-1">
+                          <FiTrendingDown /> {trendPercent}%
+                        </span>
+                      )}
+                      {trend === "neutral" && (
+                        <span className="text-xs text-gray-500">No change</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Filter */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <FiLayers className="text-indigo-500 text-sm" />
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Filter by Category:
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedCategory("")}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                !selectedCategory
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              <FiTag className="inline mr-1 text-[10px]" />
+              All Products
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat._id}
+                onClick={() => setSelectedCategory(cat._id)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  selectedCategory === cat._id
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                <FiTag className="inline mr-1 text-[10px]" />
+                {cat.name}
+              </button>
+            ))}
+          </div>
+          {selectedCategory && (
+            <button
+              onClick={() => setSelectedCategory("")}
+              className="ml-auto flex items-center gap-1 text-xs text-red-500 hover:text-red-600"
+            >
+              <FiX /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Loading / Empty / Products Grid */}
+      {initialLoading ? (
+        <div className="flex justify-center items-center h-[50vh]">
+          <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+      ) : filteredSalesData.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-8 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+            <FiBarChart2 className="text-3xl text-gray-400" />
+          </div>
+          <h2 className="text-lg font-semibold mb-1">No Sales Data</h2>
+          <p className="text-sm text-gray-500">
+            No product sales found for the selected period
+          </p>
+          {selectedCategory && (
+            <button
+              onClick={() => setSelectedCategory("")}
+              className="mt-4 text-sm text-indigo-600 hover:text-indigo-700"
+            >
+              Clear category filter
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          <AnimatePresence mode="popLayout">
+            {filteredSalesData.map((product) => {
+              const prevQty = getProductPrevData(product.productId);
+              const trend = getTrend(product.totalQuantity, prevQty);
+              const trendPercent = getTrendPercent(product.totalQuantity, prevQty);
+
+              return (
+                <motion.div
+                  key={product.productId}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.2 }}
+                  className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                >
+                  <div className="relative w-full aspect-square overflow-hidden bg-slate-100 dark:bg-slate-900">
+                    <img
+                      src={product.image || "https://via.placeholder.com/200x200?text=No+Image"}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      loading="lazy"
+                    />
+                    <div className="absolute top-2 right-2">
+                      {trend === "up" && (
+                        <div className="flex items-center gap-0.5 bg-green-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-semibold shadow">
+                          <FiTrendingUp className="text-[8px]" /> +{trendPercent}%
+                        </div>
+                      )}
+                      {trend === "down" && (
+                        <div className="flex items-center gap-0.5 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-semibold shadow">
+                          <FiTrendingDown className="text-[8px]" /> {trendPercent}%
+                        </div>
+                      )}
+                      {trend === "neutral" && (
+                        <div className="bg-gray-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-semibold shadow">
+                          0%
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-white line-clamp-1">
+                      {product.name}
+                    </h3>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="flex flex-col items-center justify-center bg-indigo-50 dark:bg-indigo-500/10 rounded-xl py-2 px-1">
+                        <FiShoppingCart className="text-indigo-500 text-sm mb-1" />
+                        <span className="text-[10px] text-slate-500 font-medium">Sold</span>
+                        <span className="text-sm font-bold text-indigo-600 mt-0.5">
+                          {product.totalQuantity}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center bg-green-50 dark:bg-green-500/10 rounded-xl py-2 px-1">
+                        <FaRupeeSign className="text-green-500 text-sm mb-1" />
+                        <span className="text-[10px] text-slate-500 font-medium">Revenue</span>
+                        <span className="text-sm font-bold text-green-600 mt-0.5 truncate max-w-full">
+                          ₹{Number(product.totalRevenue || 0).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-700/40 rounded-xl py-2 px-1">
+                        <svg className="w-4 h-4 text-slate-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-[10px] text-slate-500 font-medium">Previous</span>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
+                          {prevQty}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
 }

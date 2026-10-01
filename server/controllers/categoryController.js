@@ -1,6 +1,11 @@
 import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 
+const emitCategoriesUpdated = (req) => {
+  const io = req.app.get('io');
+  if (io) io.emit('categoriesUpdated');
+};
+
 export const getCategories = async (req, res) => {
   try {
    const categories = await Category.find().sort({ name: 1 });
@@ -16,6 +21,7 @@ export const createCategory = async (req, res) => {
     const existing = await Category.findOne({ name });
     if (existing) return res.status(400).json({ message: 'Category already exists' });
     const category = await Category.create({ name });
+    emitCategoriesUpdated(req);
     res.status(201).json(category);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -28,6 +34,7 @@ export const updateCategory = async (req, res) => {
     if (!category) return res.status(404).json({ message: 'Category not found' });
     category.name = req.body.name;
     await category.save();
+    emitCategoriesUpdated(req);
     res.json(category);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -46,6 +53,7 @@ export const deleteCategory = async (req, res) => {
     }
     
     await category.deleteOne();
+    emitCategoriesUpdated(req);
     res.json({ message: 'Category deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
