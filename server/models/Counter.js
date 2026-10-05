@@ -31,9 +31,6 @@ counterSchema.virtual('status').get(function() {
     if (!this.userId.isOnline) {
       return 'OFFLINE';
     }
-    if (this.userId.isOnBreak) {
-      return 'ON BREAK';
-    }
     return 'ONLINE';
   }
   return 'OFFLINE';

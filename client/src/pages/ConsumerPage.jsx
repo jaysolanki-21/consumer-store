@@ -152,15 +152,6 @@ function ConsumerPageContent() {
     };
   }, [fetchProducts, fetchCategories]);
 
-  const [isOnBreak, setIsOnBreak] = useState(user?.isOnBreak || false);
-  const [liveTick, setLiveTick] = useState(0);
-
-  useEffect(() => {
-    if (user) {
-      setIsOnBreak(user.isOnBreak || false);
-    }
-  }, [user]);
-
   // Sync counter profile & status with backend
   const fetchMyCounterData = useCallback(async () => {
     try {
@@ -169,7 +160,6 @@ function ConsumerPageContent() {
       const me = data.find((c) => c.userId?.email === currentEmail || c.userId?._id === user?._id);
       if (me && me.userId) {
         setUser((prev) => ({ ...prev, ...me.userId, name: me.name, counterName: me.name }));
-        setIsOnBreak(Boolean(me.userId.isOnBreak));
       }
     } catch (e) {}
   }, [user?.email, user?._id]);
@@ -183,55 +173,6 @@ function ConsumerPageContent() {
       socket.off("usersUpdated", fetchMyCounterData);
     };
   }, [fetchMyCounterData]);
-
-  // Tick every 1s for live working/active duration calculation
-  useEffect(() => {
-    const timer = setInterval(() => setLiveTick((t) => t + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const counterTimes = useMemo(() => {
-    if (!user) return { working: "0s", active: "0s", break: "0s", lastLogin: "Just now" };
-    let totalWorking = user.totalWorkingTime || 0;
-    let totalBreak = user.totalBreakTime || 0;
-
-    if (user.currentSessionStart) {
-      totalWorking += Math.max(0, Date.now() - new Date(user.currentSessionStart).getTime());
-    }
-    if (isOnBreak && user.currentBreakStart) {
-      totalBreak += Math.max(0, Date.now() - new Date(user.currentBreakStart).getTime());
-    } else if (isOnBreak && !user.currentBreakStart) {
-      totalBreak += 1000;
-    }
-    const totalActive = Math.max(0, totalWorking - totalBreak);
-
-    const format = (ms) => {
-      if (!ms || ms <= 0) return "0s";
-      const totalSec = Math.floor(ms / 1000);
-      const h = Math.floor(totalSec / 3600);
-      const m = Math.floor((totalSec % 3600) / 60);
-      const s = totalSec % 60;
-      if (h > 0) return `${h}h ${m}m ${s}s`;
-      if (m > 0) return `${m}m ${s}s`;
-      return `${s}s`;
-    };
-
-    return {
-      working: format(totalWorking),
-      active: format(totalActive),
-      break: format(totalBreak),
-      lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "Today"
-    };
-  }, [user, isOnBreak, liveTick]);
-
-  const toggleBreak = () => {
-    const newStatus = !isOnBreak;
-    setIsOnBreak(newStatus);
-    if (user && user._id) {
-      socket.emit("setBreakStatus", { userId: user._id, isOnBreak: newStatus });
-    }
-    toast.success(newStatus ? "Counter set to ON BREAK ☕" : "Counter set to ONLINE 🚀");
-  };
 
   const handleLogout = () => {
     if (cartItems.length > 0) {
@@ -559,24 +500,11 @@ function ConsumerPageContent() {
                 </div>
               </div>
 
-              {/* Realtime Active / Break Timer */}
-              <div className="hidden md:flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                <span className={`w-2 h-2 rounded-full ${isOnBreak ? 'bg-amber-500' : 'bg-emerald-500'} ${isOnBreak ? '' : 'animate-pulse'}`} />
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {isOnBreak ? 'Break:' : 'Active:'}
-                </span>
-                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                  {isOnBreak ? counterTimes.break : counterTimes.active}
-                </span>
+              {/* Online Status */}
+              <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Online</span>
               </div>
-
-              <button
-                onClick={toggleBreak}
-                className={`h-10 px-3 rounded-xl border ${isOnBreak ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700/50" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800"} font-semibold flex items-center gap-1.5 transition-all`}
-              >
-                <FiCoffee className="text-sm" />
-                <span className="hidden sm:inline text-sm">{isOnBreak ? "Resume Work" : "Take Break"}</span>
-              </button>
 
               <button
                 onClick={handleLogout}

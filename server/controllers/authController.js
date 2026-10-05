@@ -59,14 +59,10 @@ export const login = async (req, res) => {
       response.counterName = cName;
     }
 
-    // Create session / mark Online
+    // Mark Online
     user.lastLogin = new Date();
     user.lastSeen = new Date();
     user.isOnline = true;
-    user.isOnBreak = false;
-    if (!user.currentSessionStart) {
-      user.currentSessionStart = new Date();
-    }
     if (!user.loginHistory) user.loginHistory = [];
     user.loginHistory.push({
       loginAt: new Date(),

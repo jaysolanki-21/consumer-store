@@ -143,7 +143,7 @@ export const getOrders = async (req, res) => {
       .populate({
         path: 'counter',
         select: 'name description userId',
-        populate: { path: 'userId', select: 'name email isOnline isOnBreak lastLogin lastSeen totalWorkingTime totalActiveTime totalBreakTime' }
+        populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
       })
       .sort({ createdAt: -1 });
     res.json(orders);

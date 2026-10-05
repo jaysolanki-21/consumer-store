@@ -13,18 +13,6 @@ const endUserSession = (user) => {
   if (!user) return;
   user.isOnline = false;
   user.lastSeen = new Date();
-  if (user.currentSessionStart) {
-    const sessionDuration = new Date() - new Date(user.currentSessionStart);
-    user.totalWorkingTime = (user.totalWorkingTime || 0) + sessionDuration;
-    user.currentSessionStart = null;
-  }
-  if (user.isOnBreak && user.currentBreakStart) {
-    const breakDuration = new Date() - new Date(user.currentBreakStart);
-    user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
-    user.currentBreakStart = null;
-    user.isOnBreak = false;
-  }
-  user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
   if (user.loginHistory && user.loginHistory.length > 0) {
     const lastEntry = user.loginHistory[user.loginHistory.length - 1];
     if (lastEntry && !lastEntry.logoutAt) {
@@ -122,9 +110,6 @@ export const socketHandler = (io) => {
           user.isOnline = true;
           user.lastLogin = new Date();
           user.lastSeen = new Date();
-          if (!user.currentSessionStart) {
-            user.currentSessionStart = new Date();
-          }
           await user.save();
           io.emit('usersUpdated');
           io.emit('countersUpdated');
@@ -147,35 +132,7 @@ export const socketHandler = (io) => {
       } catch (err) {}
     });
 
-    // 3. setBreakStatus (Start Break / End Break)
-    socket.on('setBreakStatus', async ({ userId, isOnBreak }) => {
-      if (!userId) return;
-      try {
-        const user = await User.findById(userId);
-        if (user) {
-          if (isOnBreak && !user.isOnBreak) {
-            user.isOnBreak = true;
-            user.currentBreakStart = new Date();
-          } else if (!isOnBreak && user.isOnBreak) {
-            user.isOnBreak = false;
-            if (user.currentBreakStart) {
-              const breakDuration = new Date() - new Date(user.currentBreakStart);
-              user.totalBreakTime = (user.totalBreakTime || 0) + breakDuration;
-              user.currentBreakStart = null;
-            }
-          }
-          user.lastSeen = new Date();
-          user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
-          await user.save();
-          io.emit('usersUpdated');
-          io.emit('countersUpdated');
-        }
-      } catch (err) {
-        console.error('setBreakStatus error:', err);
-      }
-    });
-
-    // 4. userDisconnected (Manual Logout)
+    // 3. userDisconnected (Manual Logout)
     socket.on('userDisconnected', async (userId) => {
       if (!userId) return;
       const uId = String(userId);

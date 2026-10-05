@@ -1,7 +1,7 @@
 import Counter from '../models/Counter.js';
 import User from '../models/User.js';
 
-const USER_POPULATE_FIELDS = 'name email isActive disabledUntil lastLogin lastSeen isOnline isOnBreak totalWorkingTime totalActiveTime totalBreakTime currentSessionStart currentBreakStart';
+const USER_POPULATE_FIELDS = 'name email isActive disabledUntil lastLogin lastSeen isOnline';
 
 const emitCountersUpdated = (req) => {
   const io = req.app.get('io');
@@ -92,16 +92,6 @@ export const setCounterStatus = async (req, res) => {
         const isCurrentlyDisabled = !counter.isActive || (counter.disabledUntil && new Date(counter.disabledUntil) > new Date());
         if (isCurrentlyDisabled) {
           user.isOnline = false;
-          user.isOnBreak = false;
-          if (user.currentSessionStart) {
-            user.totalWorkingTime = (user.totalWorkingTime || 0) + (new Date() - user.currentSessionStart);
-            user.currentSessionStart = null;
-          }
-          if (user.currentBreakStart) {
-            user.totalBreakTime = (user.totalBreakTime || 0) + (new Date() - user.currentBreakStart);
-            user.currentBreakStart = null;
-          }
-          user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
         }
 
         await user.save();

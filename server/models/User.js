@@ -17,12 +17,6 @@ const userSchema = new mongoose.Schema({
   lastLogin: { type: Date },
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
-  isOnBreak: { type: Boolean, default: false },
-  currentSessionStart: { type: Date, default: null },
-  currentBreakStart: { type: Date, default: null },
-  totalWorkingTime: { type: Number, default: 0 },
-  totalBreakTime: { type: Number, default: 0 },
-  totalActiveTime: { type: Number, default: 0 },
   loginHistory: [{
     loginAt: { type: Date, default: Date.now },
     logoutAt: { type: Date, default: null },
@@ -42,9 +36,6 @@ userSchema.virtual('status').get(function() {
   }
   if (!this.isOnline) {
     return 'OFFLINE';
-  }
-  if (this.isOnBreak) {
-    return 'ON BREAK';
   }
   return 'ONLINE';
 });

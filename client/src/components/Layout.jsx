@@ -35,16 +35,6 @@ export default function Layout({ children }) {
   // REALTIME COUNTERS
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
-  
-  const [isOnBreak, setIsOnBreak] = useState(user?.isOnBreak || false);
-
-  const toggleBreak = () => {
-    const newStatus = !isOnBreak;
-    setIsOnBreak(newStatus);
-    if (user && user._id) {
-      socket.emit("setBreakStatus", { userId: user._id, isOnBreak: newStatus });
-    }
-  };
 
   // =========================
   // FETCH PENDING ORDERS
@@ -407,27 +397,7 @@ export default function Layout({ children }) {
           {/* STAFF NAV */}
           {user?.role === "staff" && (
             <div className="flex items-center gap-1 ml-4">
-              <Link
-                to="/staff"
-                className={`
-                  flex items-center gap-2 px-3 py-2 rounded-lg
-                  text-sm font-medium transition-all duration-200
-                  ${
-                    isActive("/staff")
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  }
-                `}
-              >
-                <FiShoppingBag className="text-sm" />
-                Orders
-
-                {pendingOrdersCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-medium">
-                    {pendingOrdersCount}
-                  </span>
-                )}
-              </Link>
+             
             </div>
           )}
         </div>
@@ -495,20 +465,6 @@ export default function Layout({ children }) {
               </p>
             </div>
           </div>
-
-          {/* BREAK TOGGLE */}
-          {user?.role === "staff" && (
-            <button
-              onClick={toggleBreak}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                isOnBreak 
-                  ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700/50" 
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800"
-              }`}
-            >
-              {isOnBreak ? "Resume Work" : "Take Break"}
-            </button>
-          )}
 
           {/* LOGOUT */}
           <button

@@ -47,7 +47,6 @@ export const createStaff = async (req, res) => {
       image: imageUrl, imageFileId,
       isActive: true,
       isOnline: false,
-      isOnBreak: false,
       lastSeen: new Date()
     });
 
@@ -106,16 +105,6 @@ export const setStaffStatus = async (req, res) => {
     const isCurrentlyDisabled = !user.isActive || (user.disabledUntil && new Date(user.disabledUntil) > new Date());
     if (isCurrentlyDisabled) {
       user.isOnline = false;
-      user.isOnBreak = false;
-      if (user.currentSessionStart) {
-        user.totalWorkingTime = (user.totalWorkingTime || 0) + (new Date() - user.currentSessionStart);
-        user.currentSessionStart = null;
-      }
-      if (user.currentBreakStart) {
-        user.totalBreakTime = (user.totalBreakTime || 0) + (new Date() - user.currentBreakStart);
-        user.currentBreakStart = null;
-      }
-      user.totalActiveTime = Math.max(0, (user.totalWorkingTime || 0) - (user.totalBreakTime || 0));
     }
 
     await user.save();
@@ -189,7 +178,7 @@ export const deleteStaff = async (req, res) => {
 export const getLoginHistory = async (req, res) => {
   try {
     const users = await User.find({ role: { $in: ['staff', 'counter', 'admin'] } })
-      .select('name email role loginHistory lastLogin lastSeen isOnline isOnBreak totalWorkingTime totalActiveTime totalBreakTime currentSessionStart currentBreakStart')
+      .select('name email role loginHistory lastLogin lastSeen isOnline')
       .lean();
 
     const history = [];

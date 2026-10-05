@@ -91,60 +91,21 @@ const sortByOldest = (list) =>
     (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
   );
 
-// ✅ Get real-time status: DISABLED (highest priority) -> OFFLINE -> ON BREAK -> ONLINE
+// ✅ Get real-time status: DISABLED -> OFFLINE -> ONLINE
 const getMemberStatus = (member) => {
   const isDisabled = !member?.isActive || (member?.disabledUntil && new Date(member.disabledUntil) > new Date());
   if (isDisabled) return 'DISABLED';
   if (!member?.isOnline) return 'OFFLINE';
-  if (member?.isOnBreak) return 'ON BREAK';
   return 'ONLINE';
 };
 
 const getStatusDotColor = (status) => {
   switch (status) {
     case 'ONLINE': return 'bg-emerald-500';
-    case 'ON BREAK': return 'bg-amber-500';
     case 'DISABLED': return 'bg-rose-500';
     case 'OFFLINE': default: return 'bg-gray-400';
   }
 };
-
-function formatDuration(ms) {
-  if (!ms || ms <= 0) return '0s';
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-  return `${seconds}s`;
-}
-
-function calculateWorkingTimes(user) {
-  if (!user) return { working: '0s', active: '0s', break: '0s' };
-  let totalWorking = user.totalWorkingTime || 0;
-  let totalBreak = user.totalBreakTime || 0;
-
-  if (user.isOnline && user.currentSessionStart) {
-    totalWorking += Math.max(0, Date.now() - new Date(user.currentSessionStart).getTime());
-  }
-
-  if (user.isOnline && user.isOnBreak && user.currentBreakStart) {
-    totalBreak += Math.max(0, Date.now() - new Date(user.currentBreakStart).getTime());
-  }
-
-  const totalActive = Math.max(0, totalWorking - totalBreak);
-
-  return {
-    working: formatDuration(totalWorking),
-    active: formatDuration(totalActive),
-    break: formatDuration(totalBreak)
-  };
-}
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
@@ -154,13 +115,6 @@ export default function AdminStaffPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
-  const [, setTick] = useState(0);
-
-  // Re-render every 1s to keep durations live in real-time
-  useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -208,8 +162,6 @@ export default function AdminStaffPage() {
 
     if (statusFilter === 'online') {
       list = list.filter(m => getMemberStatus(m) === 'ONLINE');
-    } else if (statusFilter === 'break') {
-      list = list.filter(m => getMemberStatus(m) === 'ON BREAK');
     } else if (statusFilter === 'offline') {
       list = list.filter(m => getMemberStatus(m) === 'OFFLINE');
     } else if (statusFilter === 'disabled') {
@@ -233,23 +185,21 @@ export default function AdminStaffPage() {
     }
   };
 
-  // ✅ Stats with 4 statuses
+  // ✅ Stats with 3 statuses
   const stats = useMemo(() => {
     const total = staff.length;
     let online = 0;
-    let onBreak = 0;
     let offline = 0;
     let disabled = 0;
 
     staff.forEach(s => {
       const st = getMemberStatus(s);
       if (st === 'ONLINE') online++;
-      else if (st === 'ON BREAK') onBreak++;
       else if (st === 'DISABLED') disabled++;
       else offline++;
     });
 
-    return { total, online, onBreak, offline, disabled };
+    return { total, online, offline, disabled };
   }, [staff]);
 
   // ✅ PAGINATION
@@ -451,8 +401,8 @@ export default function AdminStaffPage() {
         </button>
       </div>
 
-      {/* Stats - 5 Realtime Presence Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+      {/* Stats - Realtime Presence Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
@@ -480,21 +430,6 @@ export default function AdminStaffPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-amber-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-white" />
-                On Break
-              </p>
-              <p className="text-2xl font-bold mt-1">{stats.onBreak}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiClock className="text-xl text-white" />
-            </div>
-          </div>
-        </div>
-
         <div className="bg-gradient-to-br from-slate-500 to-slate-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
@@ -510,7 +445,7 @@ export default function AdminStaffPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200 col-span-2 sm:col-span-1">
+        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-rose-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
@@ -540,7 +475,7 @@ export default function AdminStaffPage() {
             />
           </div>
 
-          {/* ✅ 5 Filter Tabs */}
+          {/* Filter Tabs */}
           <div className="flex flex-wrap bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl gap-1">
             <button
               onClick={() => setStatusFilter('all')}
@@ -562,17 +497,6 @@ export default function AdminStaffPage() {
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Online ({stats.online})
-            </button>
-            <button
-              onClick={() => setStatusFilter('break')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                statusFilter === 'break'
-                  ? 'bg-white dark:bg-gray-700 shadow text-amber-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              On Break ({stats.onBreak})
             </button>
             <button
               onClick={() => setStatusFilter('offline')}
@@ -622,9 +546,6 @@ export default function AdminStaffPage() {
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Last Login</th>
                   <th className="px-5 py-3">Last Seen</th>
-                  <th className="px-5 py-3">Working Time</th>
-                  <th className="px-5 py-3">Active Time</th>
-                  <th className="px-5 py-3">Break Time</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -632,7 +553,6 @@ export default function AdminStaffPage() {
                 {pagedStaff.map(member => {
                   const status = getMemberStatus(member);
                   const dotColor = getStatusDotColor(status);
-                  const times = calculateWorkingTimes(member);
 
                   return (
                     <tr
@@ -680,12 +600,6 @@ export default function AdminStaffPage() {
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/50">
                               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                               ONLINE
-                            </span>
-                          )}
-                          {status === 'ON BREAK' && (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50">
-                              <span className="w-2 h-2 rounded-full bg-amber-500" />
-                              ON BREAK
                             </span>
                           )}
                           {status === 'OFFLINE' && (
@@ -738,27 +652,6 @@ export default function AdminStaffPage() {
                             </span>
                           )}
                         </div>
-                      </td>
-
-                      {/* Working Time */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 font-mono">
-                          {times.working}
-                        </span>
-                      </td>
-
-                      {/* Active Time */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-mono">
-                          {times.active}
-                        </span>
-                      </td>
-
-                      {/* Break Time */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-mono">
-                          {times.break}
-                        </span>
                       </td>
 
                       <td className="px-5 py-4 whitespace-nowrap text-right">
