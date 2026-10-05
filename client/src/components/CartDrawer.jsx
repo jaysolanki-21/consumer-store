@@ -21,6 +21,7 @@ import {
 } from "react-icons/fi";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { showConfirm } from "../utils/alertService";
 
 export default function CartDrawer({
   open,
@@ -145,10 +146,13 @@ export default function CartDrawer({
     [dispatch]
   );
 
-  const handleClearCart = () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to clear the cart?"
-    );
+  const handleClearCart = async () => {
+    const confirmed = await showConfirm({
+      title: "Clear Cart?",
+      text: "Are you sure you want to remove all items from your cart?",
+      confirmButtonText: "Yes, Clear Cart",
+      confirmButtonColor: "#ef4444"
+    });
 
     if (!confirmed) return;
 

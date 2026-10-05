@@ -38,7 +38,9 @@ import {
   FiMonitor,
   FiUser,
   FiMail,
+  FiCreditCard,
 } from "react-icons/fi";
+import { FaRupeeSign } from "react-icons/fa";
 
 // ✅ Notification sound URL
 const NOTIFICATION_SOUND_URL = "/sounds/notification-bell.mp3";
@@ -100,6 +102,30 @@ const getCounterName = (orderOrId) => {
   return "Counter 1";
 };
 
+// ✅ Get payment method (Cash / Online)
+const getPaymentMethod = (order) => {
+  if (!order) return "Cash";
+  const m = order.payment?.method || order.paymentMethod || "Cash";
+  return m.toLowerCase() === "cash" ? "Cash" : "Online";
+};
+
+// ✅ Extract numeric value from counter name for natural sort
+// e.g. "Counter 1" → 1, "Counter 12" → 12, "Counter A" → NaN
+const extractCounterNumber = (name) => {
+  if (!name) return Number.MAX_SAFE_INTEGER;
+  const match = String(name).match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
+};
+
+// ✅ Natural sort comparator for counters
+const compareCounters = (a, b) => {
+  const na = extractCounterNumber(a);
+  const nb = extractCounterNumber(b);
+  if (na !== nb) return na - nb;
+  // Fallback to alphabetical if both are non-numeric
+  return String(a).localeCompare(String(b));
+};
+
 // ✅ Order Card Component with Counter Display
 const OrderCard = React.memo(
   ({ order, onConfirm }) => {
@@ -119,6 +145,8 @@ const OrderCard = React.memo(
     }, [onConfirm, order._id, isConfirming]);
 
     const counterName = getCounterName(order);
+    const paymentMethod = getPaymentMethod(order);
+    const isCash = paymentMethod === "Cash";
 
     return (
       <motion.div
@@ -144,6 +172,21 @@ const OrderCard = React.memo(
                   <span>Counter: {counterName}</span>
                 </div>
               )}
+              {/* ✅ Payment Badge */}
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                  isCash
+                    ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                }`}
+              >
+                {isCash ? (
+                  <FaRupeeSign className="text-xs" />
+                ) : (
+                  <FiCreditCard className="text-xs" />
+                )}
+                <span>{paymentMethod}</span>
+              </div>
             </div>
             <div>
               {order.status === "Pending" ? (
@@ -268,7 +311,7 @@ export default function StaffPage() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [audioElement, setAudioElement] = useState(null);
 
-  // ✅ Get unique counters from orders
+  // ✅ Get unique counters from orders — SORTED NUMERICALLY (1, 2, 3, ...)
   const uniqueCounters = useMemo(() => {
     const counters = new Set();
     allOrders.forEach((order) => {
@@ -277,11 +320,14 @@ export default function StaffPage() {
         counters.add(name);
       }
     });
-    return Array.from(counters);
+    return Array.from(counters).sort(compareCounters);
   }, [allOrders]);
 
   // ✅ Counter filter state
   const [filterCounter, setFilterCounter] = useState("all");
+
+  // ✅ Payment filter state (all / Cash / Online)
+  const [filterPayment, setFilterPayment] = useState("all");
 
   // ✅ Staff Real-time Profile
   const authUser = useSelector((state) => state.auth?.user);
@@ -372,16 +418,24 @@ export default function StaffPage() {
     );
   }, [dateFilteredOrders, filterCounter]);
 
+  // ✅ PAYMENT FILTER (Cash / Online)
+  const paymentFilteredOrders = useMemo(() => {
+    if (filterPayment === "all") return counterFilteredOrders;
+    return counterFilteredOrders.filter(
+      (order) => getPaymentMethod(order) === filterPayment,
+    );
+  }, [counterFilteredOrders, filterPayment]);
+
   // ✅ SEARCH FILTER - Order ID
   const searchFilteredOrders = useMemo(() => {
-    if (!filter.trim()) return counterFilteredOrders;
+    if (!filter.trim()) return paymentFilteredOrders;
     const term = filter.toLowerCase().trim();
-    return counterFilteredOrders.filter(
+    return paymentFilteredOrders.filter(
       (order) =>
         order._id.toLowerCase().includes(term) ||
         order._id.slice(-6).toLowerCase().includes(term),
     );
-  }, [counterFilteredOrders, filter]);
+  }, [paymentFilteredOrders, filter]);
 
   const pendingOrders = useMemo(
     () => searchFilteredOrders.filter((o) => o.status === "Pending"),
@@ -662,29 +716,57 @@ export default function StaffPage() {
               <FiChevronRight className="text-indigo-500" />
             </button>
           </div>
-
-          {/* ✅ Counter Filter */}
-          {uniqueCounters.length > 0 && (
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
-              <FiMonitor className="text-indigo-500" />
-              <select
-                value={filterCounter}
-                onChange={(e) => setFilterCounter(e.target.value)}
-                className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
-              >
-                <option value="all">All Counters</option>
-                {uniqueCounters.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
       </div>
 
-     
+      {/* ✅ FILTER ROW: Counter + Payment */}
+      <div className="flex items-center gap-3 flex-wrap mb-6">
+        {/* ✅ Counter Filter — sorted 1, 2, 3, ... */}
+        {uniqueCounters.length > 0 && (
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
+            <FiMonitor className="text-indigo-500" />
+            <select
+              value={filterCounter}
+              onChange={(e) => setFilterCounter(e.target.value)}
+              className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
+            >
+              <option value="all">All Counters</option>
+              {uniqueCounters.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* ✅ Payment Filter — All / Cash / Online */}
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
+          <FaRupeeSign className="text-indigo-500" />
+          <select
+            value={filterPayment}
+            onChange={(e) => setFilterPayment(e.target.value)}
+            className="bg-transparent outline-none text-sm font-medium border-none p-0 focus:ring-0 dark:text-white"
+          >
+            <option value="all">All Payments</option>
+            <option value="Cash">Cash</option>
+            <option value="Online">Online</option>
+          </select>
+        </div>
+
+        {/* ✅ Active filter summary */}
+        {(filterCounter !== "all" || filterPayment !== "all") && (
+          <button
+            onClick={() => {
+              setFilterCounter("all");
+              setFilterPayment("all");
+            }}
+            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-1"
+          >
+            Clear filters ✕
+          </button>
+        )}
+      </div>
 
       {/* DATE INFO */}
       <div className="mb-4 flex items-center justify-between">
@@ -697,15 +779,11 @@ export default function StaffPage() {
             {displayDate}
           </span>
         </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+          {searchFilteredOrders.length}{" "}
+          {searchFilteredOrders.length === 1 ? "order" : "orders"} match filters
+        </div>
       </div>
-
-      {/* STATS CARDS */}
-      {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Pending Orders" value={pendingCount} icon={FiClock} colorGradient="bg-gradient-to-br from-amber-500 to-orange-600" />
-        <StatCard title="Completed Orders" value={confirmedCount} icon={FiCheckCircle} colorGradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
-        <StatCard title="Revenue (Today)" value={`₹${totalRevenue.toLocaleString()}`} icon={FiTrendingUp} colorGradient="bg-gradient-to-br from-indigo-500 to-purple-600" />
-        <StatCard title="Active Orders" value={activeOrdersCount} icon={FiShoppingBag} colorGradient="bg-gradient-to-br from-rose-500 to-pink-600" />
-      </div> */}
 
       {/* SEARCH + TABS */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">

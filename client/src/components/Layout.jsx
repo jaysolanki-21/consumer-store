@@ -184,7 +184,6 @@ export default function Layout({ children }) {
     { path: "/admin/categories", label: "Categories", icon: FiLayers },
     { path: "/admin/orders", label: "Orders", icon: FiShoppingBag },
     { path: "/admin/stock-refill", label: "Stock", icon: FiDatabase },
-    { path: "/admin/alerts", label: "Alerts", icon: FiBell, badge: lowStockCount },
     { path: "/admin/staff", label: "Staff", icon: FiUsers },
     { path: "/admin/counters", label: "Counters", icon: FiGrid },
     { path: "/admin/insights", label: "Insights", icon: FiBarChart2 },

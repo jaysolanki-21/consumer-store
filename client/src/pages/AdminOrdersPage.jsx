@@ -3,8 +3,7 @@ import api from "../services/api";
 import socket from "../services/socket";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { confirmAlert } from "react-confirm-alert";
-import "react-confirm-alert/src/react-confirm-alert.css";
+import Swal from "sweetalert2";
 
 // ✅ Thermal receipt component (reused for reprint)
 import ThermalReceipt from "../components/ThermalReceipt";
@@ -72,6 +71,37 @@ function addDays(dateStr, days) {
   return `${newYear}-${newMonth}-${newDay}`;
 }
 
+// ✅ Format time helper (IST)
+function formatISTTime(dateInput) {
+  if (!dateInput) return "N/A";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "N/A";
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
+// ✅ Human-readable duration
+function humanDuration(ms) {
+  if (ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(" ");
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,12 +166,6 @@ export default function AdminOrdersPage() {
     return order.counterName || "Counter 1";
   };
 
-  const getCounterName = (counterIdOrOrder) => {
-    if (typeof counterIdOrOrder === 'object') return getOrderCounterName(counterIdOrOrder);
-    if (countersMap[counterIdOrOrder]) return countersMap[counterIdOrOrder];
-    return "Counter 1";
-  };
-
   // ✅ Receipt state — order that should be printed
   const [printOrder, setPrintOrder] = useState(null);
 
@@ -162,15 +186,6 @@ export default function AdminOrdersPage() {
     return () => clearTimeout(timer);
   }, [printOrder]);
 
-  // ✅ Get unique counters from orders
-  const getUniqueCounters = useCallback(() => {
-    const counters = new Set();
-    orders.forEach((order) => {
-      if (order.counterId) counters.add(order.counterId);
-    });
-    return Array.from(counters);
-  }, [orders]);
-
   // ✅ Calculate order completion time
   const getCompletionTime = (order) => {
     if (order.status !== "Confirmed") return null;
@@ -188,44 +203,119 @@ export default function AdminOrdersPage() {
     return `${diffSecs}s`;
   };
 
-  const showConfirm = (title, message, onConfirm, onCancel = () => {}) => {
-    confirmAlert({
-      title,
-      message,
-      buttons: [
-        { label: "Yes, Delete", onClick: onConfirm },
-        { label: "Cancel", onClick: onCancel },
-      ],
-      customUI: ({ onClose }) => (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
-              {title}
-            </h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">{message}</p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  onClose();
-                  onCancel();
-                }}
-                className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onClose();
-                  onConfirm();
-                }}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+  // ✅ Generic confirmation dialog builder
+  const showConfirmDialog = async ({
+    title,
+    headline,
+    subtext,
+    rows = [],
+    confirmText = "Yes, Proceed",
+    confirmColor = "#dc2626",
+    icon = "warning",
+  }) => {
+    const html = `
+      <div style="text-align:left; font-size:14px; line-height:1.9;">
+        <div style="background:#f1f5f9; padding:10px 14px; border-radius:10px; margin-bottom:12px;">
+          <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${headline || ""}</div>
+          <div style="color:#475569;">${subtext || ""}</div>
         </div>
-      ),
+        ${
+          rows.length
+            ? `<table style="width:100%; border-collapse:collapse;">
+                ${rows
+                  .map(
+                    ([k, v]) => `
+                  <tr>
+                    <td style="padding:6px 8px; color:#64748b; font-weight:600; width:45%;">${k}</td>
+                    <td style="padding:6px 8px; color:#0f172a; font-weight:600;">${v}</td>
+                  </tr>`,
+                  )
+                  .join("")}
+              </table>`
+            : ""
+        }
+      </div>
+    `;
+
+    const result = await Swal.fire({
+      title,
+      html,
+      icon,
+      showCancelButton: true,
+      confirmButtonColor: confirmColor,
+      cancelButtonColor: "#94a3b8",
+      confirmButtonText: confirmText,
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+      customClass: {
+        popup:
+          "rounded-2xl dark:bg-slate-800 dark:text-white border dark:border-slate-700 shadow-2xl",
+      },
+    });
+
+    return result.isConfirmed;
+  };
+
+  // ✅ Success alert after action
+  const showActionSuccess = (title, order, actionMeta = {}) => {
+    const createdAt = order?.createdAt ? new Date(order.createdAt) : null;
+    const now = new Date();
+    const durationMs = createdAt ? now - createdAt : 0;
+    const durationStr = createdAt ? humanDuration(durationMs) : "N/A";
+
+    const actionTime = actionMeta.actionTime || now;
+
+    const rows = [
+      ["Order ID", `#${order._id.slice(-8)}`],
+      ["Status", actionMeta.newStatus || order.status],
+      ["Counter", getOrderCounterName(order)],
+      ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+      ["Order Placed", formatISTTime(order.createdAt)],
+      [`${actionMeta.actionLabel || "Action"} At`, formatISTTime(actionTime)],
+      ["Total Time", durationStr],
+    ];
+
+    if (actionMeta.extraRows && Array.isArray(actionMeta.extraRows)) {
+      rows.push(...actionMeta.extraRows);
+    }
+
+    const html = `
+      <div style="text-align:left; font-size:14px; line-height:1.9;">
+        <div style="background:#f1f5f9; padding:10px 14px; border-radius:10px; margin-bottom:12px;">
+          <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${actionMeta.headline || title}</div>
+          <div style="color:#475569;">${actionMeta.subtext || ""}</div>
+        </div>
+        <table style="width:100%; border-collapse:collapse;">
+          ${rows
+            .map(
+              ([k, v]) => `
+            <tr>
+              <td style="padding:6px 8px; color:#64748b; font-weight:600; width:45%;">${k}</td>
+              <td style="padding:6px 8px; color:#0f172a; font-weight:600;">${v}</td>
+            </tr>`,
+            )
+            .join("")}
+        </table>
+      </div>
+    `;
+
+    Swal.fire({
+      title,
+      html,
+      icon: actionMeta.icon || "success",
+      confirmButtonText: "OK",
+      confirmButtonColor:
+        actionMeta.icon === "error"
+          ? "#dc2626"
+          : actionMeta.icon === "warning"
+            ? "#f59e0b"
+            : actionMeta.icon === "info"
+              ? "#6366f1"
+              : "#16a34a",
+      customClass: {
+        popup:
+          "rounded-2xl dark:bg-slate-800 dark:text-white border dark:border-slate-700 shadow-2xl",
+      },
     });
   };
 
@@ -247,76 +337,46 @@ export default function AdminOrdersPage() {
       order.payment?.changeGiven ??
       null;
 
-    confirmAlert({
-      customUI: ({ onClose }) => (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">
-              Order Information
-            </h2>
-            <div className="space-y-3 mb-6 text-sm text-slate-600 dark:text-slate-300">
-              <p>
-                <strong>Counter:</strong> {getOrderCounterName(order)}
-              </p>
-              <p>
-                <strong>Payment Method:</strong> {paymentMethod}
-              </p>
-              {!isCash && (
-                <p>
-                  <strong>Payment Status:</strong>{" "}
-                  {order.payment?.status || "N/A"}
-                </p>
-              )}
+    const counterName = getOrderCounterName(order);
 
-              {isCash && (
-                <>
-                  <p>
-                    <strong>Cash Received:</strong>{" "}
-                    <span className="font-bold text-emerald-600">
-                      ₹
-                      {Number(
-                        cashReceived ?? order.totalAmount,
-                      ).toLocaleString()}
-                    </span>
-                  </p>
-                  <p>
-                    <strong>Change Given:</strong>{" "}
-                    <span className="font-bold text-amber-600">
-                      ₹{Number(changeGiven ?? 0).toLocaleString()}
-                    </span>
-                  </p>
-                </>
-              )}
+    let htmlContent = `
+      <div style="text-align: left; font-size: 14px; line-height: 1.8;">
+        <p><strong>Counter:</strong> ${counterName}</p>
+        <p><strong>Payment Method:</strong> ${paymentMethod}</p>
+    `;
 
-              {order.payment?.gatewayOrderId && (
-                <p>
-                  <strong>Gateway Order ID:</strong>{" "}
-                  {order.payment.gatewayOrderId}
-                </p>
-              )}
-              {order.payment?.gatewayPaymentId && (
-                <p>
-                  <strong>Gateway Payment ID:</strong>{" "}
-                  {order.payment.gatewayPaymentId}
-                </p>
-              )}
-              {order.payment?.transactionId && (
-                <p>
-                  <strong>Transaction ID:</strong> {order.payment.transactionId}
-                </p>
-              )}
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      ),
+    if (!isCash) {
+      htmlContent += `<p><strong>Payment Status:</strong> ${order.payment?.status || "N/A"}</p>`;
+    }
+
+    if (isCash) {
+      htmlContent += `
+        <p><strong>Cash Received:</strong> <span style="font-weight: bold; color: #10b981;">₹${Number(cashReceived ?? order.totalAmount).toLocaleString()}</span></p>
+        <p><strong>Change Given:</strong> <span style="font-weight: bold; color: #f59e0b;">₹${Number(changeGiven ?? 0).toLocaleString()}</span></p>
+      `;
+    }
+
+    if (order.payment?.gatewayOrderId) {
+      htmlContent += `<p><strong>Gateway Order ID:</strong> ${order.payment.gatewayOrderId}</p>`;
+    }
+    if (order.payment?.gatewayPaymentId) {
+      htmlContent += `<p><strong>Gateway Payment ID:</strong> ${order.payment.gatewayPaymentId}</p>`;
+    }
+    if (order.payment?.transactionId) {
+      htmlContent += `<p><strong>Transaction ID:</strong> ${order.payment.transactionId}</p>`;
+    }
+
+    htmlContent += `</div>`;
+
+    Swal.fire({
+      title: "Order Information",
+      html: htmlContent,
+      icon: "info",
+      confirmButtonText: "Close",
+      confirmButtonColor: "#6366f1",
+      customClass: {
+        popup: "rounded-2xl dark:bg-slate-800 dark:text-white border dark:border-slate-700 shadow-2xl",
+      },
     });
   };
 
@@ -355,204 +415,300 @@ export default function AdminOrdersPage() {
     };
   }, [fetchOrders, handleLiveUpdate]);
 
-  // ✅ CONFIRM — auto-collapse panel
+  // ✅ CONFIRM — confirmation dialog + success alert
   const confirmOrder = useCallback(
-    async (orderId) => {
+    async (order) => {
+      const orderId = order._id;
+
+      const confirmed = await showConfirmDialog({
+        title: "Confirm Order",
+        headline: "Confirm this order?",
+        subtext:
+          "Stock will be deducted and the order will be marked as Confirmed.",
+        icon: "question",
+        confirmColor: "#16a34a",
+        confirmText: "Yes, Confirm",
+        rows: [
+          ["Order ID", `#${order._id.slice(-8)}`],
+          ["Counter", getOrderCounterName(order)],
+          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+          ["Order Placed", formatISTTime(order.createdAt)],
+          [
+            "Waiting For",
+            humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+          ],
+        ],
+      });
+
+      if (!confirmed) return;
+
+      const startTime = Date.now();
       try {
         await api.put(`/orders/${orderId}/confirm`);
-        toast.success("Order confirmed successfully");
 
         if (expandedOrderId === orderId) {
           setExpandedOrderId(null);
         }
 
+        showActionSuccess("Order Confirmed ✅", order, {
+          headline: "Order has been confirmed successfully.",
+          subtext: "Stock has been deducted and order is ready for processing.",
+          newStatus: "Confirmed",
+          actionLabel: "Confirmed",
+          actionTime: new Date(startTime),
+          icon: "success",
+          extraRows: [
+            [
+              "Processing Time",
+              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+            ],
+          ],
+        });
+
         fetchOrders();
       } catch (err) {
         toast.error(err.response?.data?.message || "Confirmation failed");
+        showActionSuccess("Confirmation Failed ❌", order, {
+          headline: "Could not confirm the order.",
+          subtext: err.response?.data?.message || "Please try again.",
+          icon: "error",
+          actionLabel: "Attempted",
+        });
       }
     },
     [fetchOrders, expandedOrderId],
   );
 
-  // ✅ CANCEL — auto-collapse panel
+  // ✅ CANCEL — confirmation dialog + success alert
   const cancelOrder = useCallback(
-    async (orderId) => {
-      showConfirm(
-        "Cancel Order",
-        "Are you sure you want to cancel this order? This action can be reverted.",
-        async () => {
-          try {
-            await api.put(`/orders/${orderId}/cancel`);
-            toast.success("Order cancelled successfully");
+    async (order) => {
+      const orderId = order._id;
 
-            if (expandedOrderId === orderId) {
-              setExpandedOrderId(null);
-            }
+      const confirmed = await showConfirmDialog({
+        title: "Cancel Order",
+        headline: "Cancel this order?",
+        subtext:
+          "Are you sure you want to cancel this order? This action can be reverted.",
+        icon: "warning",
+        confirmColor: "#dc2626",
+        confirmText: "Yes, Cancel",
+        rows: [
+          ["Order ID", `#${order._id.slice(-8)}`],
+          ["Counter", getOrderCounterName(order)],
+          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+          ["Order Placed", formatISTTime(order.createdAt)],
+          [
+            "Pending For",
+            humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+          ],
+        ],
+      });
 
-            fetchOrders();
-          } catch (err) {
-            toast.error(err.response?.data?.message || "Cancellation failed");
-          }
-        },
-      );
+      if (!confirmed) return;
+
+      const startTime = Date.now();
+      try {
+        await api.put(`/orders/${orderId}/cancel`);
+
+        if (expandedOrderId === orderId) {
+          setExpandedOrderId(null);
+        }
+
+        showActionSuccess("Order Cancelled ❌", order, {
+          headline: "Order has been cancelled.",
+          subtext: "Stock has been restored. You can revert this if needed.",
+          newStatus: "Cancelled",
+          actionLabel: "Cancelled",
+          actionTime: new Date(startTime),
+          icon: "warning",
+          extraRows: [
+            [
+              "Pending Duration",
+              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+            ],
+          ],
+        });
+
+        fetchOrders();
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Cancellation failed");
+        showActionSuccess("Cancellation Failed ❌", order, {
+          headline: "Could not cancel the order.",
+          subtext: err.response?.data?.message || "Please try again.",
+          icon: "error",
+          actionLabel: "Attempted",
+        });
+      }
     },
     [fetchOrders, expandedOrderId],
   );
 
-  // ✅ REVERT — auto-collapse panel
+  // ✅ REVERT — confirmation dialog + success alert
   const revertOrder = useCallback(
-    async (orderId) => {
-      showConfirm(
-        "Revert Order",
-        "Revert this order back to Pending? Stock will be adjusted accordingly.",
-        async () => {
-          setRevertingId(orderId);
-          try {
-            await api.put(`/orders/${orderId}/revert`);
-            toast.success("Order reverted to Pending");
+    async (order) => {
+      const orderId = order._id;
 
-            if (expandedOrderId === orderId) {
-              setExpandedOrderId(null);
-            }
+      const confirmed = await showConfirmDialog({
+        title: "Revert Order",
+        headline: "Revert this order to Pending?",
+        subtext: "Stock will be adjusted accordingly.",
+        icon: "question",
+        confirmColor: "#f59e0b",
+        confirmText: "Yes, Revert",
+        rows: [
+          ["Order ID", `#${order._id.slice(-8)}`],
+          ["Current Status", order.status],
+          ["Counter", getOrderCounterName(order)],
+          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+          ["Order Placed", formatISTTime(order.createdAt)],
+        ],
+      });
 
-            fetchOrders();
-          } catch (err) {
-            toast.error(err.response?.data?.message || "Revert failed");
-          } finally {
-            setRevertingId(null);
-          }
-        },
-      );
+      if (!confirmed) return;
+
+      const startTime = Date.now();
+      setRevertingId(orderId);
+      try {
+        await api.put(`/orders/${orderId}/revert`);
+
+        if (expandedOrderId === orderId) {
+          setExpandedOrderId(null);
+        }
+
+        showActionSuccess("Order Reverted ↩️", order, {
+          headline: "Order has been reverted to Pending.",
+          subtext: "Stock has been adjusted accordingly.",
+          newStatus: "Pending",
+          actionLabel: "Reverted",
+          actionTime: new Date(startTime),
+          icon: "info",
+          extraRows: [
+            ["Previous Status", order.status],
+            [
+              "Time Since Order",
+              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+            ],
+          ],
+        });
+
+        fetchOrders();
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Revert failed");
+        showActionSuccess("Revert Failed ❌", order, {
+          headline: "Could not revert the order.",
+          subtext: err.response?.data?.message || "Please try again.",
+          icon: "error",
+          actionLabel: "Attempted",
+        });
+      } finally {
+        setRevertingId(null);
+      }
     },
     [fetchOrders, expandedOrderId],
   );
 
-  // ✅ DELETE — auto-collapse panel
+  // ✅ DELETE — confirmation dialog + success alert
   const deleteOrder = useCallback(
-    async (orderId, orderStatus) => {
+    async (order) => {
+      const orderId = order._id;
+      const orderStatus = order.status;
+
       if (orderStatus !== "Cancelled" && orderStatus !== "Pending") {
         toast.error("Only cancelled or pending orders can be deleted");
         return;
       }
 
-      showConfirm(
-        "Delete Order",
-        "Are you sure you want to permanently delete this order? This action cannot be undone.",
-        async () => {
-          setDeletingId(orderId);
-          try {
-            await api.delete(`/orders/${orderId}`);
-            toast.success("Order deleted successfully");
+      const confirmed = await showConfirmDialog({
+        title: "Delete Order",
+        headline: "Permanently delete this order?",
+        subtext: "This action cannot be undone.",
+        icon: "warning",
+        confirmColor: "#dc2626",
+        confirmText: "Yes, Delete",
+        rows: [
+          ["Order ID", `#${order._id.slice(-8)}`],
+          ["Current Status", orderStatus],
+          ["Counter", getOrderCounterName(order)],
+          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+          ["Order Placed", formatISTTime(order.createdAt)],
+        ],
+      });
 
-            if (expandedOrderId === orderId) {
-              setExpandedOrderId(null);
-            }
+      if (!confirmed) return;
 
-            fetchOrders();
-          } catch (err) {
-            toast.error(err.response?.data?.message || "Delete failed");
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      );
+      const startTime = Date.now();
+      setDeletingId(orderId);
+      try {
+        await api.delete(`/orders/${orderId}`);
+
+        if (expandedOrderId === orderId) {
+          setExpandedOrderId(null);
+        }
+
+        showActionSuccess("Order Deleted 🗑️", order, {
+          headline: "Order has been permanently deleted.",
+          subtext: "This record is no longer available in the system.",
+          actionLabel: "Deleted",
+          actionTime: new Date(startTime),
+          icon: "warning",
+          extraRows: [
+            ["Previous Status", orderStatus],
+            [
+              "Record Lifetime",
+              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
+            ],
+          ],
+        });
+
+        fetchOrders();
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Delete failed");
+        showActionSuccess("Delete Failed ❌", order, {
+          headline: "Could not delete the order.",
+          subtext: err.response?.data?.message || "Please try again.",
+          icon: "error",
+          actionLabel: "Attempted",
+        });
+      } finally {
+        setDeletingId(null);
+      }
     },
     [fetchOrders, expandedOrderId],
   );
 
-  const deleteAllPendingOrders = useCallback(async () => {
-    const pendingOrdersForDate = orders.filter(
-      (o) => o.status === "Pending" && isSameISTDate(o.createdAt, filterDate),
-    );
-
-    if (pendingOrdersForDate.length === 0) {
-      toast.error(`No pending orders found for ${filterDate}`);
-      return;
-    }
-
-    showConfirm(
-      "Delete All Pending Orders",
-      `Are you sure you want to permanently delete ALL ${pendingOrdersForDate.length} pending orders for ${filterDate}?`,
-      async () => {
-        try {
-          await api.delete("/orders/bulk/pending", {
-            data: { date: filterDate },
-          });
-          toast.success(
-            `${pendingOrdersForDate.length} pending orders deleted`,
-          );
-          fetchOrders();
-        } catch (err) {
-          toast.error(err.response?.data?.message || "Bulk delete failed");
-        }
-      },
-    );
-  }, [orders, filterDate, fetchOrders]);
-
-  const deleteAllCancelledOrders = useCallback(async () => {
-    const cancelledOrdersForDate = orders.filter(
-      (o) => o.status === "Cancelled" && isSameISTDate(o.createdAt, filterDate),
-    );
-
-    if (cancelledOrdersForDate.length === 0) {
-      toast.error(`No cancelled orders found for ${filterDate}`);
-      return;
-    }
-
-    showConfirm(
-      "Delete All Cancelled Orders",
-      `Are you sure you want to permanently delete ALL ${cancelledOrdersForDate.length} cancelled orders for ${filterDate}?`,
-      async () => {
-        try {
-          await api.delete("/orders/bulk/cancelled", {
-            data: { date: filterDate },
-          });
-          toast.success(
-            `${cancelledOrdersForDate.length} cancelled orders deleted`,
-          );
-          fetchOrders();
-        } catch (err) {
-          toast.error(err.response?.data?.message || "Bulk delete failed");
-        }
-      },
-    );
-  }, [orders, filterDate, fetchOrders]);
-
-  const deleteAllRecordsForDate = useCallback(async () => {
-    const ordersForDate = orders.filter((o) =>
-      isSameISTDate(o.createdAt, filterDate),
-    );
-
-    if (ordersForDate.length === 0) {
-      toast.error(`No orders found for ${filterDate}`);
-      return;
-    }
-
-    showConfirm(
-      "Delete All Orders",
-      `Are you sure you want to delete ALL ${ordersForDate.length} orders for ${filterDate}?`,
-      async () => {
-        try {
-          await api.delete("/orders/by-date", {
-            data: { date: filterDate },
-          });
-          toast.success(`Deleted all ${ordersForDate.length} orders`);
-          fetchOrders();
-        } catch (err) {
-          toast.error(
-            err.response?.data?.message || "Failed to delete records",
-          );
-        }
-      },
-    );
-  }, [orders, filterDate, fetchOrders]);
-
-  // ✅ Reprint
-  const reprintOrder = useCallback((order) => {
+  // ✅ REPRINT — confirmation dialog + success alert
+  const reprintOrder = useCallback(async (order) => {
     if (!order || order.status !== "Confirmed") {
       toast.error("Only confirmed orders can be reprinted");
       return;
     }
+
+    const confirmed = await showConfirmDialog({
+      title: "Reprint Bill",
+      headline: "Reprint this bill?",
+      subtext: "The thermal receipt will be sent to the printer again.",
+      icon: "question",
+      confirmColor: "#6366f1",
+      confirmText: "Yes, Reprint",
+      rows: [
+        ["Order ID", `#${order._id.slice(-8)}`],
+        ["Counter", getOrderCounterName(order)],
+        ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
+        [
+          "Confirmed At",
+          formatISTTime(order.confirmedAt || order.updatedAt),
+        ],
+        [
+          "Time Since Confirmation",
+          humanDuration(
+            Date.now() -
+              new Date(order.confirmedAt || order.updatedAt).getTime(),
+          ),
+        ],
+      ],
+    });
+
+    if (!confirmed) return;
 
     const receiptOrder = {
       _id: order._id,
@@ -570,7 +726,27 @@ export default function AdminOrdersPage() {
     };
 
     setPrintOrder(receiptOrder);
-    toast.success("Reprinting bill...", { duration: 2000 });
+
+    showActionSuccess("Reprinting Bill 🖨️", order, {
+      headline: "Bill is being reprinted.",
+      subtext: "The thermal receipt has been sent to the printer.",
+      actionLabel: "Reprinted",
+      actionTime: new Date(),
+      icon: "info",
+      extraRows: [
+        [
+          "Confirmed At",
+          formatISTTime(order.confirmedAt || order.updatedAt),
+        ],
+        [
+          "Time Since Confirmation",
+          humanDuration(
+            Date.now() -
+              new Date(order.confirmedAt || order.updatedAt).getTime(),
+          ),
+        ],
+      ],
+    });
   }, []);
 
   const toggleExpand = (orderId) => {
@@ -588,6 +764,169 @@ export default function AdminOrdersPage() {
     setFilterDate(next);
   };
 
+  // ✅ Bulk delete: pending
+  const deleteAllPendingOrders = useCallback(async () => {
+    const pendingOrdersForDate = orders.filter(
+      (o) => o.status === "Pending" && isSameISTDate(o.createdAt, filterDate),
+    );
+
+    if (pendingOrdersForDate.length === 0) {
+      toast.error(`No pending orders found for ${filterDate}`);
+      return;
+    }
+
+    const confirmed = await showConfirmDialog({
+      title: "Delete All Pending Orders",
+      headline: `Delete ${pendingOrdersForDate.length} pending orders?`,
+      subtext: "This action cannot be undone.",
+      icon: "warning",
+      confirmColor: "#dc2626",
+      confirmText: "Yes, Delete All",
+      rows: [
+        ["Date", filterDate],
+        ["Pending Orders", pendingOrdersForDate.length],
+      ],
+    });
+
+    if (!confirmed) return;
+
+    const startTime = Date.now();
+    try {
+      await api.delete("/orders/bulk/pending", {
+        data: { date: filterDate },
+      });
+
+      showActionSuccess(
+        "Pending Orders Deleted 🗑️",
+        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
+        {
+          headline: "All pending orders deleted.",
+          subtext: `${pendingOrdersForDate.length} pending order(s) removed.`,
+          actionLabel: "Deleted",
+          actionTime: new Date(startTime),
+          icon: "success",
+          extraRows: [
+            ["Deleted Count", pendingOrdersForDate.length],
+            ["Date", filterDate],
+          ],
+        },
+      );
+
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    }
+  }, [orders, filterDate, fetchOrders]);
+
+  // ✅ Bulk delete: cancelled
+  const deleteAllCancelledOrders = useCallback(async () => {
+    const cancelledOrdersForDate = orders.filter(
+      (o) => o.status === "Cancelled" && isSameISTDate(o.createdAt, filterDate),
+    );
+
+    if (cancelledOrdersForDate.length === 0) {
+      toast.error(`No cancelled orders found for ${filterDate}`);
+      return;
+    }
+
+    const confirmed = await showConfirmDialog({
+      title: "Delete All Cancelled Orders",
+      headline: `Delete ${cancelledOrdersForDate.length} cancelled orders?`,
+      subtext: "This action cannot be undone.",
+      icon: "warning",
+      confirmColor: "#dc2626",
+      confirmText: "Yes, Delete All",
+      rows: [
+        ["Date", filterDate],
+        ["Cancelled Orders", cancelledOrdersForDate.length],
+      ],
+    });
+
+    if (!confirmed) return;
+
+    const startTime = Date.now();
+    try {
+      await api.delete("/orders/bulk/cancelled", {
+        data: { date: filterDate },
+      });
+
+      showActionSuccess(
+        "Cancelled Orders Deleted 🗑️",
+        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
+        {
+          headline: "All cancelled orders deleted.",
+          subtext: `${cancelledOrdersForDate.length} cancelled order(s) removed.`,
+          actionLabel: "Deleted",
+          actionTime: new Date(startTime),
+          icon: "success",
+          extraRows: [
+            ["Deleted Count", cancelledOrdersForDate.length],
+            ["Date", filterDate],
+          ],
+        },
+      );
+
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    }
+  }, [orders, filterDate, fetchOrders]);
+
+  // ✅ Bulk delete: all records for date
+  const deleteAllRecordsForDate = useCallback(async () => {
+    const ordersForDate = orders.filter((o) =>
+      isSameISTDate(o.createdAt, filterDate),
+    );
+
+    if (ordersForDate.length === 0) {
+      toast.error(`No orders found for ${filterDate}`);
+      return;
+    }
+
+    const confirmed = await showConfirmDialog({
+      title: "Delete All Orders",
+      headline: `Delete ALL ${ordersForDate.length} orders?`,
+      subtext: "This action cannot be undone.",
+      icon: "warning",
+      confirmColor: "#dc2626",
+      confirmText: "Yes, Delete All",
+      rows: [
+        ["Date", filterDate],
+        ["Total Orders", ordersForDate.length],
+      ],
+    });
+
+    if (!confirmed) return;
+
+    const startTime = Date.now();
+    try {
+      await api.delete("/orders/by-date", {
+        data: { date: filterDate },
+      });
+
+      showActionSuccess(
+        "All Orders Deleted 🗑️",
+        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
+        {
+          headline: "All orders deleted.",
+          subtext: `${ordersForDate.length} order(s) removed.`,
+          actionLabel: "Deleted",
+          actionTime: new Date(startTime),
+          icon: "success",
+          extraRows: [
+            ["Deleted Count", ordersForDate.length],
+            ["Date", filterDate],
+          ],
+        },
+      );
+
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete records");
+    }
+  }, [orders, filterDate, fetchOrders]);
+
+  // ✅ Filtered orders
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchesDate = isSameISTDate(order.createdAt, filterDate);
@@ -599,7 +938,7 @@ export default function AdminOrdersPage() {
         filterCounter === "all" ? true : getOrderCounterName(order) === filterCounter;
       return matchesDate && matchesStatus && matchesCounter;
     });
-  }, [orders, filterStatus, filterDate, filterCounter]);
+  }, [orders, filterStatus, filterDate, filterCounter, countersMap]);
 
   const stats = useMemo(() => {
     return {
@@ -666,6 +1005,17 @@ export default function AdminOrdersPage() {
     });
   })();
 
+  const filterSummary = useMemo(() => {
+    const parts = [];
+    if (filterStatus !== "all") {
+      parts.push(filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1));
+    }
+    if (filterCounter !== "all") {
+      parts.push(filterCounter);
+    }
+    return parts.length > 0 ? parts.join(" • ") : "";
+  }, [filterStatus, filterCounter]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-[70vh] print:hidden">
@@ -676,8 +1026,6 @@ export default function AdminOrdersPage() {
       </div>
     );
   }
-
-  const uniqueCounters = getUniqueCounters();
 
   return (
     <>
@@ -775,8 +1123,8 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* DATE DISPLAY */}
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <FiCalendar className="text-indigo-500" />
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
               Showing orders for:
@@ -784,9 +1132,16 @@ export default function AdminOrdersPage() {
             <span className="text-sm font-semibold text-gray-800 dark:text-white">
               {displayDate}
             </span>
+            {filterSummary && (
+              <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+                {filterSummary}
+              </span>
+            )}
           </div>
-          <div className="text-xs text-gray-400">
-            {ordersForDate.length} orders found
+          {/* ✅ FIXED: reflects filtered count */}
+          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            {filteredOrders.length}{" "}
+            {filteredOrders.length === 1 ? "order" : "orders"} found
           </div>
         </div>
 
@@ -949,7 +1304,7 @@ export default function AdminOrdersPage() {
               No Orders Found
             </h3>
             <p className="text-slate-500 mt-2">
-              No orders available for selected date & status.
+              No orders available for selected date, status & counter.
             </p>
           </div>
         ) : (
@@ -1092,13 +1447,13 @@ export default function AdminOrdersPage() {
                             {order.status === "Pending" && (
                               <>
                                 <button
-                                  onClick={() => confirmOrder(order._id)}
+                                  onClick={() => confirmOrder(order)}
                                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
                                 >
                                   <FiCheck /> Confirm Order
                                 </button>
                                 <button
-                                  onClick={() => cancelOrder(order._id)}
+                                  onClick={() => cancelOrder(order)}
                                   className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
                                 >
                                   <FiX /> Cancel Order
@@ -1109,7 +1464,7 @@ export default function AdminOrdersPage() {
                             {(order.status === "Confirmed" ||
                               order.status === "Cancelled") && (
                               <button
-                                onClick={() => revertOrder(order._id)}
+                                onClick={() => revertOrder(order)}
                                 disabled={revertingId === order._id}
                                 className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl font-semibold transition disabled:opacity-50"
                               >
@@ -1144,9 +1499,7 @@ export default function AdminOrdersPage() {
                             {(order.status === "Cancelled" ||
                               order.status === "Pending") && (
                               <button
-                                onClick={() =>
-                                  deleteOrder(order._id, order.status)
-                                }
+                                onClick={() => deleteOrder(order)}
                                 disabled={deletingId === order._id}
                                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition ml-auto"
                               >
