@@ -102,10 +102,17 @@ const getCounterName = (orderOrId) => {
   if (!orderOrId) return "Counter 1";
   if (typeof orderOrId === "object") {
     if (orderOrId.counter?.name) return orderOrId.counter.name;
-    if (orderOrId.counterName && !orderOrId.counterName.match(/^[0-9a-fA-F]{24}$/)) return orderOrId.counterName;
+    if (
+      orderOrId.counterName &&
+      !orderOrId.counterName.match(/^[0-9a-fA-F]{24}$/)
+    )
+      return orderOrId.counterName;
     return "Counter 1";
   }
-  if (typeof orderOrId === "string" && !orderOrId.match(/^[0-9a-fA-F]{24}$/)) {
+  if (
+    typeof orderOrId === "string" &&
+    !orderOrId.match(/^[0-9a-fA-F]{24}$/)
+  ) {
     return orderOrId;
   }
   return "Counter 1";
@@ -119,7 +126,6 @@ const getPaymentMethod = (order) => {
 };
 
 // ✅ Extract numeric value from counter name for natural sort
-// e.g. "Counter 1" → 1, "Counter 12" → 12, "Counter A" → NaN
 const extractCounterNumber = (name) => {
   if (!name) return Number.MAX_SAFE_INTEGER;
   const match = String(name).match(/(\d+)/);
@@ -131,38 +137,26 @@ const compareCounters = (a, b) => {
   const na = extractCounterNumber(a);
   const nb = extractCounterNumber(b);
   if (na !== nb) return na - nb;
-  // Fallback to alphabetical if both are non-numeric
   return String(a).localeCompare(String(b));
 };
 
-// ✅ Order Card Component with Counter Display
+// ✅ Order Card Component — ONLY CONFIRM
 const OrderCard = React.memo(
-  ({ order, onConfirm, onReject }) => {
+  ({ order, onConfirm }) => {
     const [isConfirming, setIsConfirming] = useState(false);
-    const [isRejecting, setIsRejecting] = useState(false);
     const isNewOrder = useRef(
       Date.now() - new Date(order.createdAt).getTime() < 5000,
     );
 
     const handleConfirm = useCallback(async () => {
-      if (isConfirming || isRejecting) return;
+      if (isConfirming) return;
       setIsConfirming(true);
       try {
         await onConfirm(order._id);
       } finally {
         setIsConfirming(false);
       }
-    }, [onConfirm, order._id, isConfirming, isRejecting]);
-
-    const handleReject = useCallback(async () => {
-      if (isConfirming || isRejecting) return;
-      setIsRejecting(true);
-      try {
-        await onReject(order._id);
-      } finally {
-        setIsRejecting(false);
-      }
-    }, [onReject, order._id, isConfirming, isRejecting]);
+    }, [onConfirm, order._id, isConfirming]);
 
     const counterName = getCounterName(order);
     const paymentMethod = getPaymentMethod(order);
@@ -185,14 +179,14 @@ const OrderCard = React.memo(
                 <FiClock className="text-sm" />
                 {order.formattedTime}
               </div>
-              {/* ✅ Counter Badge */}
+              {/* Counter Badge */}
               {(order.counter || order.counterName || order.counterId) && (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
                   <FiMonitor className="text-xs" />
                   <span>{counterName}</span>
                 </div>
               )}
-              {/* ✅ Payment Badge */}
+              {/* Payment Badge */}
               <div
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                   isCash
@@ -213,10 +207,11 @@ const OrderCard = React.memo(
                 <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
                   Pending
                 </span>
-              ) : order.status === "Cancelled" || order.status === "Rejected" ? (
+              ) : order.status === "Cancelled" ||
+                order.status === "Rejected" ? (
                 <span className="px-4 py-2 rounded-full bg-rose-100 text-rose-700 text-sm font-semibold flex items-center gap-2">
                   <FiXCircle className="text-rose-600 text-base" />
-                  Rejected
+                  Cancelled
                 </span>
               ) : (
                 <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold flex items-center gap-2">
@@ -276,31 +271,12 @@ const OrderCard = React.memo(
                 </h2>
               </div>
 
-              {/* ✅ Actions for Pending orders */}
+              {/* ✅ ONLY Confirm Button — Reject REMOVED */}
               {order.status === "Pending" && (
                 <div className="flex items-center gap-3">
-                  {onReject && (
-                    <button
-                      onClick={handleReject}
-                      disabled={isRejecting || isConfirming}
-                      className="h-12 px-5 rounded-2xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-2 border border-rose-200 dark:border-rose-800/60 shadow-sm disabled:opacity-50 transition text-sm cursor-pointer"
-                    >
-                      {isRejecting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-rose-400 border-t-rose-600 rounded-full animate-spin" />
-                          <span>Rejecting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FiXCircle className="text-base" />
-                          <span>Reject</span>
-                        </>
-                      )}
-                    </button>
-                  )}
                   <button
                     onClick={handleConfirm}
-                    disabled={isConfirming || isRejecting}
+                    disabled={isConfirming}
                     className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm cursor-pointer"
                   >
                     {isConfirming ? (
@@ -328,8 +304,7 @@ const OrderCard = React.memo(
       prevProps.order._id === nextProps.order._id &&
       prevProps.order.status === nextProps.order.status &&
       prevProps.order.totalAmount === nextProps.order.totalAmount &&
-      prevProps.onConfirm === nextProps.onConfirm &&
-      prevProps.onReject === nextProps.onReject
+      prevProps.onConfirm === nextProps.onConfirm
     );
   },
 );
@@ -393,11 +368,12 @@ export default function StaffPage() {
   const authUser = useSelector((state) => state.auth?.user);
   const [currentStaff, setCurrentStaff] = useState(authUser || null);
 
-  // Sync staff profile & status
   const fetchMyStaffData = useCallback(async () => {
     try {
       const { data } = await api.get("/users/staff");
-      const me = data.find((s) => s._id === authUser?._id || s.email === authUser?.email);
+      const me = data.find(
+        (s) => s._id === authUser?._id || s.email === authUser?.email,
+      );
       if (me) {
         setCurrentStaff(me);
       }
@@ -480,21 +456,15 @@ export default function StaffPage() {
     [searchFilteredOrders],
   );
 
-  const rejectedOrders = useMemo(
-    () => searchFilteredOrders.filter((o) => o.status === "Cancelled" || o.status === "Rejected"),
-    [searchFilteredOrders],
-  );
-
+  // ✅ currentOrders — Only Pending / Confirmed
   const currentOrders = useMemo(() => {
     if (activeTab === "pending") return pendingOrders;
     if (activeTab === "confirmed") return confirmedOrders;
-    if (activeTab === "rejected") return rejectedOrders;
     return pendingOrders;
-  }, [activeTab, pendingOrders, confirmedOrders, rejectedOrders]);
+  }, [activeTab, pendingOrders, confirmedOrders]);
 
   const pendingCount = pendingOrders.length;
   const confirmedCount = confirmedOrders.length;
-  const rejectedCount = rejectedOrders.length;
 
   const totalRevenue = useMemo(() => {
     return confirmedOrders.reduce(
@@ -504,7 +474,7 @@ export default function StaffPage() {
   }, [confirmedOrders]);
   const activeOrdersCount = pendingCount + confirmedCount;
 
-  // ✅ FETCH ORDERS - INITIAL LOAD ONLY (FULL SPINNER ONLY HERE)
+  // ✅ FETCH ORDERS - INITIAL LOAD ONLY
   const fetchOrders = useCallback(async () => {
     try {
       dispatch(setLoading(true));
@@ -520,7 +490,7 @@ export default function StaffPage() {
     }
   }, [dispatch]);
 
-  // ✅ MANUAL REFRESH (NO FULL-PAGE SPINNER)
+  // ✅ MANUAL REFRESH
   const manualSyncOrders = useCallback(async () => {
     try {
       setIsRefreshing(true);
@@ -536,7 +506,7 @@ export default function StaffPage() {
     }
   }, [dispatch]);
 
-  // ✅ SOCKET LISTENERS - REAL-TIME ONLY, NO FULL-PAGE RELOAD OR REFETCH
+  // ✅ SOCKET LISTENERS
   useEffect(() => {
     fetchOrders();
 
@@ -549,7 +519,6 @@ export default function StaffPage() {
       return true;
     };
 
-    // ✅ New order received - add directly to Redux, show toast, play sound
     const handleNewOrder = (order) => {
       if (!order || !order._id) return;
       const eventKey = `new-${order._id}`;
@@ -573,7 +542,6 @@ export default function StaffPage() {
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Order confirmed via Socket.IO - update single order in Redux
     const handleOrderConfirmed = (order) => {
       if (!order) return;
       const orderId = order._id || order.id || order;
@@ -581,14 +549,22 @@ export default function StaffPage() {
       if (!deduplicateEvent(eventKey)) return;
 
       console.log("✅ Order confirmed (socket):", orderId);
-      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Confirmed" };
-      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Confirmed" } }));
+      const changes =
+        typeof order === "object"
+          ? normalizeOrder(order)
+          : { status: "Confirmed" };
+      dispatch(
+        updateOrder({
+          id: orderId,
+          changes: { ...changes, status: "Confirmed" },
+        }),
+      );
 
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Order cancelled via Socket.IO - update single order in Redux
+    // ✅ External cancel/reject — still listened (admin/kiosk se ho sakta hai)
     const handleOrderCancelled = (order) => {
       if (!order) return;
       const orderId = order._id || order.id || order;
@@ -596,14 +572,21 @@ export default function StaffPage() {
       if (!deduplicateEvent(eventKey)) return;
 
       console.log("❌ Order cancelled (socket):", orderId);
-      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Cancelled" };
-      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Cancelled" } }));
+      const changes =
+        typeof order === "object"
+          ? normalizeOrder(order)
+          : { status: "Cancelled" };
+      dispatch(
+        updateOrder({
+          id: orderId,
+          changes: { ...changes, status: "Cancelled" },
+        }),
+      );
 
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Order reverted via Socket.IO - update single order in Redux
     const handleOrderReverted = (order) => {
       if (!order) return;
       const orderId = order._id || order.id || order;
@@ -611,24 +594,32 @@ export default function StaffPage() {
       if (!deduplicateEvent(eventKey)) return;
 
       console.log("🔄 Order reverted (socket):", orderId);
-      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Pending" };
-      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Pending" } }));
+      const changes =
+        typeof order === "object"
+          ? normalizeOrder(order)
+          : { status: "Pending" };
+      dispatch(
+        updateOrder({
+          id: orderId,
+          changes: { ...changes, status: "Pending" },
+        }),
+      );
 
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Order updated via Socket.IO
     const handleOrderUpdated = (order) => {
       if (!order || !order._id) return;
       console.log("📝 Order updated (socket):", order._id);
-      dispatch(updateOrder({ id: order._id, changes: normalizeOrder(order) }));
+      dispatch(
+        updateOrder({ id: order._id, changes: normalizeOrder(order) }),
+      );
 
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Order deleted via Socket.IO
     const handleOrderDeleted = (orderId) => {
       if (!orderId) return;
       const id = typeof orderId === "object" ? orderId._id : orderId;
@@ -639,7 +630,6 @@ export default function StaffPage() {
       setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Stock updated via Socket.IO - NO RELOAD!
     const handleStockUpdated = (product) => {
       if (product && typeof product === "object" && product._id) {
         dispatch(updateProductStock(product));
@@ -665,16 +655,13 @@ export default function StaffPage() {
     };
   }, [fetchOrders, dispatch, playNotificationSound]);
 
-  // ✅ CONFIRM ORDER - INSTANT STATE UPDATE + BUTTON SPINNER, NO FULL-PAGE SPINNER
+  // ✅ CONFIRM ORDER - INSTANT STATE UPDATE + BUTTON SPINNER
   const confirmOrder = useCallback(
     async (orderId) => {
       try {
-        // Optimistic update - update UI immediately
-        dispatch(
-          updateOrder({ id: orderId, changes: { status: "Confirmed" } }),
-        );
+        // Optimistic update
+        dispatch(updateOrder({ id: orderId, changes: { status: "Confirmed" } }));
 
-        // Call API to confirm
         const { data } = await api.put(`/orders/${orderId}/confirm`);
         if (data) {
           dispatch(updateOrder({ id: orderId, changes: normalizeOrder(data) }));
@@ -691,38 +678,6 @@ export default function StaffPage() {
           );
         }
         toast.error(error.response?.data?.message || "Failed to confirm order");
-      }
-    },
-    [dispatch, allOrders],
-  );
-
-  // ✅ REJECT ORDER - INSTANT STATE UPDATE + BUTTON SPINNER, NO FULL-PAGE SPINNER
-  const rejectOrder = useCallback(
-    async (orderId) => {
-      try {
-        // Optimistic update - update UI immediately
-        dispatch(
-          updateOrder({ id: orderId, changes: { status: "Cancelled" } }),
-        );
-
-        // Call API to cancel/reject
-        const { data } = await api.put(`/orders/${orderId}/cancel`);
-        if (data) {
-          const updated = data.order || data;
-          dispatch(updateOrder({ id: orderId, changes: normalizeOrder(updated) }));
-        }
-
-        toast.success(`Order rejected! ❌`, { duration: 2000 });
-      } catch (error) {
-        console.error("Failed to reject order:", error);
-        // Rollback
-        const order = allOrders.find((o) => o._id === orderId);
-        if (order) {
-          dispatch(
-            updateOrder({ id: orderId, changes: { status: "Pending" } }),
-          );
-        }
-        toast.error(error.response?.data?.message || "Failed to reject order");
       }
     },
     [dispatch, allOrders],
@@ -831,8 +786,14 @@ export default function StaffPage() {
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
             title="Refresh orders"
           >
-            <FiRefreshCw className={`text-indigo-500 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span className="text-sm font-medium hidden sm:inline">Refresh</span>
+            <FiRefreshCw
+              className={`text-indigo-500 ${
+                isRefreshing ? "animate-spin" : ""
+              }`}
+            />
+            <span className="text-sm font-medium hidden sm:inline">
+              Refresh
+            </span>
           </button>
 
           {/* Sound Toggle */}
@@ -879,7 +840,6 @@ export default function StaffPage() {
 
       {/* ✅ FILTER ROW: Counter + Payment */}
       <div className="flex items-center gap-3 flex-wrap mb-6">
-        {/* ✅ Counter Filter — sorted 1, 2, 3, ... */}
         {uniqueCounters.length > 0 && (
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
             <FiMonitor className="text-indigo-500" />
@@ -898,7 +858,6 @@ export default function StaffPage() {
           </div>
         )}
 
-        {/* ✅ Payment Filter — All / Cash / Online */}
         <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2 rounded-xl shadow-sm">
           <FaRupeeSign className="text-indigo-500" />
           <select
@@ -912,7 +871,6 @@ export default function StaffPage() {
           </select>
         </div>
 
-        {/* ✅ Active filter summary */}
         {(filterCounter !== "all" || filterPayment !== "all") && (
           <button
             onClick={() => {
@@ -957,24 +915,27 @@ export default function StaffPage() {
             />
           </div>
 
+          {/* ✅ Only Pending + Completed Tabs (Rejected Removed) */}
           <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-2xl">
             <button
               onClick={() => setActiveTab("pending")}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "pending" ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400" : "text-gray-500"}`}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === "pending"
+                  ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400"
+                  : "text-gray-500"
+              }`}
             >
               Pending ({pendingCount})
             </button>
             <button
               onClick={() => setActiveTab("confirmed")}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "confirmed" ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400" : "text-gray-500"}`}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === "confirmed"
+                  ? "bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400"
+                  : "text-gray-500"
+              }`}
             >
               Completed ({confirmedCount})
-            </button>
-            <button
-              onClick={() => setActiveTab("rejected")}
-              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "rejected" ? "bg-white dark:bg-slate-700 shadow text-rose-600 dark:text-rose-400" : "text-gray-500"}`}
-            >
-              Rejected ({rejectedCount})
             </button>
           </div>
         </div>
@@ -1000,7 +961,6 @@ export default function StaffPage() {
               key={order._id}
               order={order}
               onConfirm={confirmOrder}
-              onReject={rejectOrder}
             />
           ))
         )}
