@@ -222,13 +222,31 @@ export const exportReportToPDF = ({
     }
   });
 
+  // Calculate summary foot row for numeric metrics if table has data
+  let foot = undefined;
+  const sumKeys = new Set(["amount", "revenue", "profit", "cost", "quantity", "stock", "totalCost"]);
+  const hasSummableCol = columns.some((c) => sumKeys.has(c.key));
+  if (hasSummableCol && data.length > 1) {
+    const footRow = columns.map((c, i) => {
+      if (i === 0) return "TOTAL";
+      if (sumKeys.has(c.key)) {
+        const totalVal = data.reduce((acc, row) => acc + (Number(row[c.key]) || 0), 0);
+        if (c.format === "currency") return formatPdfCurrency(totalVal);
+        return totalVal.toLocaleString("en-IN");
+      }
+      return "";
+    });
+    foot = [footRow];
+  }
+
   autoTable(doc, {
     startY: y,
     head,
     body,
+    foot,
     theme: "striped",
     headStyles: {
-      fillColor: [30, 41, 59], // Dark slate #1E293B
+      fillColor: [15, 23, 42], // Slate-900 #0F172A
       textColor: [255, 255, 255],
       fontSize: 8.5,
       fontStyle: "bold",
@@ -243,6 +261,13 @@ export const exportReportToPDF = ({
     alternateRowStyles: {
       fillColor: [248, 250, 252], // slate-50
     },
+    footStyles: {
+      fillColor: [241, 245, 249], // slate-100
+      textColor: [15, 23, 42],
+      fontSize: 8.5,
+      fontStyle: "bold",
+      cellPadding: 2.5,
+    },
     columnStyles,
     margin: { left: 14, right: 14, bottom: 18 },
     didDrawPage: (pageData) => {
@@ -253,7 +278,7 @@ export const exportReportToPDF = ({
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184); // slate-400
       doc.text(
-        `Smart POS & Inventory Management System  •  Confidential Retail Report`,
+        `Consumer Store & Supermarket Management System  •  Confidential Retail Report`,
         14,
         pageHeight - 8
       );
