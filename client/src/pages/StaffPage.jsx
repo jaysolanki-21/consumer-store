@@ -10,7 +10,14 @@ import { useDispatch, useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
-import { setOrders, updateOrder, setLoading } from "../redux/slices/orderSlice";
+import {
+  setOrders,
+  addNewOrder,
+  updateOrder,
+  removeOrder,
+  setLoading,
+} from "../redux/slices/orderSlice";
+import { updateProductStock } from "../redux/slices/productSlice";
 
 import {
   selectLoadingState,
@@ -23,6 +30,7 @@ import socket from "../services/socket";
 
 import {
   FiCheckCircle,
+  FiXCircle,
   FiSearch,
   FiClock,
   FiTrendingUp,
@@ -39,6 +47,7 @@ import {
   FiUser,
   FiMail,
   FiCreditCard,
+  FiRefreshCw,
 } from "react-icons/fi";
 import { FaRupeeSign } from "react-icons/fa";
 
@@ -128,21 +137,32 @@ const compareCounters = (a, b) => {
 
 // ✅ Order Card Component with Counter Display
 const OrderCard = React.memo(
-  ({ order, onConfirm }) => {
+  ({ order, onConfirm, onReject }) => {
     const [isConfirming, setIsConfirming] = useState(false);
+    const [isRejecting, setIsRejecting] = useState(false);
     const isNewOrder = useRef(
       Date.now() - new Date(order.createdAt).getTime() < 5000,
     );
 
     const handleConfirm = useCallback(async () => {
-      if (isConfirming) return;
+      if (isConfirming || isRejecting) return;
       setIsConfirming(true);
       try {
         await onConfirm(order._id);
       } finally {
         setIsConfirming(false);
       }
-    }, [onConfirm, order._id, isConfirming]);
+    }, [onConfirm, order._id, isConfirming, isRejecting]);
+
+    const handleReject = useCallback(async () => {
+      if (isConfirming || isRejecting) return;
+      setIsRejecting(true);
+      try {
+        await onReject(order._id);
+      } finally {
+        setIsRejecting(false);
+      }
+    }, [onReject, order._id, isConfirming, isRejecting]);
 
     const counterName = getCounterName(order);
     const paymentMethod = getPaymentMethod(order);
@@ -192,6 +212,11 @@ const OrderCard = React.memo(
               {order.status === "Pending" ? (
                 <span className="px-4 py-2 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
                   Pending
+                </span>
+              ) : order.status === "Cancelled" || order.status === "Rejected" ? (
+                <span className="px-4 py-2 rounded-full bg-rose-100 text-rose-700 text-sm font-semibold flex items-center gap-2">
+                  <FiXCircle className="text-rose-600 text-base" />
+                  Rejected
                 </span>
               ) : (
                 <span className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold flex items-center gap-2">
@@ -251,16 +276,46 @@ const OrderCard = React.memo(
                 </h2>
               </div>
 
-              {/* ✅ Only Confirm button for Pending orders */}
+              {/* ✅ Actions for Pending orders */}
               {order.status === "Pending" && (
-                <button
-                  onClick={handleConfirm}
-                  disabled={isConfirming}
-                  className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm"
-                >
-                  <FiCheckCircle className="text-base" />
-                  {isConfirming ? "Confirming..." : "Confirm"}
-                </button>
+                <div className="flex items-center gap-3">
+                  {onReject && (
+                    <button
+                      onClick={handleReject}
+                      disabled={isRejecting || isConfirming}
+                      className="h-12 px-5 rounded-2xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-2 border border-rose-200 dark:border-rose-800/60 shadow-sm disabled:opacity-50 transition text-sm cursor-pointer"
+                    >
+                      {isRejecting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-rose-400 border-t-rose-600 rounded-full animate-spin" />
+                          <span>Rejecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiXCircle className="text-base" />
+                          <span>Reject</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleConfirm}
+                    disabled={isConfirming || isRejecting}
+                    className="h-12 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-semibold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 transition text-sm cursor-pointer"
+                  >
+                    {isConfirming ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span>Confirming...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiCheckCircle className="text-base" />
+                        <span>Confirm</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -272,7 +327,9 @@ const OrderCard = React.memo(
     return (
       prevProps.order._id === nextProps.order._id &&
       prevProps.order.status === nextProps.order.status &&
-      prevProps.order.totalAmount === nextProps.order.totalAmount
+      prevProps.order.totalAmount === nextProps.order.totalAmount &&
+      prevProps.onConfirm === nextProps.onConfirm &&
+      prevProps.onReject === nextProps.onReject
     );
   },
 );
@@ -309,7 +366,10 @@ export default function StaffPage() {
 
   // ✅ SOUND OFF BY DEFAULT
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [audioElement, setAudioElement] = useState(null);
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
+  const processedEventsRef = useRef(new Set());
 
   // ✅ Get unique counters from orders — SORTED NUMERICALLY (1, 2, 3, ...)
   const uniqueCounters = useMemo(() => {
@@ -350,56 +410,29 @@ export default function StaffPage() {
     return () => socket.off("usersUpdated", fetchMyStaffData);
   }, [fetchMyStaffData]);
 
-  // ✅ Initialize audio element
-  useEffect(() => {
-    const audio = new Audio(NOTIFICATION_SOUND_URL);
-    audio.preload = "auto";
-    audio.load();
-    setAudioElement(audio);
-
-    const enableAudio = () => {
-      if (audio) {
-        audio.volume = 0;
-        audio
-          .play()
-          .then(() => {
-            audio.pause();
-            audio.volume = 0.7;
-            audio.currentTime = 0;
-          })
-          .catch(() => {});
-      }
-      document.removeEventListener("click", enableAudio);
-      document.removeEventListener("touchstart", enableAudio);
-    };
-    document.addEventListener("click", enableAudio);
-    document.addEventListener("touchstart", enableAudio);
-
-    return () => {
-      document.removeEventListener("click", enableAudio);
-      document.removeEventListener("touchstart", enableAudio);
-    };
-  }, []);
-
   // ✅ Play notification sound
   const playNotificationSound = useCallback(() => {
-    if (!soundEnabled) return;
-    if (audioElement) {
-      audioElement.currentTime = 0;
-      audioElement.play().catch(() => {});
-    }
-  }, [audioElement, soundEnabled]);
+    if (!soundEnabledRef.current) return;
+    try {
+      const audio = new Audio(NOTIFICATION_SOUND_URL);
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }, []);
 
   // ✅ Toggle sound
   const toggleSound = useCallback(() => {
-    const newState = !soundEnabled;
-    setSoundEnabled(newState);
-    toast.success(newState ? "🔔 Sound enabled" : "🔕 Sound disabled");
-    if (newState && audioElement) {
-      audioElement.currentTime = 0;
-      audioElement.play().catch(() => {});
-    }
-  }, [soundEnabled, audioElement]);
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      toast.success(next ? "🔔 Sound enabled" : "🔕 Sound disabled");
+      if (next) {
+        try {
+          const audio = new Audio(NOTIFICATION_SOUND_URL);
+          audio.play().catch(() => {});
+        } catch (e) {}
+      }
+      return next;
+    });
+  }, []);
 
   // ✅ DATE-WISE FILTERING
   const dateFilteredOrders = useMemo(() => {
@@ -432,8 +465,8 @@ export default function StaffPage() {
     const term = filter.toLowerCase().trim();
     return paymentFilteredOrders.filter(
       (order) =>
-        order._id.toLowerCase().includes(term) ||
-        order._id.slice(-6).toLowerCase().includes(term),
+        order._id?.toLowerCase().includes(term) ||
+        order._id?.slice(-6).toLowerCase().includes(term),
     );
   }, [paymentFilteredOrders, filter]);
 
@@ -447,13 +480,22 @@ export default function StaffPage() {
     [searchFilteredOrders],
   );
 
-  const currentOrders = useMemo(
-    () => (activeTab === "pending" ? pendingOrders : confirmedOrders),
-    [activeTab, pendingOrders, confirmedOrders],
+  const rejectedOrders = useMemo(
+    () => searchFilteredOrders.filter((o) => o.status === "Cancelled" || o.status === "Rejected"),
+    [searchFilteredOrders],
   );
+
+  const currentOrders = useMemo(() => {
+    if (activeTab === "pending") return pendingOrders;
+    if (activeTab === "confirmed") return confirmedOrders;
+    if (activeTab === "rejected") return rejectedOrders;
+    return pendingOrders;
+  }, [activeTab, pendingOrders, confirmedOrders, rejectedOrders]);
 
   const pendingCount = pendingOrders.length;
   const confirmedCount = confirmedOrders.length;
+  const rejectedCount = rejectedOrders.length;
+
   const totalRevenue = useMemo(() => {
     return confirmedOrders.reduce(
       (sum, order) => sum + (order.totalAmount || 0),
@@ -462,85 +504,154 @@ export default function StaffPage() {
   }, [confirmedOrders]);
   const activeOrdersCount = pendingCount + confirmedCount;
 
-  // ✅ FETCH ORDERS - INITIAL LOAD ONLY
+  // ✅ FETCH ORDERS - INITIAL LOAD ONLY (FULL SPINNER ONLY HERE)
   const fetchOrders = useCallback(async () => {
     try {
       dispatch(setLoading(true));
       const { data } = await api.get("/orders");
-      const normalized = data.map(normalizeOrder);
+      const normalized = (Array.isArray(data) ? data : []).map(normalizeOrder);
       dispatch(setOrders(normalized));
-      setIsInitialLoad(false);
     } catch (error) {
       console.error("Failed to fetch orders:", error);
       toast.error("Failed to connect to server");
-      setIsInitialLoad(false);
     } finally {
+      setIsInitialLoad(false);
       dispatch(setLoading(false));
     }
   }, [dispatch]);
 
-  // ✅ SILENT REFRESH - NO SPINNER
-  const refreshOrdersSilently = useCallback(async () => {
+  // ✅ MANUAL REFRESH (NO FULL-PAGE SPINNER)
+  const manualSyncOrders = useCallback(async () => {
     try {
       setIsRefreshing(true);
       const { data } = await api.get("/orders");
-      const normalized = data.map(normalizeOrder);
+      const normalized = (Array.isArray(data) ? data : []).map(normalizeOrder);
       dispatch(setOrders(normalized));
+      toast.success("Orders refreshed", { duration: 1500 });
     } catch (error) {
-      console.error("Silent refresh failed:", error);
+      console.error("Manual refresh failed:", error);
+      toast.error("Failed to sync orders");
     } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
+      setTimeout(() => setIsRefreshing(false), 400);
     }
   }, [dispatch]);
 
-  // ✅ Live update handler with sound - NO SPINNER
-  const handleLiveUpdate = useCallback(() => {
-    refreshOrdersSilently(); // ✅ Silent refresh - no spinner
-    setLivePulse(true);
-    setTimeout(() => setLivePulse(false), 1500);
-  }, [refreshOrdersSilently]);
-
-  // ✅ SOCKET LISTENERS - No duplicate toasts
+  // ✅ SOCKET LISTENERS - REAL-TIME ONLY, NO FULL-PAGE RELOAD OR REFETCH
   useEffect(() => {
     fetchOrders();
 
-    // ✅ Only for new order - show toast
-    const handleNewOrder = () => {
-      console.log("🔔 New order received!");
-      if (soundEnabled) playNotificationSound();
-      handleLiveUpdate();
-      toast.success("🛒 New Order Received!", {
-        duration: 5000,
+    const deduplicateEvent = (eventKey) => {
+      if (processedEventsRef.current.has(eventKey)) return false;
+      processedEventsRef.current.add(eventKey);
+      setTimeout(() => {
+        processedEventsRef.current.delete(eventKey);
+      }, 3000);
+      return true;
+    };
+
+    // ✅ New order received - add directly to Redux, show toast, play sound
+    const handleNewOrder = (order) => {
+      if (!order || !order._id) return;
+      const eventKey = `new-${order._id}`;
+      if (!deduplicateEvent(eventKey)) return;
+
+      console.log("🔔 New order received:", order._id);
+      const normalized = normalizeOrder(order);
+      dispatch(addNewOrder(normalized));
+
+      if (soundEnabledRef.current) {
+        playNotificationSound();
+      }
+
+      toast.success(`🛒 New Order #${order._id.slice(-6)} received!`, {
+        duration: 4000,
         icon: "🛒",
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
     };
 
-    // ✅ Silent updates - No toast for confirmed/cancelled/reverted
-    const handleOrderConfirmed = () => {
-      console.log("✅ Order confirmed (socket)");
-      handleLiveUpdate();
+    // ✅ Order confirmed via Socket.IO - update single order in Redux
+    const handleOrderConfirmed = (order) => {
+      if (!order) return;
+      const orderId = order._id || order.id || order;
+      const eventKey = `confirm-${orderId}`;
+      if (!deduplicateEvent(eventKey)) return;
+
+      console.log("✅ Order confirmed (socket):", orderId);
+      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Confirmed" };
+      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Confirmed" } }));
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
     };
 
-    const handleOrderCancelled = () => {
-      console.log("❌ Order cancelled");
-      handleLiveUpdate();
+    // ✅ Order cancelled via Socket.IO - update single order in Redux
+    const handleOrderCancelled = (order) => {
+      if (!order) return;
+      const orderId = order._id || order.id || order;
+      const eventKey = `cancel-${orderId}`;
+      if (!deduplicateEvent(eventKey)) return;
+
+      console.log("❌ Order cancelled (socket):", orderId);
+      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Cancelled" };
+      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Cancelled" } }));
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
     };
 
-    const handleOrderReverted = () => {
-      console.log("🔄 Order reverted");
-      handleLiveUpdate();
+    // ✅ Order reverted via Socket.IO - update single order in Redux
+    const handleOrderReverted = (order) => {
+      if (!order) return;
+      const orderId = order._id || order.id || order;
+      const eventKey = `revert-${orderId}`;
+      if (!deduplicateEvent(eventKey)) return;
+
+      console.log("🔄 Order reverted (socket):", orderId);
+      const changes = typeof order === "object" ? normalizeOrder(order) : { status: "Pending" };
+      dispatch(updateOrder({ id: orderId, changes: { ...changes, status: "Pending" } }));
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
     };
 
-    const handleStockUpdated = () => {
-      console.log("📦 Stock updated");
-      handleLiveUpdate();
+    // ✅ Order updated via Socket.IO
+    const handleOrderUpdated = (order) => {
+      if (!order || !order._id) return;
+      console.log("📝 Order updated (socket):", order._id);
+      dispatch(updateOrder({ id: order._id, changes: normalizeOrder(order) }));
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
+    };
+
+    // ✅ Order deleted via Socket.IO
+    const handleOrderDeleted = (orderId) => {
+      if (!orderId) return;
+      const id = typeof orderId === "object" ? orderId._id : orderId;
+      console.log("🗑️ Order deleted (socket):", id);
+      dispatch(removeOrder(id));
+
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
+    };
+
+    // ✅ Stock updated via Socket.IO - NO RELOAD!
+    const handleStockUpdated = (product) => {
+      if (product && typeof product === "object" && product._id) {
+        dispatch(updateProductStock(product));
+      }
     };
 
     socket.on("newOrder", handleNewOrder);
     socket.on("orderConfirmed", handleOrderConfirmed);
     socket.on("orderCancelled", handleOrderCancelled);
     socket.on("orderReverted", handleOrderReverted);
+    socket.on("orderUpdated", handleOrderUpdated);
+    socket.on("orderDeleted", handleOrderDeleted);
     socket.on("stockUpdated", handleStockUpdated);
 
     return () => {
@@ -548,11 +659,13 @@ export default function StaffPage() {
       socket.off("orderConfirmed", handleOrderConfirmed);
       socket.off("orderCancelled", handleOrderCancelled);
       socket.off("orderReverted", handleOrderReverted);
+      socket.off("orderUpdated", handleOrderUpdated);
+      socket.off("orderDeleted", handleOrderDeleted);
       socket.off("stockUpdated", handleStockUpdated);
     };
-  }, [fetchOrders, handleLiveUpdate, playNotificationSound, soundEnabled]);
+  }, [fetchOrders, dispatch, playNotificationSound]);
 
-  // ✅ CONFIRM ORDER - Only toast from here
+  // ✅ CONFIRM ORDER - INSTANT STATE UPDATE + BUTTON SPINNER, NO FULL-PAGE SPINNER
   const confirmOrder = useCallback(
     async (orderId) => {
       try {
@@ -562,9 +675,11 @@ export default function StaffPage() {
         );
 
         // Call API to confirm
-        await api.put(`/orders/${orderId}/confirm`);
+        const { data } = await api.put(`/orders/${orderId}/confirm`);
+        if (data) {
+          dispatch(updateOrder({ id: orderId, changes: normalizeOrder(data) }));
+        }
 
-        // ✅ ONLY ONE TOAST - from here
         toast.success(`Order confirmed! ✅`, { duration: 2000 });
       } catch (error) {
         console.error("Failed to confirm order:", error);
@@ -575,7 +690,39 @@ export default function StaffPage() {
             updateOrder({ id: orderId, changes: { status: "Pending" } }),
           );
         }
-        toast.error("Failed to confirm order");
+        toast.error(error.response?.data?.message || "Failed to confirm order");
+      }
+    },
+    [dispatch, allOrders],
+  );
+
+  // ✅ REJECT ORDER - INSTANT STATE UPDATE + BUTTON SPINNER, NO FULL-PAGE SPINNER
+  const rejectOrder = useCallback(
+    async (orderId) => {
+      try {
+        // Optimistic update - update UI immediately
+        dispatch(
+          updateOrder({ id: orderId, changes: { status: "Cancelled" } }),
+        );
+
+        // Call API to cancel/reject
+        const { data } = await api.put(`/orders/${orderId}/cancel`);
+        if (data) {
+          const updated = data.order || data;
+          dispatch(updateOrder({ id: orderId, changes: normalizeOrder(updated) }));
+        }
+
+        toast.success(`Order rejected! ❌`, { duration: 2000 });
+      } catch (error) {
+        console.error("Failed to reject order:", error);
+        // Rollback
+        const order = allOrders.find((o) => o._id === orderId);
+        if (order) {
+          dispatch(
+            updateOrder({ id: orderId, changes: { status: "Pending" } }),
+          );
+        }
+        toast.error(error.response?.data?.message || "Failed to reject order");
       }
     },
     [dispatch, allOrders],
@@ -677,6 +824,17 @@ export default function StaffPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Manual Refresh */}
+          <button
+            onClick={manualSyncOrders}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
+            title="Refresh orders"
+          >
+            <FiRefreshCw className={`text-indigo-500 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span className="text-sm font-medium hidden sm:inline">Refresh</span>
+          </button>
+
           {/* Sound Toggle */}
           <button
             onClick={toggleSound}
@@ -812,6 +970,12 @@ export default function StaffPage() {
             >
               Completed ({confirmedCount})
             </button>
+            <button
+              onClick={() => setActiveTab("rejected")}
+              className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === "rejected" ? "bg-white dark:bg-slate-700 shadow text-rose-600 dark:text-rose-400" : "text-gray-500"}`}
+            >
+              Rejected ({rejectedCount})
+            </button>
           </div>
         </div>
       </div>
@@ -832,7 +996,12 @@ export default function StaffPage() {
           </div>
         ) : (
           currentOrders.map((order) => (
-            <OrderCard key={order._id} order={order} onConfirm={confirmOrder} />
+            <OrderCard
+              key={order._id}
+              order={order}
+              onConfirm={confirmOrder}
+              onReject={rejectOrder}
+            />
           ))
         )}
       </div>

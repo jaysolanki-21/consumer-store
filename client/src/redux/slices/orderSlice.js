@@ -26,26 +26,37 @@ const orderSlice = createSlice({
 
     addNewOrder: (state, action) => {
       const order = action.payload;
+      if (!order || !order._id) return;
       if (!state.byId[order._id]) {
         state.byId[order._id] = order;
         state.allIds.unshift(order._id);
-        state.lastUpdate = Date.now();
+      } else {
+        Object.assign(state.byId[order._id], order);
       }
+      state.lastUpdate = Date.now();
     },
 
     updateOrder: (state, action) => {
-      const { id, changes } = action.payload;
+      const payload = action.payload;
+      if (!payload) return;
+      const id = payload.id || payload._id;
+      const changes = payload.changes ? payload.changes : payload;
 
-      if (state.byId[id]) {
+      if (id && state.byId[id]) {
         Object.assign(state.byId[id], changes);
         state.lastUpdate = Date.now();
       }
     },
 
     cancelOrder: (state, action) => {
-      const orderId = action.payload._id;
-      if (state.byId[orderId]) {
-        Object.assign(state.byId[orderId], { status: action.payload.status });
+      const payload = action.payload;
+      if (!payload) return;
+      const orderId = payload._id || payload.id || (typeof payload === 'string' ? payload : null);
+      if (orderId && state.byId[orderId]) {
+        state.byId[orderId].status = payload.status || 'Cancelled';
+        if (payload.timeline) {
+          state.byId[orderId].timeline = payload.timeline;
+        }
         state.lastUpdate = Date.now();
       }
     },
