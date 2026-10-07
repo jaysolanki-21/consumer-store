@@ -1020,7 +1020,7 @@ function ConsumerPageContent() {
 
       {/* ✅ Silent print target — invisible on screen, only prints */}
       {lastOrder && (
-        <div className="hidden print:block">
+        <div id="thermal-receipt-container" className="hidden print:block">
           <ThermalReceipt order={lastOrder} counter={user?.counter || { counterName: counterDisplayName, name: counterDisplayName }} />
         </div>
       )}

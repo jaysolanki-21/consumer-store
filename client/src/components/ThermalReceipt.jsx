@@ -48,11 +48,20 @@ const ThermalReceipt = forwardRef(({ order, counter }, ref) => {
     return "Counter 1";
   };
   const counterName = resolveCounterName();
+  const resolveStaffName = () => {
+    if (order?.staff && typeof order.staff === "object" && order.staff.name) return order.staff.name;
+    if (order?.staffName) return order.staffName;
+    if (order?.confirmedBy && typeof order.confirmedBy === "object" && order.confirmedBy.name) return order.confirmedBy.name;
+    if (typeof order?.staff === "string" && !order.staff.match(/^[0-9a-fA-F]{24}$/)) return order.staff;
+    return null;
+  };
+  const staffName = resolveStaffName();
   const totalQty = items.reduce((s, i) => s + (i.quantity || 0), 0);
 
   return (
     <div
       ref={ref}
+      id="thermal-receipt"
       className="thermal-receipt"
       style={{
         width: "80mm",
@@ -91,6 +100,7 @@ const ThermalReceipt = forwardRef(({ order, counter }, ref) => {
         <MetaRow label="Date" value={formatDate(createdAt)} />
         <MetaRow label="Time" value={formatTime(createdAt)} />
         <MetaRow label="Counter" value={counterName} />
+        {staffName && <MetaRow label="Staff" value={staffName} />}
         {customerName && <MetaRow label="Customer" value={customerName} />}
         <MetaRow label="Payment" value={paymentMethod.toUpperCase()} />
       </div>

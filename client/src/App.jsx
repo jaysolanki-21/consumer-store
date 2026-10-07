@@ -116,6 +116,7 @@ function App() {
     <BrowserRouter>
       <Toaster
         position="top-center"
+        containerClassName="no-print toast-container toaster-container"
         toastOptions={{
           duration: 3000,
           style: {

@@ -166,25 +166,8 @@ export default function AdminOrdersPage() {
     return order.counterName || "Counter 1";
   };
 
-  // ✅ Receipt state — order that should be printed
-  const [printOrder, setPrintOrder] = useState(null);
-
-  const ordersRef = useRef([]);
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
-
-  // ✅ When printOrder is set, wait for DOM update then print
-  useEffect(() => {
-    if (!printOrder) return;
-
-    const timer = setTimeout(() => {
-      window.print();
-      setTimeout(() => setPrintOrder(null), 500);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [printOrder]);
+  // ✅ Receipt preview & reprint state
+  const [previewOrder, setPreviewOrder] = useState(null);
 
   // ✅ Calculate order completion time
   const getCompletionTime = (order) => {
@@ -676,39 +659,12 @@ export default function AdminOrdersPage() {
     [fetchOrders, expandedOrderId],
   );
 
-  // ✅ REPRINT — confirmation dialog + success alert
-  const reprintOrder = useCallback(async (order) => {
+  // ✅ REPRINT — Open Bill Preview & Print Modal
+  const reprintOrder = useCallback((order) => {
     if (!order || order.status !== "Confirmed") {
       toast.error("Only confirmed orders can be reprinted");
       return;
     }
-
-    const confirmed = await showConfirmDialog({
-      title: "Reprint Bill",
-      headline: "Reprint this bill?",
-      subtext: "The thermal receipt will be sent to the printer again.",
-      icon: "question",
-      confirmColor: "#6366f1",
-      confirmText: "Yes, Reprint",
-      rows: [
-        ["Order ID", `#${order._id.slice(-8)}`],
-        ["Counter", getOrderCounterName(order)],
-        ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-        [
-          "Confirmed At",
-          formatISTTime(order.confirmedAt || order.updatedAt),
-        ],
-        [
-          "Time Since Confirmation",
-          humanDuration(
-            Date.now() -
-              new Date(order.confirmedAt || order.updatedAt).getTime(),
-          ),
-        ],
-      ],
-    });
-
-    if (!confirmed) return;
 
     const receiptOrder = {
       _id: order._id,
@@ -723,30 +679,14 @@ export default function AdminOrdersPage() {
       changeGiven: order.changeGiven ?? 0,
       paymentMethod: order.paymentMethod || "CASH",
       createdAt: order.createdAt,
+      counter: order.counter || { name: getOrderCounterName(order) },
+      counterName: getOrderCounterName(order),
+      staff: order.staff || order.confirmedBy,
+      staffName: order.staff?.name || order.staffName || order.confirmedBy?.name || null,
+      customerName: order.customerName || order.customer?.name || null,
     };
 
-    setPrintOrder(receiptOrder);
-
-    showActionSuccess("Reprinting Bill 🖨️", order, {
-      headline: "Bill is being reprinted.",
-      subtext: "The thermal receipt has been sent to the printer.",
-      actionLabel: "Reprinted",
-      actionTime: new Date(),
-      icon: "info",
-      extraRows: [
-        [
-          "Confirmed At",
-          formatISTTime(order.confirmedAt || order.updatedAt),
-        ],
-        [
-          "Time Since Confirmation",
-          humanDuration(
-            Date.now() -
-              new Date(order.confirmedAt || order.updatedAt).getTime(),
-          ),
-        ],
-      ],
-    });
+    setPreviewOrder(receiptOrder);
   }, []);
 
   const toggleExpand = (orderId) => {
@@ -1541,10 +1481,78 @@ export default function AdminOrdersPage() {
         )}
       </div>
 
-      {/* ✅ Hidden ThermalReceipt — rendered only during print */}
-      {printOrder && (
-        <div className="hidden print:block">
-          <ThermalReceipt order={printOrder} counter={printOrder?.counter || { name: getOrderCounterName(printOrder) }} />
+      {/* ✅ Reprint Bill Preview & Print Modal */}
+      {previewOrder && (
+        <div
+          id="reprint-modal-container"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm print:static print:p-0 print:m-0 print:bg-transparent print:block print:overflow-visible"
+        >
+          {/* Backdrop click to close */}
+          <div
+            className="fixed inset-0 print:hidden"
+            onClick={() => setPreviewOrder(null)}
+          />
+
+          <div
+            className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:max-w-none print:w-auto print:max-h-none print:overflow-visible print:bg-transparent print:rounded-none print:m-0 print:p-0"
+          >
+            {/* Modal Header — Hidden in print */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 print:hidden">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <FiPrinter className="text-lg" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-white text-base">
+                    Bill Preview / Print
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Order #{String(previewOrder._id || "").slice(-8).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewOrder(null)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition"
+                title="Close"
+              >
+                <FiX className="text-lg" />
+              </button>
+            </div>
+
+            {/* Modal Body — Thermal Receipt Preview */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex justify-center bg-slate-100 dark:bg-slate-950/60 print:p-0 print:m-0 print:overflow-visible print:bg-transparent print:block">
+              <div
+                id="thermal-receipt-container"
+                className="shadow-lg rounded-xl overflow-hidden bg-white print:shadow-none print:rounded-none print:overflow-visible print:m-0 print:p-0"
+              >
+                <ThermalReceipt
+                  order={previewOrder}
+                  counter={previewOrder?.counter || { name: getOrderCounterName(previewOrder) }}
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer / Actions — Hidden in print */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 print:hidden">
+              <button
+                type="button"
+                onClick={() => setPreviewOrder(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md hover:shadow-lg transition"
+              >
+                <FiPrinter className="text-base" />
+                Print
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

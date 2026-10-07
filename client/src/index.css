@@ -39,41 +39,85 @@
 
 /* ---------- Print Styles ---------- */
 @media print {
-  /* Hide navigation, sidebar, filter inputs, buttons */
+  /* 1. Hide navigation, sidebar, form controls, buttons, and no-print elements */
   aside,
   nav,
   button,
   select,
   input,
-  .no-print {
+  .no-print,
+  .swal2-container {
     display: none !important;
+    visibility: hidden !important;
   }
 
-  body {
+  /* 2. Target ONLY React Hot Toast notifications without affecting other DOM containers */
+  [data-rht-toaster],
+  [data-hot-toast],
+  .toaster-container,
+  .toast-container {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 3. Base page layout for printing */
+  html,
+  body,
+  body.swal2-shown {
     background: #fff !important;
     color: #000 !important;
     font-size: 10pt;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
   }
 
-  main {
+  #root,
+  .min-h-screen,
+  main,
+  div[class*="lg:pl-"] {
     max-width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 
-  /* Thermal Receipt Print (Consumer POS) */
+  /* 4. Ensure thermal receipt print containers display in print mode */
+  #reprint-modal-container,
+  #thermal-receipt-container,
+  .print\:block {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* 5. Force the thermal receipt and all its inner content to be visible and correctly styled */
+  #thermal-receipt,
+  .thermal-receipt,
+  #thermal-receipt *,
+  .thermal-receipt * {
+    visibility: visible !important;
+  }
+
+  #thermal-receipt,
   .thermal-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
+    display: block !important;
+    position: relative !important;
     width: 80mm !important;
+    max-width: 80mm !important;
+    min-width: 80mm !important;
     padding: 4mm 2mm !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
     background: #fff !important;
     color: #000 !important;
+    opacity: 1 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
