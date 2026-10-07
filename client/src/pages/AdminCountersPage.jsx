@@ -109,6 +109,13 @@ export default function AdminCountersPage() {
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
 
+  const [passwordModal, setPasswordModal] = useState({
+    open: false,
+    counterId: null,
+    counterName: ''
+  });
+  const [newPassword, setNewPassword] = useState('');
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'online' | 'offline' | 'disabled'
   const [page, setPage] = useState(1);
@@ -247,19 +254,31 @@ export default function AdminCountersPage() {
     fetchCounters();
   };
 
-  const resetPassword = async (counter) => {
-    const result = await Swal.fire({
-      title: `Reset password for ${counter.name}`,
-      input: 'password',
-      inputPlaceholder: 'New password',
-      showCancelButton: true,
-      confirmButtonText: 'Reset'
+  const openResetPassword = (counter) => {
+    setPasswordModal({
+      open: true,
+      counterId: counter._id,
+      counterName: counter.name
     });
-    if (!result.isConfirmed || !result.value) return;
-    await api.put(`/counters/${counter._id}/reset-password`, {
-      newPassword: result.value
-    });
-    toast.success('Password reset');
+    setNewPassword('');
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    try {
+      await api.put(`/counters/${passwordModal.counterId}/reset-password`, {
+        newPassword
+      });
+      toast.success('Password reset successfully');
+      setPasswordModal({ open: false, counterId: null, counterName: '' });
+      setNewPassword('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reset password');
+    }
   };
 
   const deleteCounter = async (counter) => {
@@ -595,7 +614,7 @@ export default function AdminCountersPage() {
                             <FiEdit2 className="text-sm" />
                           </button>
                           <button
-                            onClick={() => resetPassword(counter)}
+                            onClick={() => openResetPassword(counter)}
                             title="Reset password"
                             className="w-9 h-9 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-600 flex items-center justify-center transition"
                           >
@@ -757,10 +776,10 @@ export default function AdminCountersPage() {
 
       {/* ---------- MODAL ---------- */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <form
             onSubmit={saveCounter}
-            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-5 space-y-4 shadow-2xl"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-5 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800"
           >
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               {editing ? 'Edit Counter' : 'Add Counter'}
@@ -800,6 +819,67 @@ export default function AdminCountersPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ---------- RESET PASSWORD MODAL ---------- */}
+      {passwordModal.open && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  Reset Password
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {passwordModal.counterName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setPasswordModal({ open: false, counterId: null, counterName: '' })
+                }
+                className="w-10 h-10 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500"
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword}>
+              <div className="relative mb-5">
+                <FiKey className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="password"
+                  placeholder="Enter new password (min 6 chars)"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={6}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPasswordModal({ open: false, counterId: null, counterName: '' })
+                  }
+                  className="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 px-5 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white font-semibold shadow-lg shadow-yellow-500/20 text-sm"
+                >
+                  Reset Password
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
