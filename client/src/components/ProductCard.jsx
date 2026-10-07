@@ -19,8 +19,10 @@ export default function ProductCard({ product }) {
     product.availableStock ??
     (product.stock - (product.reservedStock || 0));
 
-  // Hide product completely
-  if (availableStock <= 0 || product.visibility === false) {
+  const isOutOfStock = availableStock <= 0;
+
+  // Hide product completely if visibility is false
+  if (product.visibility === false) {
     return null;
   }
 
@@ -76,7 +78,12 @@ export default function ProductCard({ product }) {
 
         {/* Stock Badge */}
         <div className="absolute top-3 left-3">
-          {isLowStock ? (
+          {isOutOfStock ? (
+            <span className="rounded-full bg-rose-500 text-white px-3 py-1 text-xs font-bold shadow-lg flex items-center gap-1">
+              <FiAlertCircle />
+              Out of Stock
+            </span>
+          ) : isLowStock ? (
             <span className="rounded-full bg-amber-500 text-white px-3 py-1 text-xs font-bold shadow-lg">
               Low Stock
             </span>
@@ -152,10 +159,15 @@ export default function ProductCard({ product }) {
         {/* Add To Cart */}
         <button
           onClick={handleAdd}
-          className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/20 active:scale-[0.98]"
+          disabled={isOutOfStock}
+          className={`mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 ${
+            isOutOfStock
+              ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none'
+              : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/20 active:scale-[0.98]'
+          }`}
         >
           <FiShoppingCart className="text-base" />
-          Add {quantity}
+          {isOutOfStock ? 'Out of Stock' : `Add ${quantity}`}
         </button>
       </div>
     </motion.div>

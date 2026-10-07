@@ -169,7 +169,7 @@ const OrderCard = React.memo(
               {(order.counter || order.counterName || order.counterId) && (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
                   <FiMonitor className="text-xs" />
-                  <span>Counter: {counterName}</span>
+                  <span>{counterName}</span>
                 </div>
               )}
               {/* ✅ Payment Badge */}
