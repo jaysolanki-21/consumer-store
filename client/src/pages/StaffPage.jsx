@@ -54,6 +54,27 @@ import { FaRupeeSign } from "react-icons/fa";
 // ✅ Notification sound URL
 const NOTIFICATION_SOUND_URL = "/sounds/notification-bell.mp3";
 
+// ✅ Simple, clean, professional toast configuration (centered)
+const STAFF_TOAST_CONFIG = {
+  position: "top-center",
+  duration: 3000,
+  style: {
+    background: "#0f172a",
+    color: "#ffffff",
+    fontSize: "14px",
+    fontWeight: "500",
+    borderRadius: "12px",
+    padding: "12px 20px",
+    boxShadow:
+      "0 10px 25px -5px rgba(15, 23, 42, 0.25), 0 8px 10px -6px rgba(15, 23, 42, 0.15)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+  },
+  iconTheme: {
+    primary: "#10b981",
+    secondary: "#ffffff",
+  },
+};
+
 // ✅ IST Date Functions
 function getTodayLocal() {
   const now = new Date();
@@ -399,7 +420,10 @@ export default function StaffPage() {
   const toggleSound = useCallback(() => {
     setSoundEnabled((prev) => {
       const next = !prev;
-      toast.success(next ? "🔔 Sound enabled" : "🔕 Sound disabled");
+      toast.success(next ? "🔔 Sound enabled" : "🔕 Sound disabled", {
+        ...STAFF_TOAST_CONFIG,
+        duration: 2000,
+      });
       if (next) {
         try {
           const audio = new Audio(NOTIFICATION_SOUND_URL);
@@ -483,7 +507,7 @@ export default function StaffPage() {
       dispatch(setOrders(normalized));
     } catch (error) {
       console.error("Failed to fetch orders:", error);
-      toast.error("Failed to connect to server");
+      toast.error("Failed to connect to server", { ...STAFF_TOAST_CONFIG });
     } finally {
       setIsInitialLoad(false);
       dispatch(setLoading(false));
@@ -497,10 +521,10 @@ export default function StaffPage() {
       const { data } = await api.get("/orders");
       const normalized = (Array.isArray(data) ? data : []).map(normalizeOrder);
       dispatch(setOrders(normalized));
-      toast.success("Orders refreshed", { duration: 1500 });
+      toast.success("Orders refreshed", { ...STAFF_TOAST_CONFIG, duration: 1500 });
     } catch (error) {
       console.error("Manual refresh failed:", error);
-      toast.error("Failed to sync orders");
+      toast.error("Failed to sync orders", { ...STAFF_TOAST_CONFIG });
     } finally {
       setTimeout(() => setIsRefreshing(false), 400);
     }
@@ -532,10 +556,10 @@ export default function StaffPage() {
         playNotificationSound();
       }
 
-      toast.success(`🛒 New Order #${order._id.slice(-6)} received!`, {
-        duration: 4000,
-        icon: "🛒",
-        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+      // ✅ Centered, simple, clean toast notification
+      toast.success("New order received", {
+        id: `new-${order._id}`,
+        ...STAFF_TOAST_CONFIG,
       });
 
       setLivePulse(true);
@@ -546,7 +570,7 @@ export default function StaffPage() {
       if (!order) return;
       const orderId = order._id || order.id || order;
       const eventKey = `confirm-${orderId}`;
-      if (!deduplicateEvent(eventKey)) return;
+      const isNewEvent = deduplicateEvent(eventKey);
 
       console.log("✅ Order confirmed (socket):", orderId);
       const changes =
@@ -559,6 +583,14 @@ export default function StaffPage() {
           changes: { ...changes, status: "Confirmed" },
         }),
       );
+
+      // ✅ Centered, simple, clean toast notification (prevent duplicates if confirmed locally)
+      if (isNewEvent && !processedEventsRef.current.has(`local-confirm-${orderId}`)) {
+        toast.success("Order confirmed successfully", {
+          id: `confirm-${orderId}`,
+          ...STAFF_TOAST_CONFIG,
+        });
+      }
 
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
@@ -662,12 +694,22 @@ export default function StaffPage() {
         // Optimistic update
         dispatch(updateOrder({ id: orderId, changes: { status: "Confirmed" } }));
 
+        // Mark local confirm to prevent duplicate toast from socket broadcast
+        processedEventsRef.current.add(`local-confirm-${orderId}`);
+        setTimeout(() => {
+          processedEventsRef.current.delete(`local-confirm-${orderId}`);
+        }, 5000);
+
+        // ✅ Immediate centered toast notification
+        toast.success("Order confirmed successfully", {
+          id: `confirm-${orderId}`,
+          ...STAFF_TOAST_CONFIG,
+        });
+
         const { data } = await api.put(`/orders/${orderId}/confirm`);
         if (data) {
           dispatch(updateOrder({ id: orderId, changes: normalizeOrder(data) }));
         }
-
-        toast.success(`Order confirmed! ✅`, { duration: 2000 });
       } catch (error) {
         console.error("Failed to confirm order:", error);
         // Rollback
@@ -677,7 +719,9 @@ export default function StaffPage() {
             updateOrder({ id: orderId, changes: { status: "Pending" } }),
           );
         }
-        toast.error(error.response?.data?.message || "Failed to confirm order");
+        toast.error(error.response?.data?.message || "Failed to confirm order", {
+          position: "top-center",
+        });
       }
     },
     [dispatch, allOrders],
@@ -703,7 +747,7 @@ export default function StaffPage() {
     setFilterDate((prev) => {
       const next = addDays(prev, 1);
       if (next > today) {
-        toast.error("Cannot go beyond today");
+        toast.error("Cannot go beyond today", { ...STAFF_TOAST_CONFIG });
         return prev;
       }
       return next;
