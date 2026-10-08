@@ -297,7 +297,7 @@ function StaffOrderCard({
                     ) : (
                       <>
                         <FiCheckCircle className="text-base" />
-                        <span>✓ Confirm Order</span>
+                        <span>Confirm Order</span>
                       </>
                     )}
                   </button>
