@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 // ✅ Thermal receipt component (reused for reprint)
 import ThermalReceipt from "../components/ThermalReceipt";
 import PaginationBar from "../components/PaginationBar";
+import ConfirmationModal from "../components/ConfirmationModal";
 
 import {
   FiXCircle,
@@ -206,120 +207,66 @@ export default function AdminOrdersPage() {
     return `${diffSecs}s`;
   };
 
-  // ✅ Generic confirmation dialog builder
-  const showConfirmDialog = async ({
-    title,
-    headline,
-    subtext,
-    rows = [],
-    confirmText = "Yes, Proceed",
-    confirmColor = "#dc2626",
-    icon = "warning",
-  }) => {
-    const html = `
-      <div style="text-align:left; font-size:14px; line-height:1.9;">
-        <div style="background:#f1f5f9; padding:10px 14px; border-radius:10px; margin-bottom:12px;">
-          <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${headline || ""}</div>
-          <div style="color:#475569;">${subtext || ""}</div>
-        </div>
-        ${
-          rows.length
-            ? `<table style="width:100%; border-collapse:collapse;">
-                ${rows
-                  .map(
-                    ([k, v]) => `
-                  <tr>
-                    <td style="padding:6px 8px; color:#64748b; font-weight:600; width:45%;">${k}</td>
-                    <td style="padding:6px 8px; color:#0f172a; font-weight:600;">${v}</td>
-                  </tr>`,
-                  )
-                  .join("")}
-              </table>`
-            : ""
-        }
-      </div>
-    `;
+  // ✅ Modern confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: "confirm",
+    title: "",
+    subtitle: "",
+    order: null,
+    counterName: "",
+    rows: [],
+    headline: "",
+    subtext: "",
+    confirmText: "",
+    confirmLoadingText: "",
+    onConfirm: null,
+    onClose: null,
+  });
 
-    const result = await Swal.fire({
+  // ✅ Modern confirmation dialog builder
+  const showConfirmDialog = useCallback(
+    ({
+      type = "confirm",
       title,
-      html,
-      icon,
-      showCancelButton: true,
-      confirmButtonColor: confirmColor,
-      cancelButtonColor: "#94a3b8",
-      confirmButtonText: confirmText,
-      cancelButtonText: "Cancel",
-      reverseButtons: true,
-      customClass: {
-        popup:
-          "rounded-2xl dark:bg-slate-800 dark:text-white border dark:border-slate-700 shadow-2xl",
-      },
-    });
+      subtitle,
+      order = null,
+      rows = [],
+      headline,
+      subtext,
+      confirmText,
+      confirmLoadingText,
+    }) => {
+      return new Promise((resolve) => {
+        setConfirmModal({
+          isOpen: true,
+          type,
+          title,
+          subtitle,
+          order,
+          counterName: order ? getOrderCounterName(order) : "",
+          rows,
+          headline,
+          subtext,
+          confirmText,
+          confirmLoadingText,
+          onConfirm: async () => {
+            resolve(true);
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          },
+          onClose: () => {
+            resolve(false);
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          },
+        });
+      });
+    },
+    [countersMap],
+  );
 
-    return result.isConfirmed;
-  };
-
-  // ✅ Success alert after action
+  // ✅ Success toast notification after action
   const showActionSuccess = (title, order, actionMeta = {}) => {
-    const createdAt = order?.createdAt ? new Date(order.createdAt) : null;
-    const now = new Date();
-    const durationMs = createdAt ? now - createdAt : 0;
-    const durationStr = createdAt ? humanDuration(durationMs) : "N/A";
-
-    const actionTime = actionMeta.actionTime || now;
-
-    const rows = [
-      ["Order ID", `#${order._id.slice(-8)}`],
-      ["Status", actionMeta.newStatus || order.status],
-      ["Counter", getOrderCounterName(order)],
-      ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-      ["Order Placed", formatISTTime(order.createdAt)],
-      [`${actionMeta.actionLabel || "Action"} At`, formatISTTime(actionTime)],
-      ["Total Time", durationStr],
-    ];
-
-    if (actionMeta.extraRows && Array.isArray(actionMeta.extraRows)) {
-      rows.push(...actionMeta.extraRows);
-    }
-
-    const html = `
-      <div style="text-align:left; font-size:14px; line-height:1.9;">
-        <div style="background:#f1f5f9; padding:10px 14px; border-radius:10px; margin-bottom:12px;">
-          <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${actionMeta.headline || title}</div>
-          <div style="color:#475569;">${actionMeta.subtext || ""}</div>
-        </div>
-        <table style="width:100%; border-collapse:collapse;">
-          ${rows
-            .map(
-              ([k, v]) => `
-            <tr>
-              <td style="padding:6px 8px; color:#64748b; font-weight:600; width:45%;">${k}</td>
-              <td style="padding:6px 8px; color:#0f172a; font-weight:600;">${v}</td>
-            </tr>`,
-            )
-            .join("")}
-        </table>
-      </div>
-    `;
-
-    Swal.fire({
-      title,
-      html,
-      icon: actionMeta.icon || "success",
-      confirmButtonText: "OK",
-      confirmButtonColor:
-        actionMeta.icon === "error"
-          ? "#dc2626"
-          : actionMeta.icon === "warning"
-            ? "#f59e0b"
-            : actionMeta.icon === "info"
-              ? "#6366f1"
-              : "#16a34a",
-      customClass: {
-        popup:
-          "rounded-2xl dark:bg-slate-800 dark:text-white border dark:border-slate-700 shadow-2xl",
-      },
-    });
+    toast.success(actionMeta.headline || title || "Action completed successfully");
   };
 
   // ✅ Order Info Modal
@@ -443,201 +390,126 @@ export default function AdminOrdersPage() {
     };
   }, [fetchOrders, handleLiveUpdate]);
 
-  // ✅ CONFIRM — confirmation dialog + success alert
+  // ✅ CONFIRM — modern confirmation dialog + in-modal loading
   const confirmOrder = useCallback(
-    async (order) => {
+    (order) => {
       const orderId = order._id;
 
-      const confirmed = await showConfirmDialog({
+      setConfirmModal({
+        isOpen: true,
+        type: "confirm",
         title: "Confirm Order",
+        subtitle: "Review the order details before confirming it.",
         headline: "Confirm this order?",
-        subtext:
-          "Stock will be deducted and the order will be marked as Confirmed.",
-        icon: "question",
-        confirmColor: "#16a34a",
-        confirmText: "Yes, Confirm",
-        rows: [
-          ["Order ID", `#${order._id.slice(-8)}`],
-          ["Counter", getOrderCounterName(order)],
-          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-          ["Order Placed", formatISTTime(order.createdAt)],
-          [
-            "Waiting For",
-            humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-          ],
-        ],
+        subtext: "Stock will be deducted and the order will be marked as confirmed.",
+        order,
+        counterName: getOrderCounterName(order),
+        confirmText: "Confirm Order",
+        confirmLoadingText: "Confirming...",
+        onConfirm: async () => {
+          try {
+            await api.put(`/orders/${orderId}/confirm`);
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
+            toast.success("Order confirmed successfully ✅");
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+            fetchOrders();
+          } catch (err) {
+            toast.error(err.response?.data?.message || "Confirmation failed");
+            throw err;
+          }
+        },
+        onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
       });
-
-      if (!confirmed) return;
-
-      const startTime = Date.now();
-      try {
-        await api.put(`/orders/${orderId}/confirm`);
-
-        if (expandedOrderId === orderId) {
-          setExpandedOrderId(null);
-        }
-
-        showActionSuccess("Order Confirmed ✅", order, {
-          headline: "Order has been confirmed successfully.",
-          subtext: "Stock has been deducted and order is ready for processing.",
-          newStatus: "Confirmed",
-          actionLabel: "Confirmed",
-          actionTime: new Date(startTime),
-          icon: "success",
-          extraRows: [
-            [
-              "Processing Time",
-              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-            ],
-          ],
-        });
-
-        fetchOrders();
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Confirmation failed");
-        showActionSuccess("Confirmation Failed ❌", order, {
-          headline: "Could not confirm the order.",
-          subtext: err.response?.data?.message || "Please try again.",
-          icon: "error",
-          actionLabel: "Attempted",
-        });
-      }
     },
-    [fetchOrders, expandedOrderId],
+    [fetchOrders, expandedOrderId, countersMap],
   );
 
-  // ✅ CANCEL — confirmation dialog + success alert
+  // ✅ CANCEL — modern confirmation dialog + in-modal loading
   const cancelOrder = useCallback(
-    async (order) => {
+    (order) => {
       const orderId = order._id;
 
-      const confirmed = await showConfirmDialog({
+      setConfirmModal({
+        isOpen: true,
+        type: "cancel",
         title: "Cancel Order",
+        subtitle: "Review the order details before cancelling it.",
         headline: "Cancel this order?",
-        subtext:
-          "Are you sure you want to cancel this order? This action can be reverted.",
-        icon: "warning",
-        confirmColor: "#dc2626",
-        confirmText: "Yes, Cancel",
-        rows: [
-          ["Order ID", `#${order._id.slice(-8)}`],
-          ["Counter", getOrderCounterName(order)],
-          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-          ["Order Placed", formatISTTime(order.createdAt)],
-          [
-            "Pending For",
-            humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-          ],
-        ],
+        subtext: "The order will be moved to the cancelled state.",
+        order,
+        counterName: getOrderCounterName(order),
+        confirmText: "Cancel Order",
+        confirmLoadingText: "Cancelling...",
+        onConfirm: async () => {
+          try {
+            await api.put(`/orders/${orderId}/cancel`);
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
+            toast.success("Order cancelled successfully");
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+            fetchOrders();
+          } catch (err) {
+            toast.error(err.response?.data?.message || "Cancellation failed");
+            throw err;
+          }
+        },
+        onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
       });
-
-      if (!confirmed) return;
-
-      const startTime = Date.now();
-      try {
-        await api.put(`/orders/${orderId}/cancel`);
-
-        if (expandedOrderId === orderId) {
-          setExpandedOrderId(null);
-        }
-
-        showActionSuccess("Order Cancelled ❌", order, {
-          headline: "Order has been cancelled.",
-          subtext: "Stock has been restored. You can revert this if needed.",
-          newStatus: "Cancelled",
-          actionLabel: "Cancelled",
-          actionTime: new Date(startTime),
-          icon: "warning",
-          extraRows: [
-            [
-              "Pending Duration",
-              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-            ],
-          ],
-        });
-
-        fetchOrders();
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Cancellation failed");
-        showActionSuccess("Cancellation Failed ❌", order, {
-          headline: "Could not cancel the order.",
-          subtext: err.response?.data?.message || "Please try again.",
-          icon: "error",
-          actionLabel: "Attempted",
-        });
-      }
     },
-    [fetchOrders, expandedOrderId],
+    [fetchOrders, expandedOrderId, countersMap],
   );
 
-  // ✅ REVERT — confirmation dialog + success alert
+  // ✅ REVERT — modern confirmation dialog + in-modal loading
   const revertOrder = useCallback(
-    async (order) => {
+    (order) => {
       const orderId = order._id;
 
-      const confirmed = await showConfirmDialog({
+      setConfirmModal({
+        isOpen: true,
+        type: "revert",
         title: "Revert Order",
+        subtitle: "Revert this order back to pending state.",
         headline: "Revert this order to Pending?",
-        subtext: "Stock will be adjusted accordingly.",
-        icon: "question",
-        confirmColor: "#f59e0b",
-        confirmText: "Yes, Revert",
-        rows: [
-          ["Order ID", `#${order._id.slice(-8)}`],
-          ["Current Status", order.status],
-          ["Counter", getOrderCounterName(order)],
-          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-          ["Order Placed", formatISTTime(order.createdAt)],
-        ],
+        subtext: "Stock will be adjusted and order returned to pending queue.",
+        order,
+        counterName: getOrderCounterName(order),
+        confirmText: "Revert Order",
+        confirmLoadingText: "Reverting...",
+        onConfirm: async () => {
+          setRevertingId(orderId);
+          try {
+            await api.put(`/orders/${orderId}/revert`);
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
+            toast.success("Order reverted to Pending ↩️");
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+            fetchOrders();
+          } catch (err) {
+            toast.error(err.response?.data?.message || "Revert failed");
+            throw err;
+          } finally {
+            setRevertingId(null);
+          }
+        },
+        onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
       });
-
-      if (!confirmed) return;
-
-      const startTime = Date.now();
-      setRevertingId(orderId);
-      try {
-        await api.put(`/orders/${orderId}/revert`);
-
-        if (expandedOrderId === orderId) {
-          setExpandedOrderId(null);
-        }
-
-        showActionSuccess("Order Reverted ↩️", order, {
-          headline: "Order has been reverted to Pending.",
-          subtext: "Stock has been adjusted accordingly.",
-          newStatus: "Pending",
-          actionLabel: "Reverted",
-          actionTime: new Date(startTime),
-          icon: "info",
-          extraRows: [
-            ["Previous Status", order.status],
-            [
-              "Time Since Order",
-              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-            ],
-          ],
-        });
-
-        fetchOrders();
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Revert failed");
-        showActionSuccess("Revert Failed ❌", order, {
-          headline: "Could not revert the order.",
-          subtext: err.response?.data?.message || "Please try again.",
-          icon: "error",
-          actionLabel: "Attempted",
-        });
-      } finally {
-        setRevertingId(null);
-      }
     },
-    [fetchOrders, expandedOrderId],
+    [fetchOrders, expandedOrderId, countersMap],
   );
 
-  // ✅ DELETE — confirmation dialog + success alert
+  // ✅ DELETE — modern confirmation dialog + in-modal loading
   const deleteOrder = useCallback(
-    async (order) => {
+    (order) => {
       const orderId = order._id;
       const orderStatus = order.status;
 
@@ -646,62 +518,40 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      const confirmed = await showConfirmDialog({
+      setConfirmModal({
+        isOpen: true,
+        type: "delete",
         title: "Delete Order",
-        headline: "Permanently delete this order?",
+        subtitle: "This action cannot be undone.",
+        headline: "Delete this order permanently?",
         subtext: "This action cannot be undone.",
-        icon: "warning",
-        confirmColor: "#dc2626",
-        confirmText: "Yes, Delete",
-        rows: [
-          ["Order ID", `#${order._id.slice(-8)}`],
-          ["Current Status", orderStatus],
-          ["Counter", getOrderCounterName(order)],
-          ["Amount", `₹${Number(order.totalAmount || 0).toLocaleString()}`],
-          ["Order Placed", formatISTTime(order.createdAt)],
-        ],
+        order,
+        counterName: getOrderCounterName(order),
+        confirmText: "Delete Order",
+        confirmLoadingText: "Deleting...",
+        onConfirm: async () => {
+          setDeletingId(orderId);
+          try {
+            await api.delete(`/orders/${orderId}`);
+
+            if (expandedOrderId === orderId) {
+              setExpandedOrderId(null);
+            }
+
+            toast.success("Order deleted permanently 🗑️");
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+            fetchOrders();
+          } catch (err) {
+            toast.error(err.response?.data?.message || "Delete failed");
+            throw err;
+          } finally {
+            setDeletingId(null);
+          }
+        },
+        onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
       });
-
-      if (!confirmed) return;
-
-      const startTime = Date.now();
-      setDeletingId(orderId);
-      try {
-        await api.delete(`/orders/${orderId}`);
-
-        if (expandedOrderId === orderId) {
-          setExpandedOrderId(null);
-        }
-
-        showActionSuccess("Order Deleted 🗑️", order, {
-          headline: "Order has been permanently deleted.",
-          subtext: "This record is no longer available in the system.",
-          actionLabel: "Deleted",
-          actionTime: new Date(startTime),
-          icon: "warning",
-          extraRows: [
-            ["Previous Status", orderStatus],
-            [
-              "Record Lifetime",
-              humanDuration(Date.now() - new Date(order.createdAt).getTime()),
-            ],
-          ],
-        });
-
-        fetchOrders();
-      } catch (err) {
-        toast.error(err.response?.data?.message || "Delete failed");
-        showActionSuccess("Delete Failed ❌", order, {
-          headline: "Could not delete the order.",
-          subtext: err.response?.data?.message || "Please try again.",
-          icon: "error",
-          actionLabel: "Attempted",
-        });
-      } finally {
-        setDeletingId(null);
-      }
     },
-    [fetchOrders, expandedOrderId],
+    [fetchOrders, expandedOrderId, countersMap],
   );
 
   // ✅ REPRINT — Open Bill Preview & Print Modal
@@ -756,7 +606,7 @@ export default function AdminOrdersPage() {
   };
 
   // ✅ Bulk delete: pending
-  const deleteAllPendingOrders = useCallback(async () => {
+  const deleteAllPendingOrders = useCallback(() => {
     const pendingCount = serverStats.pending || 0;
 
     if (pendingCount === 0) {
@@ -764,51 +614,39 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    const confirmed = await showConfirmDialog({
+    setConfirmModal({
+      isOpen: true,
+      type: "delete",
       title: "Delete All Pending Orders",
+      subtitle: `Delete ${pendingCount} pending orders for ${filterDate}.`,
       headline: `Delete ${pendingCount} pending orders?`,
-      subtext: "This action cannot be undone.",
-      icon: "warning",
-      confirmColor: "#dc2626",
-      confirmText: "Yes, Delete All",
+      subtext: "This action cannot be undone and records will be permanently removed.",
       rows: [
         ["Date", filterDate],
-        ["Pending Orders", pendingCount],
+        ["Pending Orders", `${pendingCount} orders`],
       ],
+      confirmText: "Delete All Pending",
+      confirmLoadingText: "Deleting...",
+      onConfirm: async () => {
+        try {
+          await api.delete("/orders/bulk/pending", {
+            data: { date: filterDate },
+          });
+
+          toast.success(`${pendingCount} pending orders deleted 🗑️`);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          fetchOrders();
+        } catch (err) {
+          toast.error(err.response?.data?.message || "Bulk delete failed");
+          throw err;
+        }
+      },
+      onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
     });
-
-    if (!confirmed) return;
-
-    const startTime = Date.now();
-    try {
-      await api.delete("/orders/bulk/pending", {
-        data: { date: filterDate },
-      });
-
-      showActionSuccess(
-        "Pending Orders Deleted 🗑️",
-        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
-        {
-          headline: "All pending orders deleted.",
-          subtext: `${pendingCount} pending order(s) removed.`,
-          actionLabel: "Deleted",
-          actionTime: new Date(startTime),
-          icon: "success",
-          extraRows: [
-            ["Deleted Count", pendingCount],
-            ["Date", filterDate],
-          ],
-        },
-      );
-
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Bulk delete failed");
-    }
   }, [serverStats.pending, filterDate, fetchOrders]);
 
   // ✅ Bulk delete: cancelled
-  const deleteAllCancelledOrders = useCallback(async () => {
+  const deleteAllCancelledOrders = useCallback(() => {
     const cancelledCount = serverStats.cancelled || 0;
 
     if (cancelledCount === 0) {
@@ -816,51 +654,39 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    const confirmed = await showConfirmDialog({
+    setConfirmModal({
+      isOpen: true,
+      type: "delete",
       title: "Delete All Cancelled Orders",
+      subtitle: `Delete ${cancelledCount} cancelled orders for ${filterDate}.`,
       headline: `Delete ${cancelledCount} cancelled orders?`,
-      subtext: "This action cannot be undone.",
-      icon: "warning",
-      confirmColor: "#dc2626",
-      confirmText: "Yes, Delete All",
+      subtext: "This action cannot be undone and records will be permanently removed.",
       rows: [
         ["Date", filterDate],
-        ["Cancelled Orders", cancelledCount],
+        ["Cancelled Orders", `${cancelledCount} orders`],
       ],
+      confirmText: "Delete All Cancelled",
+      confirmLoadingText: "Deleting...",
+      onConfirm: async () => {
+        try {
+          await api.delete("/orders/bulk/cancelled", {
+            data: { date: filterDate },
+          });
+
+          toast.success(`${cancelledCount} cancelled orders deleted 🗑️`);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          fetchOrders();
+        } catch (err) {
+          toast.error(err.response?.data?.message || "Bulk delete failed");
+          throw err;
+        }
+      },
+      onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
     });
-
-    if (!confirmed) return;
-
-    const startTime = Date.now();
-    try {
-      await api.delete("/orders/bulk/cancelled", {
-        data: { date: filterDate },
-      });
-
-      showActionSuccess(
-        "Cancelled Orders Deleted 🗑️",
-        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
-        {
-          headline: "All cancelled orders deleted.",
-          subtext: `${cancelledCount} cancelled order(s) removed.`,
-          actionLabel: "Deleted",
-          actionTime: new Date(startTime),
-          icon: "success",
-          extraRows: [
-            ["Deleted Count", cancelledCount],
-            ["Date", filterDate],
-          ],
-        },
-      );
-
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Bulk delete failed");
-    }
   }, [serverStats.cancelled, filterDate, fetchOrders]);
 
   // ✅ Bulk delete: all records for date
-  const deleteAllRecordsForDate = useCallback(async () => {
+  const deleteAllRecordsForDate = useCallback(() => {
     const totalCount = serverStats.total || 0;
 
     if (totalCount === 0) {
@@ -868,47 +694,35 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    const confirmed = await showConfirmDialog({
+    setConfirmModal({
+      isOpen: true,
+      type: "delete",
       title: "Delete All Orders",
+      subtitle: `Permanently delete all ${totalCount} orders for ${filterDate}.`,
       headline: `Delete ALL ${totalCount} orders?`,
-      subtext: "This action cannot be undone.",
-      icon: "warning",
-      confirmColor: "#dc2626",
-      confirmText: "Yes, Delete All",
+      subtext: "This action cannot be undone. All order records for this date will be permanently deleted.",
       rows: [
         ["Date", filterDate],
-        ["Total Orders", totalCount],
+        ["Total Orders", `${totalCount} orders`],
       ],
+      confirmText: "Delete All Orders",
+      confirmLoadingText: "Deleting...",
+      onConfirm: async () => {
+        try {
+          await api.delete("/orders/by-date", {
+            data: { date: filterDate },
+          });
+
+          toast.success(`All ${totalCount} orders deleted for ${filterDate} 🗑️`);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          fetchOrders();
+        } catch (err) {
+          toast.error(err.response?.data?.message || "Failed to delete records");
+          throw err;
+        }
+      },
+      onClose: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
     });
-
-    if (!confirmed) return;
-
-    const startTime = Date.now();
-    try {
-      await api.delete("/orders/by-date", {
-        data: { date: filterDate },
-      });
-
-      showActionSuccess(
-        "All Orders Deleted 🗑️",
-        { _id: filterDate, totalAmount: 0, createdAt: new Date() },
-        {
-          headline: "All orders deleted.",
-          subtext: `${totalCount} order(s) removed.`,
-          actionLabel: "Deleted",
-          actionTime: new Date(startTime),
-          icon: "success",
-          extraRows: [
-            ["Deleted Count", totalCount],
-            ["Date", filterDate],
-          ],
-        },
-      );
-
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to delete records");
-    }
   }, [serverStats.total, filterDate, fetchOrders]);
 
   // Orders are filtered and paginated on the server
@@ -1661,6 +1475,26 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
+
+      {/* Modern Order Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => {
+          confirmModal.onClose?.();
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        }}
+        onConfirm={confirmModal.onConfirm}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        subtitle={confirmModal.subtitle}
+        order={confirmModal.order}
+        counterName={confirmModal.counterName}
+        rows={confirmModal.rows}
+        headline={confirmModal.headline}
+        subtext={confirmModal.subtext}
+        confirmText={confirmModal.confirmText}
+        confirmLoadingText={confirmModal.confirmLoadingText}
+      />
     </>
   );
 }

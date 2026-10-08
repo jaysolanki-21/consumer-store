@@ -2288,16 +2288,17 @@ export default function SalesReportPage() {
 
       {/* 2. TOP REPORT CATEGORY NAVIGATION (REPLACES LEFT NAVIGATOR) */}
       <div className="rounded-xl border border-slate-200/90 bg-white p-3 md:p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        {/* Primary Category Row */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {/* Primary Category Row - Responsive Wrapping with No Horizontal Scrollbar */}
+        <div className="flex flex-wrap items-center gap-2">
           {REPORT_GROUPS.map((group) => {
             const isSelected = activeCategory === group.id;
             const Icon = group.icon;
             return (
               <button
                 key={group.id}
+                type="button"
                 onClick={() => handleCategorySelect(group.id)}
-                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs md:text-sm font-semibold transition-all ${
                   isSelected
                     ? "bg-slate-900 text-white shadow-xs dark:bg-emerald-600 dark:text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -2310,8 +2311,8 @@ export default function SalesReportPage() {
           })}
         </div>
 
-        {/* Clean Secondary Navigation Row for Reports in Selected Category */}
-        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-slate-100 pt-3 scrollbar-none dark:border-slate-800">
+        {/* Clean Secondary Navigation Row for Reports in Selected Category - Responsive Wrapping */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">
             Reports:
           </span>
@@ -2320,8 +2321,9 @@ export default function SalesReportPage() {
             return (
               <button
                 key={r}
+                type="button"
                 onClick={() => handleReportSelect(r)}
-                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs md:text-[13px] transition-all ${
+                className={`rounded-md px-3 py-1.5 text-xs md:text-[13px] font-medium transition-all ${
                   isSelected
                     ? "bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300 shadow-2xs dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800"
                     : "border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"

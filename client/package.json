@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@cashfreepayments/cashfree-js": "^1.0.7",
+    "@dotlottie/player-component": "^2.7.12",
     "@reduxjs/toolkit": "^1.9.5",
     "autoprefixer": "^10.4.15",
     "axios": "^1.5.0",

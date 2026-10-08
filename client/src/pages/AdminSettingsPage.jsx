@@ -430,16 +430,34 @@ export default function AdminSettingsPage() {
       {/* CONFIRMATION MODAL */}
       <AnimatePresence>
         {confirmModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Subtle Overlay Backdrop - background remains recognizable and lightly dimmed */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => !isLoading && setConfirmModal(null)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-[2px]"
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+              }}
+              aria-hidden="true"
+            />
+
+            {/* Modal Dialog Content - Sharp, Centered, and Unaffected by Overlay Filters */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5"
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${
                     confirmModal === 'enable'
                       ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
                       : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
@@ -453,7 +471,7 @@ export default function AdminSettingsPage() {
                       ? 'Enable Maintenance Mode?'
                       : 'Disable Maintenance Mode?'}
                   </h3>
-                  <p className="text-xs text-slate-400">Confirmation Required</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Confirmation Required</p>
                 </div>
               </div>
 
@@ -498,12 +516,29 @@ export default function AdminSettingsPage() {
       {/* LIVE PREVIEW MODAL */}
       <AnimatePresence>
         {showPreviewModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Subtle Overlay Backdrop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 relative text-center text-white"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setShowPreviewModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-[2px]"
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+              }}
+              aria-hidden="true"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="relative z-10 bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 text-center text-white"
             >
               <button
                 onClick={() => setShowPreviewModal(false)}
