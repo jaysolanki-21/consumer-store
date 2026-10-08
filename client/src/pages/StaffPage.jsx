@@ -96,6 +96,64 @@ function getPaymentMethod(order) {
   return m.toLowerCase() === "cash" ? "Cash" : "Online";
 }
 
+function getISTDateFromUTC(utcDateString) {
+  if (!utcDateString) return "";
+  const date = new Date(utcDateString);
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(date.getTime() + istOffset);
+  const year = istDate.getUTCFullYear();
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(istDate.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isSameISTDate(orderCreatedAt, filterDate) {
+  return getISTDateFromUTC(orderCreatedAt) === filterDate;
+}
+
+function matchesFilters(order, { filterDate, filterCounter, filterPayment, filter }) {
+  if (!order) return false;
+  // Date check
+  if (filterDate && filterDate !== "all") {
+    if (!isSameISTDate(order.createdAt || new Date(), filterDate)) return false;
+  }
+  // Counter check
+  if (filterCounter && filterCounter !== "all") {
+    const cName = getCounterName(order);
+    if (
+      cName !== filterCounter &&
+      order.counterId !== filterCounter &&
+      order.counter !== filterCounter
+    ) {
+      return false;
+    }
+  }
+  // Payment check
+  if (filterPayment && filterPayment !== "all") {
+    const pMethod = getPaymentMethod(order);
+    if (pMethod.toLowerCase() !== filterPayment.toLowerCase()) return false;
+  }
+  // Search text check
+  if (filter && filter.trim()) {
+    const term = filter.trim().toLowerCase().replace(/^#/, "");
+    const id = String(order._id || "").toLowerCase();
+    const invoice = String(order.invoiceNumber || "").toLowerCase();
+    const bill = String(order.billNumber || "").toLowerCase();
+    const items = (order.items || [])
+      .map((it) => (it.productId?.name || it.name || "").toLowerCase())
+      .join(" ");
+    if (
+      !id.includes(term) &&
+      !invoice.includes(term) &&
+      !bill.includes(term) &&
+      !items.includes(term)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER CARD COMPONENT (COLLAPSED BY DEFAULT, ACCORDION EXPAND)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -513,41 +571,56 @@ export default function StaffPage() {
       try {
         setConfirmingId(orderId);
 
-        // Optimistic UI update in current list
-        setOrders((prev) =>
-          prev.map((o) => (o._id === orderId ? { ...o, status: "Confirmed" } : o))
-        );
+        // Track local confirmation to avoid double-processing when Socket.IO event arrives
+        processedEventsRef.current.add(`confirm-${orderId}`);
+
+        // 1. Immediately remove from current list if on pending tab
+        if (activeTab === "pending") {
+          setOrders((prev) => prev.filter((o) => o._id !== orderId));
+          setTotalItems((prev) => Math.max(0, prev - 1));
+        }
+
+        // 2. Immediately update badge stats
         setStats((prev) => ({
           ...prev,
           pending: Math.max(0, (prev.pending || 1) - 1),
           confirmed: (prev.confirmed || 0) + 1,
         }));
 
-        processedEventsRef.current.add(`confirm-${orderId}`);
+        // 3. Close expanded accordion
+        if (expandedOrderId === orderId) {
+          setExpandedOrderId(null);
+        }
 
         toast.success("Order confirmed successfully", {
           id: `confirm-${orderId}`,
           ...STAFF_TOAST_CONFIG,
         });
 
+        // 4. Send API request
         const { data } = await api.put(`/orders/${orderId}/confirm`);
 
-        if (data) {
-          setOrders((prev) =>
-            prev.map((o) => (o._id === orderId ? { ...o, ...data, status: "Confirmed" } : o))
-          );
+        // 5. If user is currently on confirmed tab, add/update it
+        if (activeTab === "confirmed" && data) {
+          setOrders((prev) => {
+            if (prev.some((o) => o._id === orderId)) {
+              return prev.map((o) =>
+                o._id === orderId ? { ...o, ...data, status: "Confirmed" } : o
+              );
+            }
+            return [{ ...data, status: "Confirmed" }, ...prev.slice(0, pageSize - 1)];
+          });
+          setTotalItems((prev) => prev + 1);
         }
 
-        // Close expanded view after short confirmation
-        setTimeout(() => {
-          setExpandedOrderId((prev) => (prev === orderId ? null : prev));
-        }, 300);
+        // 6. If page became empty on pending tab and page > 1, go to previous page
+        if (activeTab === "pending" && orders.length <= 1 && page > 1) {
+          setPage((p) => Math.max(1, p - 1));
+        }
       } catch (err) {
         console.error("Failed to confirm order:", err);
         // Rollback on error
-        setOrders((prev) =>
-          prev.map((o) => (o._id === orderId ? { ...o, status: "Pending" } : o))
-        );
+        fetchOrders();
         toast.error(err.response?.data?.message || "Failed to confirm order", {
           ...STAFF_TOAST_CONFIG,
         });
@@ -555,7 +628,7 @@ export default function StaffPage() {
         setConfirmingId(null);
       }
     },
-    [confirmingId]
+    [confirmingId, orders, activeTab, expandedOrderId, page, pageSize, fetchOrders]
   );
 
   // ── REALTIME SOCKET.IO EVENT HANDLERS ──
@@ -582,9 +655,16 @@ export default function StaffPage() {
         total: (prev.total || 0) + 1,
       }));
 
-      // If viewing pending tab on page 1 for today, prepend to current page
-      if (activeTab === "pending" && page === 1 && filterDate === getTodayLocal()) {
-        setOrders((prev) => [order, ...prev.slice(0, pageSize - 1)]);
+      // If viewing pending tab on page 1 and matches filters, prepend to current page
+      if (
+        activeTab === "pending" &&
+        page === 1 &&
+        matchesFilters(order, { filterDate, filterCounter, filterPayment, filter })
+      ) {
+        setOrders((prev) => {
+          if (prev.some((o) => o._id === order._id)) return prev;
+          return [order, ...prev.slice(0, pageSize - 1)];
+        });
         setTotalItems((prev) => prev + 1);
       }
     };
@@ -596,46 +676,103 @@ export default function StaffPage() {
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
 
-      // Update in current page if present
-      setOrders((prev) =>
-        prev.map((o) => (o._id === id ? { ...o, status: "Confirmed" } : o))
-      );
+      // Check if we already handled this order locally via handleConfirmOrder
+      const wasLocalConfirm = processedEventsRef.current.has(`confirm-${id}`);
 
-      // Update stats
-      setStats((prev) => ({
-        ...prev,
-        pending: Math.max(0, (prev.pending || 1) - 1),
-        confirmed: (prev.confirmed || 0) + 1,
-      }));
+      if (!wasLocalConfirm) {
+        // If confirmed by someone else, update stats
+        setStats((prev) => ({
+          ...prev,
+          pending: Math.max(0, (prev.pending || 1) - 1),
+          confirmed: (prev.confirmed || 0) + 1,
+        }));
+      }
+
+      // If viewing pending tab, REMOVE the confirmed order from the list!
+      if (activeTab === "pending") {
+        setOrders((prev) => prev.filter((o) => o._id !== id));
+        if (!wasLocalConfirm) {
+          setTotalItems((prev) => Math.max(0, prev - 1));
+        }
+        if (expandedOrderId === id) {
+          setExpandedOrderId(null);
+        }
+      }
+
+      // If viewing confirmed tab, ADD/UPDATE the order if it matches filters
+      if (activeTab === "confirmed") {
+        if (matchesFilters(order, { filterDate, filterCounter, filterPayment, filter })) {
+          setOrders((prev) => {
+            if (prev.some((o) => o._id === id)) {
+              return prev.map((o) =>
+                o._id === id ? { ...o, ...order, status: "Confirmed" } : o
+              );
+            }
+            return [order, ...prev.slice(0, pageSize - 1)];
+          });
+          if (!wasLocalConfirm) {
+            setTotalItems((prev) => prev + 1);
+          }
+        }
+      }
     };
 
     const handleOrderCancelled = (order) => {
       if (!order) return;
       const id = order._id || order.id || order;
 
-      setOrders((prev) =>
-        prev.map((o) => (o._id === id ? { ...o, status: "Cancelled" } : o))
-      );
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
 
+      // Update stats
       setStats((prev) => ({
         ...prev,
         pending: Math.max(0, (prev.pending || 1) - 1),
       }));
+
+      // If viewing pending tab, remove it
+      if (activeTab === "pending") {
+        setOrders((prev) => prev.filter((o) => o._id !== id));
+        setTotalItems((prev) => Math.max(0, prev - 1));
+        if (expandedOrderId === id) {
+          setExpandedOrderId(null);
+        }
+      }
     };
 
     const handleOrderReverted = (order) => {
       if (!order) return;
       const id = order._id || order.id || order;
 
-      setOrders((prev) =>
-        prev.map((o) => (o._id === id ? { ...o, status: "Pending" } : o))
-      );
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1500);
 
+      // Update stats
       setStats((prev) => ({
         ...prev,
         pending: (prev.pending || 0) + 1,
         confirmed: Math.max(0, (prev.confirmed || 1) - 1),
       }));
+
+      // If on pending tab, add it if it matches filters
+      if (activeTab === "pending") {
+        if (matchesFilters(order, { filterDate, filterCounter, filterPayment, filter })) {
+          setOrders((prev) => {
+            if (prev.some((o) => o._id === id)) return prev;
+            return [order, ...prev.slice(0, pageSize - 1)];
+          });
+          setTotalItems((prev) => prev + 1);
+        }
+      }
+
+      // If on confirmed tab, remove it
+      if (activeTab === "confirmed") {
+        setOrders((prev) => prev.filter((o) => o._id !== id));
+        setTotalItems((prev) => Math.max(0, prev - 1));
+        if (expandedOrderId === id) {
+          setExpandedOrderId(null);
+        }
+      }
     };
 
     socket.on("newOrder", handleNewOrder);
@@ -649,7 +786,17 @@ export default function StaffPage() {
       socket.off("orderCancelled", handleOrderCancelled);
       socket.off("orderReverted", handleOrderReverted);
     };
-  }, [activeTab, page, pageSize, filterDate, playNotificationSound]);
+  }, [
+    activeTab,
+    page,
+    pageSize,
+    filterDate,
+    filterCounter,
+    filterPayment,
+    filter,
+    expandedOrderId,
+    playNotificationSound,
+  ]);
 
   // Display date text
   const displayDate = useMemo(() => {
