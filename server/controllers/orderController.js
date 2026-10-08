@@ -136,11 +136,13 @@ export const createOrder = async (req, res) => {
 
 export const getOrders = async (req, res) => {
   try {
-    let query = {};
     const isCounterRole = req.user && req.user.role === 'counter';
     const paramCounter = req.query.counterId || req.query.counter;
 
-    if (isCounterRole || paramCounter) {
+    const andConditions = [];
+
+    // Counter condition
+    if (isCounterRole || (paramCounter && paramCounter !== 'all')) {
       let counterDoc = null;
       if (isCounterRole) {
         counterDoc = await Counter.findOne({ userId: req.user._id });
@@ -157,7 +159,7 @@ export const getOrders = async (req, res) => {
         counterConditions.push({ counterId: counterDoc._id.toString() });
         counterConditions.push({ counterName: counterDoc.name });
       }
-      if (paramCounter) {
+      if (paramCounter && paramCounter !== 'all') {
         counterConditions.push({ counterId: paramCounter.toString() });
         counterConditions.push({ counterName: paramCounter.toString() });
         if (mongoose.Types.ObjectId.isValid(paramCounter)) {
@@ -172,11 +174,12 @@ export const getOrders = async (req, res) => {
         }
       }
       if (counterConditions.length > 0) {
-        query.$or = counterConditions;
+        andConditions.push({ $or: counterConditions });
       }
     }
 
-    // Support Asia/Kolkata (IST) today filtering
+    // Date condition (Asia/Kolkata IST)
+    let dateCondition = null;
     if (req.query.today === 'true' || req.query.date === 'today') {
       const now = new Date();
       const istDateStr = new Intl.DateTimeFormat('en-CA', {
@@ -188,25 +191,227 @@ export const getOrders = async (req, res) => {
       const [y, m, d] = istDateStr.split('-').map(Number);
       const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) - (5.5 * 60 * 60 * 1000));
       const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (5.5 * 60 * 60 * 1000));
+      dateCondition = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
+    } else if (req.query.date && req.query.date !== 'all') {
+      const parts = req.query.date.split('-').map(Number);
+      if (parts.length === 3 && !parts.some(isNaN)) {
+        const [y, m, d] = parts;
+        const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+        const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (5.5 * 60 * 60 * 1000));
+        dateCondition = { createdAt: { $gte: startOfDay, $lte: endOfDay } };
+      }
+    } else if (req.query.startDate && req.query.endDate) {
+      dateCondition = {
+        createdAt: {
+          $gte: new Date(req.query.startDate),
+          $lte: new Date(req.query.endDate)
+        }
+      };
+    }
 
-      if (query.$or) {
-        query = {
-          $and: [
-            { $or: query.$or },
-            { createdAt: { $gte: startOfDay, $lte: endOfDay } }
-          ]
-        };
+    if (dateCondition) {
+      andConditions.push(dateCondition);
+    }
+
+    // Base conditions for date & counter stats
+    const baseConditions = [...andConditions];
+
+    // Status filter
+    if (req.query.status && req.query.status !== 'all') {
+      const st = req.query.status.toLowerCase();
+      if (st === 'pending') {
+        andConditions.push({ status: { $in: ['Pending', 'Processing'] } });
+      } else if (st === 'confirmed' || st === 'completed') {
+        andConditions.push({ status: { $in: ['Confirmed', 'Completed'] } });
+      } else if (st === 'cancelled' || st === 'rejected') {
+        andConditions.push({ status: { $in: ['Cancelled', 'Rejected'] } });
       } else {
-        query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+        andConditions.push({ status: { $regex: new RegExp(`^${req.query.status}$`, 'i') } });
       }
     }
 
+    // Payment method filter
+    if (req.query.payment && req.query.payment !== 'all') {
+      const pm = req.query.payment.toLowerCase();
+      if (pm === 'cash') {
+        andConditions.push({
+          $or: [
+            { 'payment.method': { $regex: /^cash$/i } },
+            { paymentMethod: { $regex: /^cash$/i } }
+          ]
+        });
+      } else if (pm === 'online') {
+        andConditions.push({
+          $or: [
+            { 'payment.method': { $regex: /^(online|card|upi)$/i } },
+            { paymentMethod: { $regex: /^(online|card|upi)$/i } }
+          ]
+        });
+      } else {
+        andConditions.push({
+          $or: [
+            { 'payment.method': { $regex: new RegExp(`^${req.query.payment}$`, 'i') } },
+            { paymentMethod: { $regex: new RegExp(`^${req.query.payment}$`, 'i') } }
+          ]
+        });
+      }
+    }
+
+    // Search filter
+    if (req.query.search && req.query.search.trim()) {
+      const raw = req.query.search.trim();
+      const clean = raw.replace(/^#/, '').replace(/^ORD-/i, '').trim();
+      const searchOr = [
+        { invoiceNumber: { $regex: clean, $options: 'i' } },
+        { billNumber: { $regex: clean, $options: 'i' } },
+        { 'items.name': { $regex: clean, $options: 'i' } },
+        { 'items.productName': { $regex: clean, $options: 'i' } }
+      ];
+      if (mongoose.Types.ObjectId.isValid(clean) && clean.length === 24) {
+        searchOr.push({ _id: new mongoose.Types.ObjectId(clean) });
+      } else if (clean.length >= 4) {
+        searchOr.push({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: clean,
+              options: 'i'
+            }
+          }
+        });
+      }
+      andConditions.push({ $or: searchOr });
+    }
+
+    // Staff filter
+    if (req.query.staff && req.query.staff !== 'all') {
+      if (mongoose.Types.ObjectId.isValid(req.query.staff)) {
+        andConditions.push({
+          $or: [
+            { staffId: req.query.staff },
+            { confirmedBy: req.query.staff }
+          ]
+        });
+      } else {
+        andConditions.push({ staffName: req.query.staff });
+      }
+    }
+
+    const finalQuery = andConditions.length === 0
+      ? {}
+      : andConditions.length === 1
+        ? andConditions[0]
+        : { $and: andConditions };
+
     if (req.query.countOnly === 'true') {
-      const count = await Order.countDocuments(query);
+      const count = await Order.countDocuments(finalQuery);
       return res.json({ count });
     }
 
-    const orders = await Order.find(query)
+    const isPaginated = req.query.page !== undefined || req.query.limit !== undefined || req.query.paginate === 'true';
+
+    if (isPaginated) {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 25));
+      const skip = (page - 1) * limit;
+
+      const [total, orders] = await Promise.all([
+        Order.countDocuments(finalQuery),
+        Order.find(finalQuery)
+          .populate('items.productId')
+          .populate('confirmedBy', 'name email')
+          .populate('staffId', 'name email')
+          .populate({
+            path: 'counter',
+            select: 'name description userId',
+            populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
+          })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+      ]);
+
+      const totalPages = Math.ceil(total / limit) || 1;
+
+      // Calculate stats based on base date/counter query
+      const baseMatch = baseConditions.length === 0
+        ? {}
+        : baseConditions.length === 1
+          ? baseConditions[0]
+          : { $and: baseConditions };
+
+      const statsAggregation = await Order.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            pending: {
+              $sum: { $cond: [{ $in: ['$status', ['Pending', 'Processing']] }, 1, 0] }
+            },
+            confirmed: {
+              $sum: { $cond: [{ $in: ['$status', ['Confirmed', 'Completed']] }, 1, 0] }
+            },
+            cancelled: {
+              $sum: { $cond: [{ $in: ['$status', ['Cancelled', 'Rejected']] }, 1, 0] }
+            },
+            revenue: {
+              $sum: { $cond: [{ $in: ['$status', ['Confirmed', 'Completed']] }, '$totalAmount', 0] }
+            },
+            cashCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: [{ $toLower: '$payment.method' }, 'cash'] },
+                      { $eq: [{ $toLower: '$paymentMethod' }, 'cash'] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            },
+            onlineCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $in: [{ $toLower: '$payment.method' }, ['online', 'upi', 'card']] },
+                      { $in: [{ $toLower: '$paymentMethod' }, ['online', 'upi', 'card']] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]);
+
+      const stats = statsAggregation[0] || {
+        total: 0,
+        pending: 0,
+        confirmed: 0,
+        cancelled: 0,
+        revenue: 0,
+        cashCount: 0,
+        onlineCount: 0
+      };
+
+      return res.json({
+        orders,
+        total,
+        page,
+        limit,
+        totalPages,
+        stats
+      });
+    }
+
+    // Default unpaginated query (for backwards compatibility)
+    const orders = await Order.find(finalQuery)
       .populate('items.productId')
       .populate('confirmedBy', 'name email')
       .populate('staffId', 'name email')
@@ -216,6 +421,7 @@ export const getOrders = async (req, res) => {
         populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
       })
       .sort({ createdAt: -1 });
+
     res.json(orders);
   } catch (error) {
     console.error(error);

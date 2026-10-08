@@ -333,7 +333,6 @@ export default function InsightsPage() {
 
   const [chartGranularity, setChartGranularity] = useState("daily");
   const [productTab, setProductTab] = useState("top_selling");
-  const [showAIInsights, setShowAIInsights] = useState(false);
 
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
@@ -553,6 +552,13 @@ export default function InsightsPage() {
 
     return { currentPeriodOrders: cur, comparePeriodOrders: comp };
   }, [orders, currentRange, compareRange]);
+
+  const aiFilters = useMemo(() => {
+    return {
+      from: currentRange.start.toISOString().split("T")[0],
+      to: currentRange.end.toISOString().split("T")[0],
+    };
+  }, [currentRange]);
 
   // ==========================================
   // 1. KPIs
@@ -1860,7 +1866,16 @@ export default function InsightsPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* 2. AUTOMATIC BUSINESS INSIGHTS                             */}
+      {/* 2. AI BUSINESS INSIGHTS (PERSISTENT & FIRST-CLASS MODULE)  */}
+      {/* ========================================================= */}
+      <AIInsights
+        filters={aiFilters}
+        currentLiveOrders={currentPeriodOrders.length}
+        currentLiveRevenue={kpis.revenue}
+      />
+
+      {/* ========================================================= */}
+      {/* 2b. LIVE STORE OBSERVATIONS (HEURISTIC SNAPSHOT)           */}
       {/* ========================================================= */}
       <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -1870,32 +1885,18 @@ export default function InsightsPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
-                Automatic Business Insights
+                Live Performance Observations
               </h2>
               <p className="text-sm text-slate-500 dark:text-[#94A3B8] font-normal">
-                Data-driven executive observations generated from actual store activity
+                Instant rule-based observations computed live from store activity
               </p>
             </div>
           </div>
-
-          <button
-            onClick={() => setShowAIInsights(!showAIInsights)}
-            className="self-start sm:self-auto text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-slate-50 dark:bg-[#0F172A] hover:bg-slate-100 dark:hover:bg-[#172033] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 transition flex items-center gap-2 shadow-xs"
-          >
-            <span>
-              {showAIInsights ? "Hide Deep AI Summary" : "Deep AI Summary (Optional)"}
-            </span>
-            <FiChevronDown
-              className={`text-xs transition-transform ${
-                showAIInsights ? "rotate-180" : ""
-              }`}
-            />
-          </button>
         </div>
 
         {dynamicObservations.length === 0 ? (
-          <div className="py-10 text-center text-sm text-slate-400 dark:text-[#64748B] font-medium">
-            Not enough data to generate this insight.
+          <div className="py-8 text-center text-sm text-slate-400 dark:text-[#64748B] font-medium">
+            Not enough data to generate live observations.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
@@ -1917,17 +1918,6 @@ export default function InsightsPage() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {showAIInsights && (
-          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
-            <AIInsights
-              filters={{
-                from: currentRange.start.toISOString().split("T")[0],
-                to: currentRange.end.toISOString().split("T")[0],
-              }}
-            />
           </div>
         )}
       </div>

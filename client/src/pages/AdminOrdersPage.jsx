@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 
 // ✅ Thermal receipt component (reused for reprint)
 import ThermalReceipt from "../components/ThermalReceipt";
+import PaginationBar from "../components/PaginationBar";
 
 import {
   FiXCircle,
@@ -32,6 +33,7 @@ import {
   FiClock as FiTime,
   FiMonitor,
   FiCreditCard,
+  FiSearch,
 } from "react-icons/fi";
 import { FaRupeeSign } from "react-icons/fa";
 
@@ -113,6 +115,24 @@ export default function AdminOrdersPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterDate, setFilterDate] = useState(() => getTodayLocal());
   const [filterCounter, setFilterCounter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Server-computed stats
+  const [serverStats, setServerStats] = useState({
+    total: 0,
+    pending: 0,
+    confirmed: 0,
+    cancelled: 0,
+    revenue: 0,
+    cashCount: 0,
+    onlineCount: 0,
+  });
 
   const [countersMap, setCountersMap] = useState({});
   const [allCounters, setAllCounters] = useState([]);
@@ -365,14 +385,39 @@ export default function AdminOrdersPage() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const { data } = await api.get("/orders");
-      setOrders(data);
+      const params = {
+        page,
+        limit: pageSize,
+        date: filterDate,
+        status: filterStatus,
+        counter: filterCounter,
+        paginate: "true",
+      };
+
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const { data } = await api.get("/orders", { params });
+
+      if (data && Array.isArray(data.orders)) {
+        setOrders(data.orders);
+        setTotalItems(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        if (data.stats) {
+          setServerStats(data.stats);
+        }
+      } else if (Array.isArray(data)) {
+        setOrders(data);
+        setTotalItems(data.length);
+        setTotalPages(Math.ceil(data.length / pageSize) || 1);
+      }
     } catch (err) {
       toast.error("Failed to load orders");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, filterDate, filterStatus, filterCounter, searchQuery]);
 
   const handleLiveUpdate = useCallback(() => {
     fetchOrders();
@@ -693,7 +738,13 @@ export default function AdminOrdersPage() {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  const goPrevDay = () => setFilterDate((prev) => addDays(prev, -1));
+  const handleDateChange = (newDate) => {
+    setFilterDate(newDate);
+    setPage(1);
+    setExpandedOrderId(null);
+  };
+
+  const goPrevDay = () => handleDateChange(addDays(filterDate, -1));
   const goNextDay = () => {
     const today = getTodayLocal();
     const next = addDays(filterDate, 1);
@@ -701,30 +752,28 @@ export default function AdminOrdersPage() {
       toast.error("Cannot go beyond today");
       return;
     }
-    setFilterDate(next);
+    handleDateChange(next);
   };
 
   // ✅ Bulk delete: pending
   const deleteAllPendingOrders = useCallback(async () => {
-    const pendingOrdersForDate = orders.filter(
-      (o) => o.status === "Pending" && isSameISTDate(o.createdAt, filterDate),
-    );
+    const pendingCount = serverStats.pending || 0;
 
-    if (pendingOrdersForDate.length === 0) {
+    if (pendingCount === 0) {
       toast.error(`No pending orders found for ${filterDate}`);
       return;
     }
 
     const confirmed = await showConfirmDialog({
       title: "Delete All Pending Orders",
-      headline: `Delete ${pendingOrdersForDate.length} pending orders?`,
+      headline: `Delete ${pendingCount} pending orders?`,
       subtext: "This action cannot be undone.",
       icon: "warning",
       confirmColor: "#dc2626",
       confirmText: "Yes, Delete All",
       rows: [
         ["Date", filterDate],
-        ["Pending Orders", pendingOrdersForDate.length],
+        ["Pending Orders", pendingCount],
       ],
     });
 
@@ -741,12 +790,12 @@ export default function AdminOrdersPage() {
         { _id: filterDate, totalAmount: 0, createdAt: new Date() },
         {
           headline: "All pending orders deleted.",
-          subtext: `${pendingOrdersForDate.length} pending order(s) removed.`,
+          subtext: `${pendingCount} pending order(s) removed.`,
           actionLabel: "Deleted",
           actionTime: new Date(startTime),
           icon: "success",
           extraRows: [
-            ["Deleted Count", pendingOrdersForDate.length],
+            ["Deleted Count", pendingCount],
             ["Date", filterDate],
           ],
         },
@@ -756,29 +805,27 @@ export default function AdminOrdersPage() {
     } catch (err) {
       toast.error(err.response?.data?.message || "Bulk delete failed");
     }
-  }, [orders, filterDate, fetchOrders]);
+  }, [serverStats.pending, filterDate, fetchOrders]);
 
   // ✅ Bulk delete: cancelled
   const deleteAllCancelledOrders = useCallback(async () => {
-    const cancelledOrdersForDate = orders.filter(
-      (o) => o.status === "Cancelled" && isSameISTDate(o.createdAt, filterDate),
-    );
+    const cancelledCount = serverStats.cancelled || 0;
 
-    if (cancelledOrdersForDate.length === 0) {
+    if (cancelledCount === 0) {
       toast.error(`No cancelled orders found for ${filterDate}`);
       return;
     }
 
     const confirmed = await showConfirmDialog({
       title: "Delete All Cancelled Orders",
-      headline: `Delete ${cancelledOrdersForDate.length} cancelled orders?`,
+      headline: `Delete ${cancelledCount} cancelled orders?`,
       subtext: "This action cannot be undone.",
       icon: "warning",
       confirmColor: "#dc2626",
       confirmText: "Yes, Delete All",
       rows: [
         ["Date", filterDate],
-        ["Cancelled Orders", cancelledOrdersForDate.length],
+        ["Cancelled Orders", cancelledCount],
       ],
     });
 
@@ -795,12 +842,12 @@ export default function AdminOrdersPage() {
         { _id: filterDate, totalAmount: 0, createdAt: new Date() },
         {
           headline: "All cancelled orders deleted.",
-          subtext: `${cancelledOrdersForDate.length} cancelled order(s) removed.`,
+          subtext: `${cancelledCount} cancelled order(s) removed.`,
           actionLabel: "Deleted",
           actionTime: new Date(startTime),
           icon: "success",
           extraRows: [
-            ["Deleted Count", cancelledOrdersForDate.length],
+            ["Deleted Count", cancelledCount],
             ["Date", filterDate],
           ],
         },
@@ -810,29 +857,27 @@ export default function AdminOrdersPage() {
     } catch (err) {
       toast.error(err.response?.data?.message || "Bulk delete failed");
     }
-  }, [orders, filterDate, fetchOrders]);
+  }, [serverStats.cancelled, filterDate, fetchOrders]);
 
   // ✅ Bulk delete: all records for date
   const deleteAllRecordsForDate = useCallback(async () => {
-    const ordersForDate = orders.filter((o) =>
-      isSameISTDate(o.createdAt, filterDate),
-    );
+    const totalCount = serverStats.total || 0;
 
-    if (ordersForDate.length === 0) {
+    if (totalCount === 0) {
       toast.error(`No orders found for ${filterDate}`);
       return;
     }
 
     const confirmed = await showConfirmDialog({
       title: "Delete All Orders",
-      headline: `Delete ALL ${ordersForDate.length} orders?`,
+      headline: `Delete ALL ${totalCount} orders?`,
       subtext: "This action cannot be undone.",
       icon: "warning",
       confirmColor: "#dc2626",
       confirmText: "Yes, Delete All",
       rows: [
         ["Date", filterDate],
-        ["Total Orders", ordersForDate.length],
+        ["Total Orders", totalCount],
       ],
     });
 
@@ -849,12 +894,12 @@ export default function AdminOrdersPage() {
         { _id: filterDate, totalAmount: 0, createdAt: new Date() },
         {
           headline: "All orders deleted.",
-          subtext: `${ordersForDate.length} order(s) removed.`,
+          subtext: `${totalCount} order(s) removed.`,
           actionLabel: "Deleted",
           actionTime: new Date(startTime),
           icon: "success",
           extraRows: [
-            ["Deleted Count", ordersForDate.length],
+            ["Deleted Count", totalCount],
             ["Date", filterDate],
           ],
         },
@@ -864,41 +909,11 @@ export default function AdminOrdersPage() {
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to delete records");
     }
-  }, [orders, filterDate, fetchOrders]);
+  }, [serverStats.total, filterDate, fetchOrders]);
 
-  // ✅ Filtered orders
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesDate = isSameISTDate(order.createdAt, filterDate);
-      const matchesStatus =
-        filterStatus === "all"
-          ? true
-          : order.status.toLowerCase() === filterStatus;
-      const matchesCounter =
-        filterCounter === "all" ? true : getOrderCounterName(order) === filterCounter;
-      return matchesDate && matchesStatus && matchesCounter;
-    });
-  }, [orders, filterStatus, filterDate, filterCounter, countersMap]);
-
-  const stats = useMemo(() => {
-    return {
-      total: filteredOrders.length,
-      pending: filteredOrders.filter((o) => o.status === "Pending").length,
-      confirmed: filteredOrders.filter((o) => o.status === "Confirmed").length,
-      cancelled: filteredOrders.filter((o) => o.status === "Cancelled").length,
-      revenue: filteredOrders
-        .filter((o) => o.status === "Confirmed")
-        .reduce((acc, item) => acc + item.totalAmount, 0),
-      cashCount: filteredOrders.filter((o) => {
-        const method = o.payment?.method || o.paymentMethod || "";
-        return method.toLowerCase() === "cash";
-      }).length,
-      onlineCount: filteredOrders.filter((o) => {
-        const method = o.payment?.method || o.paymentMethod || "";
-        return method.toLowerCase() === "online";
-      }).length,
-    };
-  }, [filteredOrders]);
+  // Orders are filtered and paginated on the server
+  const filteredOrders = orders;
+  const stats = serverStats;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -925,15 +940,9 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const ordersForDate = orders.filter((o) =>
-    isSameISTDate(o.createdAt, filterDate),
-  );
-  const cancelledOrdersForDate = ordersForDate.filter(
-    (o) => o.status === "Cancelled",
-  ).length;
-  const pendingOrdersForDate = ordersForDate.filter(
-    (o) => o.status === "Pending",
-  ).length;
+  const cancelledOrdersForDate = serverStats.cancelled || 0;
+  const pendingOrdersForDate = serverStats.pending || 0;
+  const ordersForDateCount = serverStats.total || 0;
 
   const displayDate = (() => {
     const [year, month, day] = filterDate.split("-");
@@ -953,8 +962,11 @@ export default function AdminOrdersPage() {
     if (filterCounter !== "all") {
       parts.push(filterCounter);
     }
+    if (searchQuery.trim()) {
+      parts.push(`"${searchQuery.trim()}"`);
+    }
     return parts.length > 0 ? parts.join(" • ") : "";
-  }, [filterStatus, filterCounter]);
+  }, [filterStatus, filterCounter, searchQuery]);
 
   if (loading) {
     return (
@@ -1025,15 +1037,15 @@ export default function AdminOrdersPage() {
               </button>
               <button
                 onClick={deleteAllRecordsForDate}
-                disabled={ordersForDate.length === 0}
+                disabled={ordersForDateCount === 0}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                  ordersForDate.length > 0
+                  ordersForDateCount > 0
                     ? "bg-red-600 hover:bg-red-700 text-white shadow-md"
                     : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
                 }`}
               >
                 <FiTrash className="text-sm" /> Delete All (
-                {ordersForDate.length})
+                {ordersForDateCount})
               </button>
             </div>
 
@@ -1048,7 +1060,7 @@ export default function AdminOrdersPage() {
               <input
                 type="date"
                 value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 max={getTodayLocal()}
                 className="bg-transparent outline-none"
               />
@@ -1078,10 +1090,10 @@ export default function AdminOrdersPage() {
               </span>
             )}
           </div>
-          {/* ✅ FIXED: reflects filtered count */}
+          {/* ✅ FIXED: reflects total matching server count */}
           <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            {filteredOrders.length}{" "}
-            {filteredOrders.length === 1 ? "order" : "orders"} found
+            {totalItems}{" "}
+            {totalItems === 1 ? "order" : "orders"} found
           </div>
         </div>
 
@@ -1207,26 +1219,63 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* STATUS FILTERS */}
-        <div className="flex flex-wrap gap-3">
-          {[
-            ["all", "All"],
-            ["pending", "Pending"],
-            ["confirmed", "Confirmed"],
-            ["cancelled", "Cancelled"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setFilterStatus(value)}
-              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                filterStatus === value
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* FILTERS & SEARCH ROW */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* STATUS FILTERS */}
+          <div className="flex flex-wrap gap-2.5">
+            {[
+              ["all", "All"],
+              ["pending", "Pending"],
+              ["confirmed", "Confirmed"],
+              ["cancelled", "Cancelled"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => {
+                  setFilterStatus(value);
+                  setPage(1);
+                  setExpandedOrderId(null);
+                }}
+                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
+                  filterStatus === value
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                    : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* SEARCH BAR */}
+          <div className="relative w-full md:w-80">
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by order #, item, bill #..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+                setExpandedOrderId(null);
+              }}
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setPage(1);
+                  setExpandedOrderId(null);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="Clear search"
+              >
+                <FiX className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* COUNTER FILTER */}
@@ -1239,7 +1288,11 @@ export default function AdminOrdersPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setFilterCounter("all")}
+              onClick={() => {
+                setFilterCounter("all");
+                setPage(1);
+                setExpandedOrderId(null);
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                 filterCounter === "all"
                   ? "bg-indigo-600 text-white shadow-md"
@@ -1251,7 +1304,11 @@ export default function AdminOrdersPage() {
             {allCounters.map((counter) => (
               <button
                 key={counter.name}
-                onClick={() => setFilterCounter(counter.name)}
+                onClick={() => {
+                  setFilterCounter(counter.name);
+                  setPage(1);
+                  setExpandedOrderId(null);
+                }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
                   filterCounter === counter.name
                     ? "bg-indigo-600 text-white shadow-md"
@@ -1508,6 +1565,26 @@ export default function AdminOrdersPage() {
             })}
           </div>
         )}
+
+        {/* PAGINATION BAR */}
+        <PaginationBar
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={(newPage) => {
+            setPage(newPage);
+            setExpandedOrderId(null);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+            setExpandedOrderId(null);
+          }}
+          pageSizeOptions={[10, 25, 50, 100]}
+          label="orders"
+        />
       </div>
 
       {/* ✅ Reprint Bill Preview & Print Modal */}

@@ -1426,38 +1426,38 @@ function ConsumerPageContent() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowTodayOrders(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-sm"
             />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-10"
+              className="relative w-full max-w-4xl max-h-[92vh] sm:max-h-[88vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-gray-800 overflow-hidden z-10"
             >
               {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/90">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-xs border border-indigo-100 dark:border-indigo-900">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-2xs border border-indigo-100 dark:border-indigo-900/80 flex-shrink-0">
                     🥈
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         Today&apos;s Orders
                         <span className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                           ({todayOrdersCount} {todayOrdersCount === 1 ? "Order" : "Orders"})
                         </span>
                       </h2>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         IST Live
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
                       <span>{formatISTDate(new Date())}</span>
                       <span>•</span>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                      <span className="font-semibold text-slate-700 dark:text-gray-200">
                         {counterDisplayName}
                       </span>
                     </p>
@@ -1467,7 +1467,8 @@ function ConsumerPageContent() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowTodayOrders(false)}
-                    className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-800 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                    aria-label="Close modal"
                   >
                     <FiX className="w-5 h-5" />
                   </button>
@@ -1475,48 +1476,49 @@ function ConsumerPageContent() {
               </div>
 
               {/* KPI Summary Cards */}
-              <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
-                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
-                  <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 px-4 sm:px-6 py-3.5 bg-slate-50/70 dark:bg-gray-950/50 border-b border-slate-200 dark:border-gray-800">
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800/90 border border-slate-200/90 dark:border-gray-700/80 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Today&apos;s Orders
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+                  <div className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
                     {todayOrdersCount}
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800/90 border border-slate-200/90 dark:border-gray-700/80 shadow-2xs">
                   <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                     Completed
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                  <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
                     {todaySummary.completedCount}
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
-                  <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800/90 border border-slate-200/90 dark:border-gray-700/80 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     Today&apos;s Revenue
                   </div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+                  <div className="text-lg sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-1 truncate">
                     ₹{todaySummary.totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
               </div>
 
               {/* Search & Filter Controls */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800 space-y-3 bg-white dark:bg-gray-900">
+              <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-gray-800 space-y-3 bg-white dark:bg-gray-900">
                 <div className="relative">
-                  <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 w-4 h-4 pointer-events-none" />
                   <input
                     type="text"
                     value={todaySearch}
                     onChange={(e) => setTodaySearch(e.target.value)}
                     placeholder="Search by Order ID (#1045), product name..."
-                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-0 text-sm font-medium focus:ring-2 focus:ring-indigo-500/30 dark:text-white placeholder-gray-400"
+                    className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-100 hover:bg-slate-100/90 focus:bg-white dark:bg-gray-800 dark:hover:bg-gray-800/90 dark:focus:bg-gray-800 border border-transparent focus:border-indigo-500/50 dark:focus:border-indigo-500/50 text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 transition-all"
                   />
                   {todaySearch && (
                     <button
                       onClick={() => setTodaySearch("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-gray-400 dark:hover:text-white p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-gray-700 transition-colors"
+                      title="Clear search"
                     >
                       <FiX className="w-3.5 h-3.5" />
                     </button>
@@ -1524,10 +1526,10 @@ function ConsumerPageContent() {
                 </div>
 
                 {/* Filter Pills */}
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs">
                   {/* Status Filters */}
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-gray-400 font-medium mr-1">Status:</span>
+                    <span className="text-slate-500 dark:text-gray-400 font-medium mr-1">Status:</span>
                     {[
                       { id: "ALL", label: "All" },
                       { id: "CONFIRMED", label: "Completed" },
@@ -1539,8 +1541,8 @@ function ConsumerPageContent() {
                         onClick={() => setTodayStatusFilter(tab.id)}
                         className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
                           todayStatusFilter === tab.id
-                            ? "bg-indigo-600 text-white shadow-xs"
-                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                            ? "bg-indigo-600 text-white shadow-xs border border-indigo-600"
+                            : "bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-300 dark:hover:text-white border border-slate-200/70 dark:border-gray-700/80"
                         }`}
                       >
                         {tab.label}
@@ -1550,7 +1552,7 @@ function ConsumerPageContent() {
 
                   {/* Payment Filters */}
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-gray-400 font-medium mr-1">Payment:</span>
+                    <span className="text-slate-500 dark:text-gray-400 font-medium mr-1">Payment:</span>
                     {[
                       { id: "ALL", label: "All" },
                       { id: "CASH", label: "Cash" },
@@ -1561,8 +1563,8 @@ function ConsumerPageContent() {
                         onClick={() => setTodayPaymentFilter(tab.id)}
                         className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
                           todayPaymentFilter === tab.id
-                            ? "bg-purple-600 text-white shadow-xs"
-                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                            ? "bg-purple-600 text-white shadow-xs border border-purple-600"
+                            : "bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-300 dark:hover:text-white border border-slate-200/70 dark:border-gray-700/80"
                         }`}
                       >
                         {tab.label}
@@ -1573,21 +1575,21 @@ function ConsumerPageContent() {
               </div>
 
               {/* Order Cards List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[260px] max-h-[50vh]">
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3 min-h-[260px] max-h-[50vh] bg-slate-50/40 dark:bg-gray-950/40">
                 {ordersLoading && orders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-gray-500">
                     <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-2" />
                     <p className="text-sm">Loading today&apos;s orders...</p>
                   </div>
                 ) : filteredTodayOrders.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 text-2xl mb-3">
+                    <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700/80 flex items-center justify-center text-2xl mb-3 shadow-2xs">
                       📦
                     </div>
-                    <h3 className="text-base font-bold text-gray-700 dark:text-gray-300">
+                    <h3 className="text-base font-bold text-slate-800 dark:text-gray-200">
                       No orders today
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+                    <p className="text-xs text-slate-500 dark:text-gray-400 mt-1 max-w-xs leading-relaxed">
                       {todaySearch || todayStatusFilter !== "ALL" || todayPaymentFilter !== "ALL"
                         ? "Try adjusting your search query or filters."
                         : "Orders created on this counter today will appear here."}
@@ -1602,22 +1604,23 @@ function ConsumerPageContent() {
                       .map((it) => `${it.quantity || 1}x ${it.name || it.productId?.name || it.productName || "Item"}`)
                       .join(", ");
                     const payMethod = (ord.payment?.method || ord.paymentMethod || "Cash").toUpperCase();
+                    const isCash = payMethod === "CASH";
                     const isConfirmed = ord.status === "Confirmed" || ord.status === "Completed";
                     const isPending = ord.status === "Pending" || ord.status === "Processing";
 
                     return (
                       <div
                         key={ord._id}
-                        className="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/90 dark:border-gray-750 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all shadow-xs hover:shadow-sm"
+                        className="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-gray-800/90 border border-slate-200/90 dark:border-gray-700/80 hover:border-indigo-300 dark:hover:border-indigo-500/60 transition-all shadow-2xs hover:shadow-xs"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                           {/* Left Details */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="font-mono font-bold text-sm text-gray-900 dark:text-white">
+                              <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
                                 {shortId}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                              <span className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-1 font-medium">
                                 <FiClock className="w-3.5 h-3.5" />
                                 {timeStr}
                               </span>
@@ -1625,33 +1628,39 @@ function ConsumerPageContent() {
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
                                   isConfirmed
-                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80"
                                     : isPending
-                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                                    : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800/80"
+                                    : "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800/80"
                                 }`}
                               >
                                 {ord.status || "Completed"}
                               </span>
                               {/* Payment Badge */}
-                              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                  isCash
+                                    ? "bg-emerald-50/80 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/60"
+                                    : "bg-purple-50/80 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/60"
+                                }`}
+                              >
                                 {payMethod}
                               </span>
                             </div>
 
                             {/* Items Preview */}
-                            <p className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-lg mt-0.5">
-                              <span className="font-semibold text-gray-700 dark:text-gray-200">
+                            <p className="text-xs text-slate-600 dark:text-gray-300 truncate max-w-lg mt-0.5">
+                              <span className="font-semibold text-slate-800 dark:text-gray-200">
                                 {itemCount} {itemCount === 1 ? "Item" : "Items"}
                               </span>
-                              {itemsPreview ? ` • ${itemsPreview}` : ""}
+                              {itemsPreview ? <span className="text-slate-500 dark:text-gray-400"> • {itemsPreview}</span> : ""}
                             </p>
                           </div>
 
                           {/* Right Amount & Actions */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-750">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-gray-700/60">
                             <div className="text-right">
-                              <div className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                              <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                                 ₹{(ord.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </div>
                             </div>
@@ -1660,7 +1669,7 @@ function ConsumerPageContent() {
                               {/* View Details */}
                               <button
                                 onClick={() => setSelectedOrderForView(ord)}
-                                className="px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-center gap-1 transition-colors"
+                                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:bg-gray-700/80 dark:hover:bg-gray-700 dark:text-gray-200 dark:hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors border border-slate-200/80 dark:border-gray-600 active:scale-95"
                               >
                                 <FiEye className="w-3.5 h-3.5" />
                                 <span>View</span>
@@ -1669,7 +1678,7 @@ function ConsumerPageContent() {
                               {/* Reprint Bill */}
                               <button
                                 onClick={() => handleReprintOrder(ord)}
-                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-indigo-200/60 dark:border-indigo-800/60"
+                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 dark:text-indigo-300 dark:hover:text-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-indigo-200/80 dark:border-indigo-800/80 shadow-2xs active:scale-95"
                                 title="Reprint 80mm Receipt"
                               >
                                 <FiPrinter className="w-3.5 h-3.5" />
@@ -1685,13 +1694,13 @@ function ConsumerPageContent() {
               </div>
 
               {/* Footer */}
-              <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70 flex items-center justify-between text-xs text-gray-500">
-                <span>
+              <div className="px-4 sm:px-6 py-3.5 border-t border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/90 flex items-center justify-between text-xs text-slate-500 dark:text-gray-400">
+                <span className="font-medium">
                   Showing {filteredTodayOrders.length} of {todayOrders.length} orders
                 </span>
                 <button
                   onClick={() => setShowTodayOrders(false)}
-                  className="px-4 py-1.5 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold transition-colors"
+                  className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300/80 text-slate-800 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold transition-colors border border-slate-300/60 dark:border-gray-700"
                 >
                   Close
                 </button>
@@ -1700,8 +1709,6 @@ function ConsumerPageContent() {
           </div>
         )}
       </AnimatePresence>
-
-
 
       {/* ────────────────────────────────────────────────────────────────── */}
       {/* 👁️ ORDER DETAILS MODAL                                             */}
@@ -1714,28 +1721,28 @@ function ConsumerPageContent() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedOrderForView(null)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-sm"
             />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 1, y: 0 }}
-              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-10"
+              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-gray-800 overflow-hidden z-10"
             >
               {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/90">
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     Order Details
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
                     #ORD-{selectedOrderForView.billNumber || selectedOrderForView.invoiceNumber || String(selectedOrderForView._id).slice(-6).toUpperCase()}
                   </p>
                 </div>
                 <button
                   onClick={() => setSelectedOrderForView(null)}
-                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-800 transition-colors"
                 >
                   <FiX className="w-5 h-5" />
                 </button>
@@ -1744,27 +1751,27 @@ function ConsumerPageContent() {
               {/* Order Meta */}
               <div className="p-4 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <span className="text-gray-400 block">Date & Time (IST)</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-gray-800/90 border border-slate-200/70 dark:border-gray-700/80">
+                    <span className="text-slate-500 dark:text-gray-400 block">Date & Time (IST)</span>
+                    <span className="font-semibold text-slate-800 dark:text-gray-200">
                       {formatISTDateTime(selectedOrderForView.createdAt)}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <span className="text-gray-400 block">Status</span>
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-gray-800/90 border border-slate-200/70 dark:border-gray-700/80">
+                    <span className="text-slate-500 dark:text-gray-400 block">Status</span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                       {selectedOrderForView.status || "Completed"}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <span className="text-gray-400 block">Counter</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-gray-800/90 border border-slate-200/70 dark:border-gray-700/80">
+                    <span className="text-slate-500 dark:text-gray-400 block">Counter</span>
+                    <span className="font-semibold text-slate-800 dark:text-gray-200">
                       {(typeof selectedOrderForView.counter === "object" ? selectedOrderForView.counter?.name : null) || selectedOrderForView.counterName || counterDisplayName}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    <span className="text-gray-400 block">Payment Mode</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-gray-800/90 border border-slate-200/70 dark:border-gray-700/80">
+                    <span className="text-slate-500 dark:text-gray-400 block">Payment Mode</span>
+                    <span className="font-semibold text-slate-800 dark:text-gray-200">
                       {(selectedOrderForView.payment?.method || selectedOrderForView.paymentMethod || "Cash").toUpperCase()}
                     </span>
                   </div>
@@ -1772,25 +1779,25 @@ function ConsumerPageContent() {
 
                 {/* Items List */}
                 <div>
-                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  <h4 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                     Items ({selectedOrderForView.items?.length || 0})
                   </h4>
-                  <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
+                  <div className="divide-y divide-slate-100 dark:divide-gray-800 border border-slate-200/80 dark:border-gray-800 rounded-xl overflow-hidden">
                     {(selectedOrderForView.items || []).map((it, idx) => {
                       const itemName = it.name || it.productId?.name || it.productName || `Item ${idx + 1}`;
                       const qty = it.quantity || 1;
                       const price = it.price || it.sellingPrice || 0;
                       return (
-                        <div key={idx} className="flex items-center justify-between p-2.5 text-xs bg-white dark:bg-gray-850">
+                        <div key={idx} className="flex items-center justify-between p-2.5 text-xs bg-white dark:bg-gray-800">
                           <div>
-                            <span className="font-medium text-gray-800 dark:text-gray-200">
+                            <span className="font-medium text-slate-800 dark:text-gray-200">
                               {itemName}
                             </span>
-                            <span className="text-gray-400 block text-[11px]">
+                            <span className="text-slate-400 dark:text-gray-500 block text-[11px]">
                               {qty} × ₹{price.toFixed(2)}
                             </span>
                           </div>
-                          <span className="font-semibold text-gray-900 dark:text-white">
+                          <span className="font-semibold text-slate-900 dark:text-white">
                             ₹{(qty * price).toFixed(2)}
                           </span>
                         </div>
@@ -1800,21 +1807,21 @@ function ConsumerPageContent() {
                 </div>
 
                 {/* Financial Breakdown */}
-                <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 text-xs space-y-1.5 border border-gray-200/60 dark:border-gray-700/60">
-                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-gray-800/60 text-xs space-y-1.5 border border-slate-200/70 dark:border-gray-700/80">
+                  <div className="flex justify-between text-slate-600 dark:text-gray-300">
                     <span>Grand Total:</span>
-                    <span className="font-bold text-gray-900 dark:text-white text-sm">
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">
                       ₹{(selectedOrderForView.totalAmount || 0).toFixed(2)}
                     </span>
                   </div>
                   {selectedOrderForView.payment?.receivedAmount !== undefined && (
-                    <div className="flex justify-between text-gray-500">
+                    <div className="flex justify-between text-slate-500 dark:text-gray-400">
                       <span>Amount Received:</span>
                       <span>₹{(selectedOrderForView.payment.receivedAmount || 0).toFixed(2)}</span>
                     </div>
                   )}
                   {selectedOrderForView.payment?.changeReturned !== undefined && (
-                    <div className="flex justify-between text-gray-500">
+                    <div className="flex justify-between text-slate-500 dark:text-gray-400">
                       <span>Change Returned:</span>
                       <span>₹{(selectedOrderForView.payment.changeReturned || 0).toFixed(2)}</span>
                     </div>
@@ -1823,10 +1830,10 @@ function ConsumerPageContent() {
               </div>
 
               {/* Action Buttons */}
-              <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70 flex items-center justify-between">
+              <div className="px-5 py-3 border-t border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/90 flex items-center justify-between">
                 <button
                   onClick={() => setSelectedOrderForView(null)}
-                  className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold text-xs transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300/80 text-slate-800 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 font-semibold text-xs transition-colors border border-slate-300/60 dark:border-gray-700"
                 >
                   Close
                 </button>

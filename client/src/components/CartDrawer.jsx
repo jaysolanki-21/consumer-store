@@ -22,6 +22,7 @@ import {
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { showConfirm } from "../utils/alertService";
+import { FaRupeeSign } from "react-icons/fa";
 
 export default function CartDrawer({
   open,
@@ -407,7 +408,7 @@ export default function CartDrawer({
                             : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:border-gray-300"
                         }`}
                       >
-                        <FiDollarSign className="text-base" />
+                        <FaRupeeSign className="text-base" />
                         CASH
                       </button>
 
