@@ -418,20 +418,22 @@ export default function StaffPage() {
 
   // ✅ Toggle sound
   const toggleSound = useCallback(() => {
-    setSoundEnabled((prev) => {
-      const next = !prev;
-      toast.success(next ? "🔔 Sound enabled" : "🔕 Sound disabled", {
-        ...STAFF_TOAST_CONFIG,
-        duration: 2000,
-      });
-      if (next) {
-        try {
-          const audio = new Audio(NOTIFICATION_SOUND_URL);
-          audio.play().catch(() => {});
-        } catch (e) {}
-      }
-      return next;
+    const next = !soundEnabledRef.current;
+    soundEnabledRef.current = next;
+    setSoundEnabled(next);
+
+    toast.success(next ? "🔔 Sound enabled" : "🔕 Sound disabled", {
+      id: "sound-toggle-toast",
+      ...STAFF_TOAST_CONFIG,
+      duration: 2000,
     });
+
+    if (next) {
+      try {
+        const audio = new Audio(NOTIFICATION_SOUND_URL);
+        audio.play().catch(() => {});
+      } catch (e) {}
+    }
   }, []);
 
   // ✅ DATE-WISE FILTERING
@@ -744,15 +746,16 @@ export default function StaffPage() {
 
   const goNextDay = useCallback(() => {
     const today = getTodayLocal();
-    setFilterDate((prev) => {
-      const next = addDays(prev, 1);
-      if (next > today) {
-        toast.error("Cannot go beyond today", { ...STAFF_TOAST_CONFIG });
-        return prev;
-      }
-      return next;
-    });
-  }, [addDays]);
+    const next = addDays(filterDate, 1);
+    if (next > today) {
+      toast.error("Cannot go beyond today", {
+        id: "date-nav-error",
+        ...STAFF_TOAST_CONFIG,
+      });
+      return;
+    }
+    setFilterDate(next);
+  }, [addDays, filterDate]);
 
   // Show loading only on first load
   if (isInitialLoad) {

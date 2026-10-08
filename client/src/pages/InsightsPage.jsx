@@ -270,36 +270,36 @@ const FinanceTooltip = ({ active, payload, label }) => {
     const margin = rev > 0 ? Math.round((profit / rev) * 100) : 0;
 
     return (
-      <div className="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700/80 text-xs space-y-2 min-w-[210px]">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-          <p className="font-bold text-slate-200 text-sm">{label}</p>
-          <span className="text-[11px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+      <div className="bg-[#0B1220] text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700/80 text-xs space-y-2 min-w-[220px]">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <p className="font-semibold text-[#F8FAFC] text-sm">{label}</p>
+          <span className="text-[11px] font-semibold text-[#94A3B8] bg-[#0F172A] border border-slate-800 px-2 py-0.5 rounded-full">
             {orders} {orders === 1 ? "order" : "orders"}
           </span>
         </div>
         <div className="space-y-1.5">
           <div className="flex justify-between items-center text-indigo-400">
-            <span className="font-medium">Revenue:</span>
+            <span className="text-[#94A3B8] font-normal">Revenue:</span>
             <span className="font-bold tabular-nums">
               ₹{Number(rev).toLocaleString("en-IN")}
             </span>
           </div>
           <div className="flex justify-between items-center text-amber-400">
-            <span className="font-medium">COGS (Cost):</span>
+            <span className="text-[#94A3B8] font-normal">COGS (Cost):</span>
             <span className="font-bold tabular-nums">
               ₹{Number(cost).toLocaleString("en-IN")}
             </span>
           </div>
           <div className="flex justify-between items-center text-emerald-400">
-            <span className="font-medium">Profit:</span>
+            <span className="text-[#94A3B8] font-normal">Profit:</span>
             <span className="font-bold tabular-nums">
               ₹{Number(profit).toLocaleString("en-IN")}
             </span>
           </div>
         </div>
-        <div className="flex justify-between items-center text-slate-300 pt-1.5 border-t border-slate-800 font-semibold">
+        <div className="flex justify-between items-center text-[#CBD5E1] pt-2 border-t border-slate-800 font-medium">
           <span>Profit Margin:</span>
-          <span className="text-white tabular-nums font-bold">{margin}%</span>
+          <span className="text-[#F8FAFC] tabular-nums font-bold">{margin}%</span>
         </div>
       </div>
     );
@@ -1305,48 +1305,63 @@ export default function InsightsPage() {
   // Loading Skeleton on initial load
   if (loading) {
     return (
-      <div className="space-y-6 sm:space-y-8 animate-pulse p-1">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-850 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div className="space-y-6 sm:space-y-7 animate-pulse">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#111827] p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
           <div className="space-y-2">
-            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-64" />
-            <div className="h-4 bg-slate-100 dark:bg-slate-800/60 rounded-lg w-80" />
+            <div className="h-7 bg-slate-200 dark:bg-[#172033] rounded-lg w-56" />
+            <div className="h-4 bg-slate-100 dark:bg-[#172033]/60 rounded-md w-80" />
           </div>
-          <div className="h-11 bg-slate-200 dark:bg-slate-800 rounded-xl w-48" />
+          <div className="flex items-center gap-2.5">
+            <div className="h-10 bg-slate-200 dark:bg-[#172033] rounded-xl w-36" />
+            <div className="h-10 bg-slate-200 dark:bg-[#172033] rounded-xl w-40" />
+            <div className="h-10 bg-slate-200 dark:bg-[#172033] rounded-xl w-24" />
+          </div>
         </div>
-        <div className="h-20 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800" />
+        <div className="h-24 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5" />
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
           {[...Array(6)].map((_, i) => (
             <div
               key={i}
-              className="h-28 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800 p-4"
-            />
+              className="h-32 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-4 sm:p-5 space-y-3"
+            >
+              <div className="flex justify-between items-center">
+                <div className="h-3 bg-slate-200 dark:bg-[#172033] rounded w-20" />
+                <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#172033]" />
+              </div>
+              <div className="h-7 bg-slate-200 dark:bg-[#172033] rounded-lg w-28" />
+              <div className="h-3 bg-slate-100 dark:bg-[#172033]/60 rounded w-24" />
+            </div>
           ))}
         </div>
-        <div className="h-44 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800 p-4" />
+        <div className="h-44 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6" />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 h-80 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800" />
-          <div className="lg:col-span-4 h-80 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-800" />
+          <div className="lg:col-span-8 h-96 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-6" />
+          <div className="lg:col-span-4 h-96 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-6" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-12">
+    <div className="space-y-6 sm:space-y-7 pb-12">
       {/* ========================================================= */}
       {/* HEADER & DATE RANGE / COMPARISON SELECTOR                 */}
       {/* ========================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white dark:bg-slate-850 p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white dark:bg-[#111827] p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
               Business Insights
             </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800">
+            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20">
               Analytics & Patterns
             </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Realtime Active
+            </span>
           </div>
-          <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 mt-1 font-medium">
+          <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
             Understand how the store is performing and identify useful business trends
           </p>
         </div>
@@ -1357,7 +1372,7 @@ export default function InsightsPage() {
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="h-11 pl-4 pr-9 rounded-xl font-semibold text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+              className="h-10 pl-3.5 pr-8 rounded-xl font-medium text-xs sm:text-sm bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-[#CBD5E1] focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition"
             >
               <option value="today">Today</option>
               <option value="yesterday">Yesterday</option>
@@ -1368,7 +1383,7 @@ export default function InsightsPage() {
               <option value="thisYear">This Year</option>
               <option value="custom">Custom Range</option>
             </select>
-            <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-sm" />
+            <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#64748B] pointer-events-none text-xs" />
           </div>
 
           {/* Comparison selector */}
@@ -1376,27 +1391,27 @@ export default function InsightsPage() {
             <select
               value={comparisonType}
               onChange={(e) => setComparisonType(e.target.value)}
-              className="h-11 pl-4 pr-9 rounded-xl font-semibold text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+              className="h-10 pl-3.5 pr-8 rounded-xl font-medium text-xs sm:text-sm bg-slate-50 dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-[#CBD5E1] focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition"
             >
               <option value="previous_period">vs Previous Period</option>
               <option value="previous_month">vs Previous Month</option>
               <option value="previous_year">vs Previous Year</option>
             </select>
-            <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-sm" />
+            <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#64748B] pointer-events-none text-xs" />
           </div>
 
           <button
             onClick={() => loadData(true)}
             disabled={isRefreshing}
-            className="h-11 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 transition flex items-center gap-2 text-sm font-bold"
+            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#0F172A] dark:hover:bg-[#172033] border border-transparent dark:border-slate-800 text-slate-700 dark:text-[#CBD5E1] transition flex items-center gap-2 text-xs font-semibold"
             title="Refresh analytics data"
           >
             <FiRefreshCw
-              className={`text-sm ${
-                isRefreshing ? "animate-spin text-indigo-600" : ""
+              className={`text-xs ${
+                isRefreshing ? "animate-spin text-indigo-500" : ""
               }`}
             />
-            <span className="hidden sm:inline">
+            <span>
               {isRefreshing ? "Syncing..." : "Sync"}
             </span>
           </button>
@@ -1405,28 +1420,28 @@ export default function InsightsPage() {
 
       {/* Custom Date Range Picker */}
       {selectedPeriod === "custom" && (
-        <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900 shadow-sm flex flex-wrap items-center gap-4">
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+        <div className="bg-white dark:bg-[#111827] p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-wrap items-center gap-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-[#94A3B8]">
             Custom Date Range:
           </span>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-500">
+            <label className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">
               From:
             </label>
             <input
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
-              className="h-10 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="h-9 px-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0F172A] text-slate-800 dark:text-[#CBD5E1] focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-500">To:</label>
+            <label className="text-xs font-medium text-slate-500 dark:text-[#94A3B8]">To:</label>
             <input
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
-              className="h-10 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="h-9 px-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0F172A] text-slate-800 dark:text-[#CBD5E1] focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
         </div>
@@ -1435,22 +1450,22 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       {/* WHAT CHANGED? COMPACT SUMMARY INSIGHT                     */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+      <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/80 dark:border-indigo-500/20 flex items-center justify-center font-bold text-sm">
               Δ
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   What Changed?
                 </h3>
-                <span className="text-xs text-slate-400 font-medium">
+                <span className="text-xs text-slate-400 dark:text-[#94A3B8] font-normal">
                   vs {comparisonLabel}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                 {kpis.revenueDelta.hasPrev ? (
                   kpis.revenueDelta.direction === "up" ? (
                     `Revenue is up ${kpis.revenueDelta.percent}% with ${
@@ -1470,21 +1485,21 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/80">
             {/* Revenue Change */}
-            <div className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block">
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-[#64748B] block">
                 Revenue
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {kpis.revenueDelta.hasPrev ? (
                   <span
-                    className={`text-xs sm:text-sm font-black tabular-nums ${
+                    className={`text-xs sm:text-sm font-bold tabular-nums ${
                       kpis.revenueDelta.direction === "up"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : kpis.revenueDelta.direction === "down"
                           ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-600 dark:text-slate-400"
+                          : "text-slate-600 dark:text-[#94A3B8]"
                     }`}
                   >
                     {kpis.revenueDelta.direction === "up"
@@ -1495,7 +1510,7 @@ export default function InsightsPage() {
                     {kpis.revenueDelta.percent}%
                   </span>
                 ) : (
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-xs font-normal text-slate-400 dark:text-[#64748B]">
                     No prev data
                   </span>
                 )}
@@ -1503,19 +1518,19 @@ export default function InsightsPage() {
             </div>
 
             {/* Orders Change */}
-            <div className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block">
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-[#64748B] block">
                 Orders
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {kpis.ordersDelta.hasPrev ? (
                   <span
-                    className={`text-xs sm:text-sm font-black tabular-nums ${
+                    className={`text-xs sm:text-sm font-bold tabular-nums ${
                       kpis.ordersDelta.direction === "up"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : kpis.ordersDelta.direction === "down"
                           ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-600 dark:text-slate-400"
+                          : "text-slate-600 dark:text-[#94A3B8]"
                     }`}
                   >
                     {kpis.ordersDelta.direction === "up"
@@ -1526,7 +1541,7 @@ export default function InsightsPage() {
                     {kpis.ordersDelta.percent}%
                   </span>
                 ) : (
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-xs font-normal text-slate-400 dark:text-[#64748B]">
                     No prev data
                   </span>
                 )}
@@ -1534,19 +1549,19 @@ export default function InsightsPage() {
             </div>
 
             {/* Profit Change */}
-            <div className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block">
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-[#64748B] block">
                 Profit
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {kpis.profitDelta.hasPrev ? (
                   <span
-                    className={`text-xs sm:text-sm font-black tabular-nums ${
+                    className={`text-xs sm:text-sm font-bold tabular-nums ${
                       kpis.profitDelta.direction === "up"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : kpis.profitDelta.direction === "down"
                           ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-600 dark:text-slate-400"
+                          : "text-slate-600 dark:text-[#94A3B8]"
                     }`}
                   >
                     {kpis.profitDelta.direction === "up"
@@ -1557,7 +1572,7 @@ export default function InsightsPage() {
                     {kpis.profitDelta.percent}%
                   </span>
                 ) : (
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-xs font-normal text-slate-400 dark:text-[#64748B]">
                     No prev data
                   </span>
                 )}
@@ -1565,19 +1580,19 @@ export default function InsightsPage() {
             </div>
 
             {/* AOV Change */}
-            <div className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block">
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800">
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-[#64748B] block">
                 AOV
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {kpis.aovDelta.hasPrev ? (
                   <span
-                    className={`text-xs sm:text-sm font-black tabular-nums ${
+                    className={`text-xs sm:text-sm font-bold tabular-nums ${
                       kpis.aovDelta.direction === "up"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : kpis.aovDelta.direction === "down"
                           ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-600 dark:text-slate-400"
+                          : "text-slate-600 dark:text-[#94A3B8]"
                     }`}
                   >
                     {kpis.aovDelta.direction === "up"
@@ -1588,7 +1603,7 @@ export default function InsightsPage() {
                     {kpis.aovDelta.percent}%
                   </span>
                 ) : (
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-xs font-normal text-slate-400 dark:text-[#64748B]">
                     No prev data
                   </span>
                 )}
@@ -1603,21 +1618,21 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Total Revenue */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Revenue
               </span>
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                <FaRupeeSign className="text-sm" />
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/80 dark:border-indigo-500/20 flex items-center justify-center">
+                <FaRupeeSign className="text-xs" />
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2.5 truncate tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
               ₹{kpis.revenue.toLocaleString("en-IN")}
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.revenueDelta.hasPrev ? (
               <span
                 className={`inline-flex items-center gap-0.5 ${
@@ -1625,18 +1640,18 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.revenueDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }`}
               >
                 {kpis.revenueDelta.direction === "up" ? (
-                  <FiArrowUpRight className="text-sm" />
+                  <FiArrowUpRight className="text-xs" />
                 ) : kpis.revenueDelta.direction === "down" ? (
-                  <FiArrowDownRight className="text-sm" />
+                  <FiArrowDownRight className="text-xs" />
                 ) : null}
                 {kpis.revenueDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1644,21 +1659,21 @@ export default function InsightsPage() {
         </div>
 
         {/* Total Profit */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Profit
               </span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-500/20 flex items-center justify-center">
                 <FiTrendingUp className="text-sm" />
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-2.5 truncate tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-emerald-600 dark:text-emerald-400 mt-2.5 truncate tabular-nums">
               ₹{kpis.profit.toLocaleString("en-IN")}
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.profitDelta.hasPrev ? (
               <span
                 className={`inline-flex items-center gap-0.5 ${
@@ -1666,18 +1681,18 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.profitDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }`}
               >
                 {kpis.profitDelta.direction === "up" ? (
-                  <FiArrowUpRight className="text-sm" />
+                  <FiArrowUpRight className="text-xs" />
                 ) : kpis.profitDelta.direction === "down" ? (
-                  <FiArrowDownRight className="text-sm" />
+                  <FiArrowDownRight className="text-xs" />
                 ) : null}
                 {kpis.profitDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1685,21 +1700,21 @@ export default function InsightsPage() {
         </div>
 
         {/* Profit Margin */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Profit Margin
               </span>
-              <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm font-black">
+              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-100/80 dark:border-purple-500/20 flex items-center justify-center text-xs font-bold">
                 %
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2.5 tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 tabular-nums">
               {kpis.margin}%
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.marginDelta.hasPrev ? (
               <span
                 className={
@@ -1707,13 +1722,13 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.marginDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }
               >
                 {kpis.marginDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1721,21 +1736,21 @@ export default function InsightsPage() {
         </div>
 
         {/* Total Orders */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Orders
               </span>
-              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-500/20 flex items-center justify-center">
                 <FiShoppingBag className="text-sm" />
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2.5 tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 tabular-nums">
               {kpis.orders}
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.ordersDelta.hasPrev ? (
               <span
                 className={`inline-flex items-center gap-0.5 ${
@@ -1743,18 +1758,18 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.ordersDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }`}
               >
                 {kpis.ordersDelta.direction === "up" ? (
-                  <FiArrowUpRight className="text-sm" />
+                  <FiArrowUpRight className="text-xs" />
                 ) : kpis.ordersDelta.direction === "down" ? (
-                  <FiArrowDownRight className="text-sm" />
+                  <FiArrowDownRight className="text-xs" />
                 ) : null}
                 {kpis.ordersDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1762,21 +1777,21 @@ export default function InsightsPage() {
         </div>
 
         {/* Avg Order Value */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Avg Order Value
               </span>
-              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-100/80 dark:border-amber-500/20 flex items-center justify-center">
                 <FiBarChart2 className="text-sm" />
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2.5 truncate tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
               ₹{kpis.aov.toLocaleString("en-IN")}
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.aovDelta.hasPrev ? (
               <span
                 className={`inline-flex items-center gap-0.5 ${
@@ -1784,18 +1799,18 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.aovDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }`}
               >
                 {kpis.aovDelta.direction === "up" ? (
-                  <FiArrowUpRight className="text-sm" />
+                  <FiArrowUpRight className="text-xs" />
                 ) : kpis.aovDelta.direction === "down" ? (
-                  <FiArrowDownRight className="text-sm" />
+                  <FiArrowDownRight className="text-xs" />
                 ) : null}
                 {kpis.aovDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1803,21 +1818,21 @@ export default function InsightsPage() {
         </div>
 
         {/* Items Sold */}
-        <div className="bg-white dark:bg-slate-850 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Items Sold
               </span>
-              <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-100/80 dark:border-cyan-500/20 flex items-center justify-center">
                 <FiBox className="text-sm" />
               </div>
             </div>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2.5 tabular-nums">
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 tabular-nums">
               {kpis.itemsSold.toLocaleString("en-IN")}
             </p>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
+          <div className="mt-3 flex items-center gap-1.5 text-xs font-medium">
             {kpis.itemsSoldDelta.hasPrev ? (
               <span
                 className={`inline-flex items-center gap-0.5 ${
@@ -1825,18 +1840,18 @@ export default function InsightsPage() {
                     ? "text-emerald-600 dark:text-emerald-400"
                     : kpis.itemsSoldDelta.direction === "down"
                       ? "text-rose-600 dark:text-rose-400"
-                      : "text-slate-400"
+                      : "text-slate-400 dark:text-[#94A3B8]"
                 }`}
               >
                 {kpis.itemsSoldDelta.direction === "up" ? (
-                  <FiArrowUpRight className="text-sm" />
+                  <FiArrowUpRight className="text-xs" />
                 ) : kpis.itemsSoldDelta.direction === "down" ? (
-                  <FiArrowDownRight className="text-sm" />
+                  <FiArrowDownRight className="text-xs" />
                 ) : null}
                 {kpis.itemsSoldDelta.label}
               </span>
             ) : (
-              <span className="text-slate-400 font-normal">
+              <span className="text-slate-400 dark:text-[#64748B] font-normal">
                 No previous-period data
               </span>
             )}
@@ -1847,17 +1862,17 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       {/* 2. AUTOMATIC BUSINESS INSIGHTS                             */}
       {/* ========================================================= */}
-      <div className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 dark:from-slate-850 dark:via-slate-850 dark:to-slate-900 rounded-2xl border border-indigo-100 dark:border-slate-800 p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-indigo-100/80 dark:border-slate-800">
+      <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-              <FiZap className="text-lg" />
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+              <FiZap className="text-base" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                 Automatic Business Insights
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-[#94A3B8] font-normal">
                 Data-driven executive observations generated from actual store activity
               </p>
             </div>
@@ -1865,7 +1880,7 @@ export default function InsightsPage() {
 
           <button
             onClick={() => setShowAIInsights(!showAIInsights)}
-            className="self-start sm:self-auto text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-indigo-200 dark:border-indigo-900 transition flex items-center gap-2 shadow-sm"
+            className="self-start sm:self-auto text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-slate-50 dark:bg-[#0F172A] hover:bg-slate-100 dark:hover:bg-[#172033] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 transition flex items-center gap-2 shadow-xs"
           >
             <span>
               {showAIInsights ? "Hide Deep AI Summary" : "Deep AI Summary (Optional)"}
@@ -1879,7 +1894,7 @@ export default function InsightsPage() {
         </div>
 
         {dynamicObservations.length === 0 ? (
-          <div className="py-10 text-center text-sm text-slate-400 font-medium">
+          <div className="py-10 text-center text-sm text-slate-400 dark:text-[#64748B] font-medium">
             Not enough data to generate this insight.
           </div>
         ) : (
@@ -1887,16 +1902,16 @@ export default function InsightsPage() {
             {dynamicObservations.map((obs, idx) => (
               <div
                 key={idx}
-                className="p-4 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-750 shadow-sm flex items-start gap-3"
+                className="p-4 rounded-xl bg-slate-50/70 dark:bg-[#0F172A] border border-slate-200/80 dark:border-slate-800 flex items-start gap-3.5"
               >
                 <span className="text-2xl flex-shrink-0 mt-0.5">
                   {obs.icon}
                 </span>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-[#F8FAFC]">
                     {obs.title}
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 leading-relaxed font-normal">
                     {obs.description}
                   </p>
                 </div>
@@ -1906,7 +1921,7 @@ export default function InsightsPage() {
         )}
 
         {showAIInsights && (
-          <div className="mt-5 pt-5 border-t border-indigo-100 dark:border-slate-800">
+          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
             <AIInsights
               filters={{
                 from: currentRange.start.toISOString().split("T")[0],
@@ -1922,27 +1937,27 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Finance Chart */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   Revenue, Cost & Profit Analysis
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                   Financial trajectory comparing Revenue, COGS, and Profit
                 </p>
               </div>
 
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl self-start sm:self-auto">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#0F172A] p-1 rounded-xl self-start sm:self-auto border border-transparent dark:border-slate-800">
                 {["daily", "weekly", "monthly"].map((gran) => (
                   <button
                     key={gran}
                     onClick={() => setChartGranularity(gran)}
-                    className={`px-3.5 py-1.5 text-xs font-bold rounded-lg capitalize transition ${
+                    className={`px-3 py-1.5 text-xs rounded-lg capitalize transition ${
                       chartGranularity === gran
-                        ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        ? "bg-white dark:bg-[#172033] text-indigo-600 dark:text-[#F8FAFC] shadow-xs font-semibold"
+                        : "text-slate-500 dark:text-[#94A3B8] hover:text-slate-800 dark:hover:text-[#F8FAFC] font-medium"
                     }`}
                   >
                     {gran}
@@ -1954,11 +1969,11 @@ export default function InsightsPage() {
             <div className="mt-5 h-80 w-full">
               {financeTrendData.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                  <FiBarChart2 className="text-4xl text-slate-400 mb-3" />
-                  <p className="text-base font-bold text-slate-700 dark:text-slate-300">
+                  <FiBarChart2 className="text-4xl text-slate-400 dark:text-[#64748B] mb-3" />
+                  <p className="text-base font-semibold text-slate-700 dark:text-[#CBD5E1]">
                     No confirmed sales data for this period
                   </p>
-                  <p className="text-sm text-slate-400 mt-1.5">
+                  <p className="text-sm text-slate-400 dark:text-[#64748B] mt-1.5">
                     Try picking a broader date range or select "Last 30 Days".
                   </p>
                 </div>
@@ -1971,18 +1986,17 @@ export default function InsightsPage() {
                     <CartesianGrid
                       strokeDasharray="3 3"
                       vertical={false}
-                      stroke="#e2e8f0"
-                      className="dark:stroke-slate-800"
+                      stroke="rgba(148, 163, 184, 0.12)"
                     />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 12, fill: "#94a3b8", fontWeight: 500 }}
+                      tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 500 }}
                       axisLine={false}
                       tickLine={false}
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      tick={{ fontSize: 12, fill: "#94a3b8", fontWeight: 500 }}
+                      tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 500 }}
                       axisLine={false}
                       tickLine={false}
                       tickFormatter={(v) =>
@@ -2022,94 +2036,94 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between text-xs font-medium text-slate-400 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 gap-2">
+          <div className="flex flex-wrap items-center justify-between text-xs font-medium text-slate-400 dark:text-[#64748B] pt-4 border-t border-slate-100 dark:border-slate-800/80 mt-4 gap-2">
             <span>Granularity: {chartGranularity.toUpperCase()}</span>
             <span>Based on confirmed store orders</span>
           </div>
         </div>
 
         {/* Sales Trend & Run Rate */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="pb-4 border-b border-slate-100 dark:border-slate-800">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                 Sales Trend & Run-Rate
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                 Pacing indicators and performance extremes
               </p>
             </div>
 
             {salesTrendAnalysis ? (
               <div className="space-y-4 mt-5">
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-750">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-[#64748B] uppercase tracking-wider">
                     Average Daily Run-Rate
                   </span>
                   <div className="flex items-baseline justify-between mt-1.5">
-                    <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+                    <p className="text-2xl font-bold text-slate-900 dark:text-[#F8FAFC] tabular-nums">
                       ₹
                       {salesTrendAnalysis.avgDailyRevenue.toLocaleString(
                         "en-IN",
                       )}
                       /day
                     </p>
-                    <span className="text-xs font-bold text-slate-500">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8]">
                       {salesTrendAnalysis.avgDailyOrders} orders/day
                     </span>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60">
-                  <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase flex items-center gap-1.5 tracking-wider">
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1.5 tracking-wider">
                     <FiTrendingUp /> Best Performing Period
                   </span>
                   <div className="flex items-baseline justify-between mt-1.5">
-                    <p className="text-base font-black text-emerald-800 dark:text-emerald-300">
+                    <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">
                       {salesTrendAnalysis.peakDay.label}
                     </p>
-                    <span className="text-base font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
+                    <span className="text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
                       ₹
                       {salesTrendAnalysis.peakDay.revenue.toLocaleString(
                         "en-IN",
                       )}
                     </span>
                   </div>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1 font-medium">
                     {salesTrendAnalysis.peakDay.orders} orders processed
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-750">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5 tracking-wider">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-[#64748B] uppercase flex items-center gap-1.5 tracking-wider">
                     <FiTrendingDown /> Lowest Performing Period
                   </span>
                   <div className="flex items-baseline justify-between mt-1.5">
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-[#CBD5E1]">
                       {salesTrendAnalysis.lowDay.label}
                     </p>
-                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400 tabular-nums">
+                    <span className="text-sm font-semibold text-slate-600 dark:text-[#94A3B8] tabular-nums">
                       ₹
                       {salesTrendAnalysis.lowDay.revenue.toLocaleString(
                         "en-IN",
                       )}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 dark:text-[#64748B] mt-1 font-normal">
                     {salesTrendAnalysis.lowDay.orders} orders processed
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-slate-400 text-sm">
+              <div className="text-center py-12 text-slate-400 dark:text-[#64748B] text-sm">
                 No trend metrics available for this period.
               </div>
             )}
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-500 flex justify-between mt-4">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-500 dark:text-[#94A3B8] flex justify-between mt-4">
             <span>Period Duration:</span>
-            <span className="font-bold text-slate-800 dark:text-slate-200">
+            <span className="font-semibold text-slate-800 dark:text-[#F8FAFC]">
               {salesTrendAnalysis?.bucketsCount || 0} active periods
             </span>
           </div>
@@ -2121,25 +2135,25 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Hourly Sales */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm">
+        <div className="lg:col-span-7 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-                <FiClock className="text-lg" />
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                <FiClock className="text-base" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   Peak Sales Hours
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                   Hourly transaction density identifying busiest store hours
                 </p>
               </div>
             </div>
 
             {hourlyAnalysis.peakHour && (
-              <div className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+              <div className="self-start sm:self-auto px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/60 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-semibold flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                 <span>
                   Peak: {hourlyAnalysis.peakHour.rangeLabel} (
                   {hourlyAnalysis.peakHour.orders} orders · ₹
@@ -2158,17 +2172,16 @@ export default function InsightsPage() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e2e8f0"
-                  className="dark:stroke-slate-800"
+                  stroke="rgba(148, 163, 184, 0.12)"
                 />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 11, fill: "#94a3b8", fontWeight: 500 }}
+                  tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 500 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "#94a3b8", fontWeight: 500 }}
+                  tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 500 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) =>
@@ -2183,11 +2196,12 @@ export default function InsightsPage() {
                     "Revenue",
                   ]}
                   contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "none",
-                    borderRadius: "10px",
+                    backgroundColor: "#0B1220",
+                    borderColor: "rgba(148, 163, 184, 0.2)",
+                    borderRadius: "12px",
                     fontSize: "12px",
-                    color: "#fff",
+                    color: "#F8FAFC",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
                   }}
                 />
                 <Bar
@@ -2204,17 +2218,17 @@ export default function InsightsPage() {
               {hourlyAnalysis.top3.map((h, i) => (
                 <div
                   key={h.hour24}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-750 flex justify-between items-center"
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800 flex justify-between items-center"
                 >
                   <div>
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                    <span className="text-sm font-semibold text-slate-800 dark:text-[#F8FAFC]">
                       #{i + 1} {h.label}
                     </span>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 dark:text-[#64748B] mt-0.5">
                       {h.orders} orders
                     </p>
                   </div>
-                  <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 tabular-nums">
+                  <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">
                     ₹{h.revenue.toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -2224,23 +2238,23 @@ export default function InsightsPage() {
         </div>
 
         {/* Payment Method Insights */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-                  <FiCreditCard className="text-lg" />
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <FiCreditCard className="text-base" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                     Payment Method Insights
                   </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                     Cash vs Online / UPI distribution
                   </p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/80">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 LIVE
               </span>
@@ -2275,20 +2289,21 @@ export default function InsightsPage() {
                         `₹${Number(val).toLocaleString("en-IN")}`
                       }
                       contentStyle={{
-                        backgroundColor: "#0f172a",
-                        border: "none",
-                        borderRadius: "10px",
+                        backgroundColor: "#0B1220",
+                        borderColor: "rgba(148, 163, 184, 0.2)",
+                        borderRadius: "12px",
                         fontSize: "12px",
-                        color: "#fff",
+                        color: "#F8FAFC",
+                        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
                       }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#64748B]">
                     Total
                   </span>
-                  <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                  <span className="text-sm font-bold text-slate-900 dark:text-[#F8FAFC] tabular-nums">
                     ₹
                     {(
                       paymentAnalytics.cashRevenue +
@@ -2299,38 +2314,38 @@ export default function InsightsPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/60">
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       Cash
                     </span>
-                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
+                    <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
                       {paymentAnalytics.cashPct}%
                     </span>
                   </div>
-                  <p className="text-lg font-black text-emerald-800 dark:text-emerald-300 mt-1 tabular-nums">
+                  <p className="text-lg font-bold text-emerald-800 dark:text-emerald-300 mt-1 tabular-nums">
                     ₹{paymentAnalytics.cashRevenue.toLocaleString("en-IN")}
                   </p>
-                  <p className="text-xs text-emerald-600/80 dark:text-emerald-500 mt-0.5">
+                  <p className="text-xs text-emerald-600/80 dark:text-emerald-500 mt-0.5 font-normal">
                     {paymentAnalytics.cashCount} orders
                   </p>
                 </div>
 
-                <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/70 dark:border-indigo-800/60">
+                <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500" />
                       Online / UPI
                     </span>
-                    <span className="text-sm font-black text-indigo-700 dark:text-indigo-400 tabular-nums">
+                    <span className="text-sm font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">
                       {paymentAnalytics.onlinePct}%
                     </span>
                   </div>
-                  <p className="text-lg font-black text-indigo-800 dark:text-indigo-300 mt-1 tabular-nums">
+                  <p className="text-lg font-bold text-indigo-800 dark:text-indigo-300 mt-1 tabular-nums">
                     ₹{paymentAnalytics.onlineRevenue.toLocaleString("en-IN")}
                   </p>
-                  <p className="text-xs text-indigo-600/80 dark:text-indigo-500 mt-0.5">
+                  <p className="text-xs text-indigo-600/80 dark:text-indigo-500 mt-0.5 font-normal">
                     {paymentAnalytics.onlineCount} orders
                   </p>
                 </div>
@@ -2338,7 +2353,7 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400 mt-4">
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400 dark:text-[#64748B] mt-4 font-normal">
             <span>Method Distribution</span>
             <span>
               {paymentAnalytics.cashCount + paymentAnalytics.onlineCount} orders processed
@@ -2352,21 +2367,21 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Product Performance */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   Product Performance
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                   Top selling, high revenue, most profitable, and slow-moving SKUs
                 </p>
               </div>
 
               <Link
                 to="/admin/reports"
-                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
+                className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline flex items-center gap-1 self-start sm:self-auto"
               >
                 <span>View Full Report</span>
                 <FiArrowRight />
@@ -2384,10 +2399,10 @@ export default function InsightsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setProductTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
                     productTab === tab.id
                       ? "bg-indigo-600 text-white shadow-xs"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      : "bg-slate-100 dark:bg-[#0F172A] text-slate-600 dark:text-[#94A3B8] hover:bg-slate-200 dark:hover:bg-[#172033]"
                   }`}
                 >
                   {tab.label}
@@ -2414,7 +2429,7 @@ export default function InsightsPage() {
 
                 if (list.length === 0) {
                   return (
-                    <div className="text-center py-12 text-sm text-slate-400 font-medium">
+                    <div className="text-center py-12 text-sm text-slate-400 dark:text-[#64748B] font-medium">
                       {emptyMsg}
                     </div>
                   );
@@ -2423,7 +2438,7 @@ export default function InsightsPage() {
                 return (
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                      <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-[#64748B] font-semibold uppercase tracking-wider text-[11px]">
                         <th className="py-2.5 px-2">#</th>
                         <th className="py-2.5 px-2">Product</th>
                         <th className="py-2.5 px-2 text-center">
@@ -2436,35 +2451,35 @@ export default function InsightsPage() {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                       {list.map((item, idx) => (
                         <tr
                           key={item.id || idx}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition"
+                          className="hover:bg-slate-50 dark:hover:bg-[#172033] transition duration-150"
                         >
-                          <td className="py-3 px-2 text-slate-400 font-bold text-xs">
+                          <td className="py-3 px-2 text-slate-400 dark:text-[#64748B] font-medium text-xs">
                             #{idx + 1}
                           </td>
                           <td className="py-3 px-2">
-                            <p className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-[160px] sm:max-w-xs text-sm">
+                            <p className="font-semibold text-slate-800 dark:text-[#F8FAFC] truncate max-w-[160px] sm:max-w-xs text-sm">
                               {item.name}
                             </p>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[11px] text-slate-400 dark:text-[#64748B]">
                               {item.category}
                             </span>
                           </td>
                           <td className="py-3 px-2 text-center">
                             {productTab === "slow_moving" ? (
-                              <span className="text-xs text-slate-500 font-semibold">
+                              <span className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">
                                 {item.stock} in stock ({item.qtySold} sold)
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold text-xs tabular-nums">
+                              <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20 font-semibold text-xs tabular-nums">
                                 {item.qtySold}
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-2 text-right font-black text-slate-900 dark:text-white text-sm tabular-nums">
+                          <td className="py-3 px-2 text-right font-bold text-slate-900 dark:text-[#F8FAFC] text-sm tabular-nums">
                             ₹
                             {productTab === "top_profit"
                               ? item.profit.toLocaleString("en-IN")
@@ -2479,42 +2494,42 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 flex justify-between mt-4">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 dark:text-[#64748B] flex justify-between mt-4">
             <span>Sorting: {productTab.replace("_", " ").toUpperCase()}</span>
             <span>Real transaction data</span>
           </div>
         </div>
 
         {/* Category Performance (Clean, Accurate, Compact) */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   Category Performance
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                   Revenue contribution, profit, and quantity sold by category
                 </p>
               </div>
 
               {categoryAnalytics.topCategory && (
-                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20">
                   Top: {categoryAnalytics.topCategory.name}
                 </span>
               )}
             </div>
 
-            <div className="mt-5 space-y-3.5">
+            <div className="mt-5 space-y-3">
               {!categoryAnalytics.hasData ? (
-                <div className="text-center py-12 text-sm text-slate-400 font-medium">
+                <div className="text-center py-12 text-sm text-slate-400 dark:text-[#64748B] font-medium">
                   No category data available for the selected period.
                 </div>
               ) : (
                 categoryAnalytics.list.slice(0, 5).map((cat, idx) => (
                   <div
                     key={cat.name}
-                    className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 space-y-2"
+                    className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800 space-y-2"
                   >
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
@@ -2525,26 +2540,26 @@ export default function InsightsPage() {
                               PIE_COLORS[idx % PIE_COLORS.length],
                           }}
                         />
-                        <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                        <span className="font-semibold text-slate-800 dark:text-[#F8FAFC] text-sm">
                           {cat.name}
                         </span>
-                        <span className="text-xs text-slate-400 font-medium">
+                        <span className="text-xs text-slate-400 dark:text-[#64748B] font-normal">
                           ({cat.qtySold} sold)
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2.5 font-bold">
-                        <span className="text-slate-900 dark:text-white tabular-nums text-sm">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-slate-900 dark:text-[#F8FAFC] tabular-nums font-bold text-sm">
                           ₹{cat.revenue.toLocaleString("en-IN")}
                         </span>
-                        <span className="text-xs text-slate-500 font-bold tabular-nums bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600">
+                        <span className="text-xs text-slate-500 dark:text-[#94A3B8] font-semibold tabular-nums bg-white dark:bg-[#172033] px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700/80">
                           {cat.percentage}%
                         </span>
                       </div>
                     </div>
 
                     {/* Progress bar */}
-                    <div className="w-full h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700 overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{
@@ -2555,16 +2570,16 @@ export default function InsightsPage() {
                       />
                     </div>
 
-                    <div className="flex justify-between items-center text-[11px] text-slate-400 pt-0.5">
+                    <div className="flex justify-between items-center text-[11px] text-slate-400 dark:text-[#64748B] pt-0.5">
                       <span>
                         Profit:{" "}
-                        <strong className="text-emerald-600 dark:text-emerald-400">
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">
                           ₹{cat.profit.toLocaleString("en-IN")}
                         </strong>
                       </span>
                       <span>
                         Margin:{" "}
-                        <strong className="text-slate-700 dark:text-slate-300">
+                        <strong className="text-slate-700 dark:text-[#CBD5E1] font-semibold">
                           {cat.margin}%
                         </strong>
                       </span>
@@ -2575,9 +2590,9 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 flex justify-between mt-4">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 dark:text-[#64748B] flex justify-between mt-4">
             <span>Categories Monitored:</span>
-            <span className="font-bold text-slate-800 dark:text-slate-200">
+            <span className="font-semibold text-slate-800 dark:text-[#F8FAFC]">
               {categoryAnalytics.list.length} active
             </span>
           </div>
@@ -2589,18 +2604,18 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Counter Performance */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-                  <FiMonitor className="text-lg" />
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <FiMonitor className="text-base" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                     Counter Performance
                   </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                     Throughput, sales, and average ticket per counter
                   </p>
                 </div>
@@ -2608,7 +2623,7 @@ export default function InsightsPage() {
 
               {counterAnalytics.topCounter &&
                 counterAnalytics.topCounter.revenue > 0 && (
-                  <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                  <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
                     🥇 Best Counter
                   </span>
                 )}
@@ -2616,34 +2631,34 @@ export default function InsightsPage() {
 
             <div className="mt-5 space-y-3">
               {counterAnalytics.list.length === 0 ? (
-                <div className="text-center py-12 text-sm text-slate-400">
+                <div className="text-center py-12 text-sm text-slate-400 dark:text-[#64748B]">
                   No counter activity recorded for this period.
                 </div>
               ) : (
                 counterAnalytics.list.map((c, idx) => (
                   <div
                     key={c.id || idx}
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-750 flex items-center justify-between"
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-[#172033] transition duration-150"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold text-xs flex items-center justify-center border border-indigo-100/80 dark:border-indigo-500/20">
                         C{idx + 1}
                       </div>
                       <div>
-                        <p className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                        <p className="font-semibold text-sm text-slate-800 dark:text-[#F8FAFC]">
                           {c.name}
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-400 dark:text-[#64748B] mt-0.5 font-normal">
                           {c.orders} orders processed
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">
+                      <p className="text-base font-bold text-slate-900 dark:text-[#F8FAFC] tabular-nums">
                         ₹{c.revenue.toLocaleString("en-IN")}
                       </p>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      <p className="text-xs text-slate-400 dark:text-[#64748B] font-medium mt-0.5">
                         AOV: ₹{c.aov}
                       </p>
                     </div>
@@ -2655,7 +2670,7 @@ export default function InsightsPage() {
 
           <Link
             to="/admin/counters"
-            className="mt-5 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-1"
+            className="mt-5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline flex items-center justify-center gap-1"
           >
             <span>View All Billing Counters</span>
             <FiArrowRight />
@@ -2663,25 +2678,25 @@ export default function InsightsPage() {
         </div>
 
         {/* Staff Performance */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-                  <FiUsers className="text-lg" />
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <FiUsers className="text-base" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                     Staff Performance
                   </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                     Order handling volume and revenue output by personnel
                   </p>
                 </div>
               </div>
 
               {staffAnalytics.topStaff && staffAnalytics.topStaff.revenue > 0 && (
-                <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 flex items-center gap-1">
                   🌟 Top Performer
                 </span>
               )}
@@ -2689,34 +2704,34 @@ export default function InsightsPage() {
 
             <div className="mt-5 space-y-3">
               {staffAnalytics.list.length === 0 ? (
-                <div className="text-center py-12 text-sm text-slate-400">
+                <div className="text-center py-12 text-sm text-slate-400 dark:text-[#64748B]">
                   No staff activity recorded for this period.
                 </div>
               ) : (
                 staffAnalytics.list.map((s, idx) => (
                   <div
                     key={s.name || idx}
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-750 flex items-center justify-between"
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/60 dark:border-slate-800 flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-[#172033] transition duration-150"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-xs flex items-center justify-center border border-emerald-100/80 dark:border-emerald-500/20">
                         {s.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                        <p className="font-semibold text-sm text-slate-800 dark:text-[#F8FAFC]">
                           {s.name}
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-400 dark:text-[#64748B] mt-0.5 font-normal">
                           {s.orders} orders completed
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <p className="text-base font-black text-slate-900 dark:text-white tabular-nums">
+                      <p className="text-base font-bold text-slate-900 dark:text-[#F8FAFC] tabular-nums">
                         ₹{s.revenue.toLocaleString("en-IN")}
                       </p>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      <p className="text-xs text-slate-400 dark:text-[#64748B] font-medium mt-0.5">
                         Avg: ₹{s.aov}
                       </p>
                     </div>
@@ -2728,7 +2743,7 @@ export default function InsightsPage() {
 
           <Link
             to="/admin/staff"
-            className="mt-5 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-1"
+            className="mt-5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline flex items-center justify-center gap-1"
           >
             <span>View All Staff Members</span>
             <FiArrowRight />
@@ -2741,18 +2756,18 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Inventory Intelligence */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/20">
-                  <FiPackage className="text-lg" />
+                <div className="w-9 h-9 rounded-xl bg-cyan-600 text-white flex items-center justify-center shadow-xs">
+                  <FiPackage className="text-base" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                     Inventory Intelligence
                   </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                     Stock valuation and warehouse catalog health
                   </p>
                 </div>
@@ -2760,7 +2775,7 @@ export default function InsightsPage() {
 
               <Link
                 to="/admin/stock-refill"
-                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800"
+                className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/60 dark:border-indigo-500/20"
               >
                 <span>Stock Refill</span>
                 <FiArrowRight />
@@ -2768,27 +2783,27 @@ export default function InsightsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-5">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-750">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/80 dark:border-slate-800">
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-[#64748B] uppercase tracking-wider">
                   Inventory Value (Cost)
                 </span>
-                <p className="text-2xl font-black text-slate-900 dark:text-white mt-1.5 tabular-nums">
+                <p className="text-2xl font-bold text-slate-900 dark:text-[#F8FAFC] mt-1.5 tabular-nums">
                   ₹
                   {inventoryAnalytics.totalCostValuation.toLocaleString(
                     "en-IN",
                   )}
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-slate-400 dark:text-[#64748B] mt-1 font-normal">
                   {inventoryAnalytics.totalStockUnits.toLocaleString("en-IN")}{" "}
                   units in stock
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-750">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-slate-200/80 dark:border-slate-800">
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-[#64748B] uppercase tracking-wider">
                   Retail Value (Potential)
                 </span>
-                <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1.5 tabular-nums">
+                <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1.5 tabular-nums">
                   ₹
                   {inventoryAnalytics.totalRetailValuation.toLocaleString(
                     "en-IN",
@@ -2805,39 +2820,39 @@ export default function InsightsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="p-4 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/70 dark:border-rose-900 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-rose-700 dark:text-rose-400">
+                  <span className="text-sm font-semibold text-rose-700 dark:text-rose-400">
                     Out of Stock
                   </span>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-[#64748B] mt-0.5 font-normal">
                     Order loss risk
                   </p>
                 </div>
-                <span className="text-2xl font-black text-rose-600 dark:text-rose-400 tabular-nums">
+                <span className="text-2xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">
                   {inventoryAnalytics.outOfStockCount}
                 </span>
               </div>
 
-              <div className="p-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
                     Low Stock Limit
                   </span>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-[#64748B] mt-0.5 font-normal">
                     Needs restock
                   </p>
                 </div>
-                <span className="text-2xl font-black text-amber-600 dark:text-amber-400 tabular-nums">
+                <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
                   {inventoryAnalytics.lowStockCount}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 flex justify-between mt-5">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 dark:text-[#64748B] flex justify-between mt-5">
             <span>Healthy Products:</span>
-            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
               {inventoryAnalytics.healthyCatalogCount} of {products.length}{" "}
               catalog items
             </span>
@@ -2845,34 +2860,34 @@ export default function InsightsPage() {
         </div>
 
         {/* Profitability & P&L Breakdown */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-6 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-start gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-                <FaRupeeSign className="text-lg" />
+              <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                <FaRupeeSign className="text-base" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-[#F8FAFC]">
                   Profitability & P&L Breakdown
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-0.5 font-normal">
                   Financial summary derived using project cost snapshot formulas
                 </p>
               </div>
             </div>
 
             <div className="mt-5 space-y-2.5">
-              <div className="flex justify-between items-center py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <div className="flex justify-between items-center py-3 px-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-transparent dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-600 dark:text-[#CBD5E1]">
                   Gross Sales Revenue
                 </span>
-                <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                <span className="text-sm font-bold text-slate-900 dark:text-[#F8FAFC] tabular-nums">
                   ₹{kpis.revenue.toLocaleString("en-IN")}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-amber-700 dark:text-amber-400">
-                <span className="text-sm font-semibold">
+              <div className="flex justify-between items-center py-3 px-4 rounded-xl bg-slate-50 dark:bg-[#0F172A] border border-transparent dark:border-slate-800 text-amber-700 dark:text-amber-400">
+                <span className="text-sm font-medium">
                   (-) Cost of Goods Sold (COGS)
                 </span>
                 <span className="text-sm font-bold tabular-nums">
@@ -2880,35 +2895,35 @@ export default function InsightsPage() {
                 </span>
               </div>
 
-              <div className="border-t-2 border-slate-200 dark:border-slate-700 my-2" />
+              <div className="border-t border-slate-200 dark:border-slate-800 my-2" />
 
-              <div className="flex justify-between items-center py-3.5 px-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800">
-                <span className="text-base font-bold">
+              <div className="flex justify-between items-center py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+                <span className="text-base font-semibold">
                   (=) Gross Profit
                 </span>
-                <span className="text-lg font-black tabular-nums">
+                <span className="text-lg font-bold tabular-nums">
                   ₹{kpis.profit.toLocaleString("en-IN")}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center py-2.5 px-4 text-slate-500">
+              <div className="flex justify-between items-center py-2.5 px-4 text-slate-500 dark:text-[#94A3B8]">
                 <span className="text-sm font-medium">
                   Gross Profit Margin
                 </span>
-                <span className="font-black text-slate-800 dark:text-slate-200 text-base tabular-nums">
+                <span className="font-bold text-slate-800 dark:text-[#F8FAFC] text-base tabular-nums">
                   {kpis.margin}%
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 flex justify-between">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-400 dark:text-[#64748B] flex justify-between">
             <span>Period Financial Status:</span>
             <span
-              className={`font-bold ${
+              className={`font-semibold ${
                 kpis.profit > 0
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-500"
+                  : "text-slate-500 dark:text-[#94A3B8]"
               }`}
             >
               {kpis.profit > 0

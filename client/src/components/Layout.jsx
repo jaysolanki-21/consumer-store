@@ -22,6 +22,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiChevronDown,
+  FiSettings,
 } from "react-icons/fi";
 
 export default function Layout({ children }) {
@@ -188,6 +189,7 @@ export default function Layout({ children }) {
     { path: "/admin/counters", label: "Counters", icon: FiGrid },
     { path: "/admin/insights", label: "Insights", icon: FiBarChart2 },
     { path: "/admin/reports", label: "Reports", icon: FiFileText },
+    { path: "/admin/settings", label: "Settings", icon: FiSettings },
   ];
 
 
@@ -217,17 +219,17 @@ export default function Layout({ children }) {
       <aside
         className={`
           fixed top-0 left-0 z-50 h-screen
-          bg-white dark:bg-slate-950
-          border-r border-slate-200 dark:border-slate-800
+          bg-white dark:bg-[#0B1220]
+          border-r border-slate-200 dark:border-slate-800/80
           shadow-xl
           transition-transform duration-300
           lg:translate-x-0
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          ${sidebarCollapsed ? "lg:w-20" : "lg:w-64"}
+          ${sidebarCollapsed ? "lg:w-16" : "lg:w-60"}
         `}
       >
         {/* SIDEBAR HEADER */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+        <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80">
           <Link
             to="/admin"
             className={`flex items-center gap-3 min-w-0 ${
@@ -356,7 +358,7 @@ export default function Layout({ children }) {
   // TOP HEADER
   // =========================
   const TopHeader = () => (
-    <nav className="sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+    <nav className="sticky top-0 z-30 backdrop-blur-md bg-white/90 dark:bg-[#0B1220]/90 border-b border-slate-200 dark:border-slate-800/80 shadow-xs">
       <div className="h-16 px-4 lg:px-8 flex items-center justify-between gap-4">
         {/* LEFT */}
         <div className="flex items-center gap-3">
@@ -482,7 +484,7 @@ export default function Layout({ children }) {
   // MAIN LAYOUT
   // =========================
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#080D1A] text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* ADMIN SIDEBAR */}
       {user?.role === "admin" && <AdminSidebar />}
 
@@ -491,14 +493,14 @@ export default function Layout({ children }) {
         className={
           user?.role === "admin"
             ? sidebarCollapsed
-              ? "lg:pl-20"
-              : "lg:pl-64"
+              ? "lg:pl-16"
+              : "lg:pl-60"
             : ""
         }
       >
         <TopHeader />
 
-        <main className="max-w-[1600px] mx-auto px-4 lg:px-8 py-6">
+        <main className="max-w-[1650px] mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-8">
           {children}
         </main>
       </div>

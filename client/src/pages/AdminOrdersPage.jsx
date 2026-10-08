@@ -975,7 +975,7 @@ export default function AdminOrdersPage() {
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-slate-800 dark:text-white">
+              <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
                 Live Order Monitoring
               </h1>
               <AnimatePresence>
@@ -984,7 +984,7 @@ export default function AdminOrdersPage() {
                     initial={{ scale: 0.7, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.7, opacity: 0 }}
-                    className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold"
+                    className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1 rounded-full text-xs font-semibold"
                   >
                     <FiActivity className="animate-pulse" />
                     LIVE UPDATE
@@ -992,7 +992,7 @@ export default function AdminOrdersPage() {
                 )}
               </AnimatePresence>
             </div>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
               Real-time order tracking & management dashboard
             </p>
           </div>
@@ -1086,95 +1086,124 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* STATS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-5">
-          <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-indigo-100 text-sm font-medium">
-                  Total Orders
-                </p>
-                <p className="text-3xl font-bold mt-1">{stats.total}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiShoppingBag className="text-2xl text-white" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Total Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0">
+                <FiShoppingBag className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.total}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              All transactions
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-amber-100 text-sm font-medium">
-                  Pending Orders
-                </p>
-                <p className="text-3xl font-bold mt-1">{stats.pending}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiClock className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Pending Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center shrink-0">
+                <FiClock className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.pending}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              Awaiting fulfillment
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-emerald-100 text-sm font-medium">
-                  Confirmed Orders
-                </p>
-                <p className="text-3xl font-bold mt-1">{stats.confirmed}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiCheckCircle className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Confirmed Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center shrink-0">
+                <FiCheckCircle className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.confirmed}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              Fulfilled successfully
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-rose-100 text-sm font-medium">
-                  Cancelled Orders
-                </p>
-                <p className="text-3xl font-bold mt-1">{stats.cancelled}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiXCircle className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Cancelled Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 flex items-center justify-center shrink-0">
+                <FiXCircle className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.cancelled}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              Voided transactions
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-purple-100 text-sm font-medium">Revenue</p>
-                <p className="text-3xl font-bold mt-1">
-                  ₹{stats.revenue.toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiTrendingUp className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Total Revenue
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center shrink-0">
+                <FiTrendingUp className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              ₹{stats.revenue.toLocaleString()}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              Gross sales today
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-blue-100 text-sm font-medium">Cash Orders</p>
-                <p className="text-3xl font-bold mt-1">{stats.cashCount}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiPackage className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Cash Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center shrink-0">
+                <FiPackage className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.cashCount}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              Physical cash payments
+            </p>
           </div>
-          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-cyan-100 text-sm font-medium">
-                  Online Orders
-                </p>
-                <p className="text-3xl font-bold mt-1">{stats.onlineCount}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                <FiPackage className="text-2xl text-white" />
+
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Online Orders
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/50 flex items-center justify-center shrink-0">
+                <FiCreditCard className="text-base" />
               </div>
             </div>
+            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+              {stats.onlineCount}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+              UPI & card payments
+            </p>
           </div>
         </div>
 

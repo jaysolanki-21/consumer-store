@@ -58,14 +58,32 @@ export default function LoginPage() {
       // ✅ Always save email for next time
       localStorage.setItem('savedEmail', email);
 
-      toast.success(`Welcome ${data.name}!`);
+      // ✅ Check maintenance mode status
+      let isMaintenanceActive = false;
+      try {
+        const { data: maintData } = await api.get('/settings/maintenance');
+        isMaintenanceActive = !!maintData?.maintenanceMode?.enabled;
+      } catch (e) {}
 
       // ✅ Handle redirect based on role
       if (data.role === 'admin') {
+        toast.success(`Welcome ${data.name}!`);
         navigate('/admin');
+      } else if (isMaintenanceActive) {
+        if (data.role === 'counter') {
+          localStorage.setItem('counterToken', data.token);
+          localStorage.setItem('counterUser', JSON.stringify(data));
+        }
+        toast('System Under Maintenance: Your account is valid, but Staff/Counter access is temporarily unavailable.', {
+          icon: '⚠️',
+          duration: 4000,
+        });
+        navigate('/maintenance');
       } else if (data.role === 'staff') {
+        toast.success(`Welcome ${data.name}!`);
         navigate('/staff');
       } else if (data.role === 'counter') {
+        toast.success(`Welcome ${data.name}!`);
         // ✅ Save counter token separately for consumer page
         localStorage.setItem('counterToken', data.token);
         localStorage.setItem('counterUser', JSON.stringify(data));

@@ -1,8 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useEffect, useState } from "react";
+import Swal from "sweetalert2";
 import socket from "./services/socket";
+import api from "./services/api";
+import { setMaintenanceMode } from "./redux/slices/settingsSlice";
 
 import ConsumerPage from "./pages/ConsumerPage";
 import StaffPage from "./pages/StaffPage";
@@ -11,6 +14,8 @@ import AdminProductsPage from "./pages/AdminProductsPage";
 import AdminCategoriesPage from "./pages/AdminCategoriesPage";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MaintenanceGuard from "./components/MaintenanceGuard";
+import MaintenancePage from "./pages/MaintenancePage";
 import Layout from "./components/Layout";
 import StockRefillPage from "./pages/StockRefillPage";
 import AdminOrdersPage from "./pages/AdminOrdersPage";
@@ -19,6 +24,7 @@ import AdminAlertsPage from "./pages/AdminAlertsPage";
 import InsightsPage from "./pages/InsightsPage";
 import AdminCountersPage from "./pages/AdminCountersPage";
 import SalesReportPage from "./pages/SalesReportPage";
+import AdminSettingsPage from "./pages/AdminSettingsPage";
 
 function App() {
   const { user, token } = useSelector((state) => state.auth);
@@ -109,6 +115,73 @@ function App() {
     };
   }, [user]);
 
+  const dispatch = useDispatch();
+
+  // Initial maintenance status fetch
+  useEffect(() => {
+    api
+      .get('/settings/maintenance')
+      .then(({ data }) => {
+        if (data?.maintenanceMode) {
+          dispatch(setMaintenanceMode(data.maintenanceMode));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load initial maintenance status:', err);
+      });
+  }, [dispatch]);
+
+  // Global Maintenance Mode realtime listener
+  useEffect(() => {
+    const handleMaintenanceChange = (data) => {
+      if (!data) return;
+      dispatch(setMaintenanceMode(data));
+
+      const activeRole = user?.role;
+      let counterRole = null;
+      try {
+        const parsed = JSON.parse(localStorage.getItem('counterUser') || '{}');
+        counterRole = parsed.role;
+      } catch (e) {}
+
+      // Admin is NEVER redirected or interrupted
+      if (activeRole === 'admin') {
+        return;
+      }
+
+      // If maintenance enabled and user is staff or counter
+      if (data.enabled) {
+        const isStaff = activeRole === 'staff';
+        const isCounter = counterRole === 'counter' || !!localStorage.getItem('counterToken');
+
+        if (isStaff || isCounter) {
+          if (window.location.pathname === '/maintenance') return;
+
+          Swal.fire({
+            title: 'System Maintenance Started',
+            text: 'The system is now under maintenance. You will be redirected shortly.',
+            icon: 'warning',
+            timer: 2500,
+            timerProgressBar: true,
+            showConfirmButton: false,
+            background: '#0f172a',
+            color: '#ffffff',
+            customClass: {
+              popup: 'rounded-2xl border border-slate-700',
+            },
+          }).then(() => {
+            window.location.href = '/maintenance';
+          });
+        }
+      }
+    };
+
+    socket.on('maintenanceModeChanged', handleMaintenanceChange);
+    return () => {
+      socket.off('maintenanceModeChanged', handleMaintenanceChange);
+    };
+  }, [user, dispatch]);
+
   // ✅ Check if counter user is logged in
   const isCounterLoggedIn = !!localStorage.getItem('counterToken');
 
@@ -166,15 +239,20 @@ function App() {
           }
         />
 
-        {/* ✅ Consumer Page - Protected with counter token */}
+        {/* ✅ Maintenance Page */}
+        <Route path="/maintenance" element={<MaintenancePage />} />
+
+        {/* ✅ Consumer Page - Protected with counter token & MaintenanceGuard */}
         <Route
           path="/consumer"
           element={
-            isCounterLoggedIn ? (
-              <ConsumerPage />
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            <MaintenanceGuard>
+              {isCounterLoggedIn ? (
+                <ConsumerPage />
+              ) : (
+                <Navigate to="/login" replace />
+              )}
+            </MaintenanceGuard>
           }
         />
 
@@ -185,9 +263,11 @@ function App() {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute roles={["staff"]}>
-              <Layout><StaffPage /></Layout>
-            </ProtectedRoute>
+            <MaintenanceGuard>
+              <ProtectedRoute roles={["staff"]}>
+                <Layout><StaffPage /></Layout>
+              </ProtectedRoute>
+            </MaintenanceGuard>
           }
         />
 
@@ -227,9 +307,11 @@ function App() {
         <Route
           path="/admin/stock-refill"
           element={
-            <ProtectedRoute roles={["admin", "staff"]}>
-              <Layout><StockRefillPage /></Layout>
-            </ProtectedRoute>
+            <MaintenanceGuard>
+              <ProtectedRoute roles={["admin", "staff"]}>
+                <Layout><StockRefillPage /></Layout>
+              </ProtectedRoute>
+            </MaintenanceGuard>
           }
         />
         <Route
@@ -272,11 +354,19 @@ function App() {
             </ProtectedRoute>
           }
         />
-         <Route
+        <Route
           path="/admin/counters"
           element={
             <ProtectedRoute roles={["admin"]}>
               <Layout><AdminCountersPage /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <Layout><AdminSettingsPage /></Layout>
             </ProtectedRoute>
           }
         />

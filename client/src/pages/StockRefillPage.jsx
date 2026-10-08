@@ -207,82 +207,109 @@ export default function StockRefillPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+          <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
             Stock Management
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
             Manage inventory and refill stock levels
           </p>
         </div>
 
         <button
           onClick={fetchProducts}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium transition shadow-sm"
         >
-          <FiRefreshCw className="text-indigo-500" />
-          <span className="text-sm font-medium">Refresh</span>
+          <FiRefreshCw className="text-indigo-500 text-sm" />
+          <span>Refresh</span>
         </button>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-indigo-100 text-sm font-medium">Products</p>
-              <p className="text-3xl font-bold mt-1">{products.length}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiPackage className="text-2xl text-white" />
+        <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              Total Products
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0">
+              <FiPackage className="text-base" />
             </div>
           </div>
+          <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            {products.length}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            Active items in inventory
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-100 text-sm font-medium">Total Stock</p>
-              <p className="text-3xl font-bold mt-1">{totalStock}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiTrendingUp className="text-2xl text-white" />
+        <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              Total Stock Units
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center shrink-0">
+              <FiTrendingUp className="text-base" />
             </div>
           </div>
+          <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            {totalStock.toLocaleString()}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            Across all catalog items
+          </p>
         </div>
 
-        <div
-          className={`rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300 ${
-            lowStockCount > 0
-              ? 'bg-gradient-to-br from-orange-500 to-red-600'
-              : 'bg-gradient-to-br from-green-500 to-emerald-600'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-orange-100 text-sm font-medium">Low Stock</p>
-              <p className="text-3xl font-bold mt-1">{lowStockCount}</p>
-              {criticalStockCount > 0 && (
-                <p className="text-xs text-orange-200 mt-1">
-                  {criticalStockCount} critical
-                </p>
-              )}
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiAlertTriangle className="text-2xl text-white animate-pulse" />
+        <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              Low Stock Alerts
+            </span>
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                lowStockCount > 0
+                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50"
+                  : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50"
+              }`}
+            >
+              <FiAlertTriangle className={`text-base ${lowStockCount > 0 ? "animate-pulse" : ""}`} />
             </div>
           </div>
+          <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            {lowStockCount}
+          </div>
+          <p className="text-xs font-normal mt-3">
+            {criticalStockCount > 0 ? (
+              <span className="text-rose-600 dark:text-rose-400 font-medium">
+                {criticalStockCount} critical items require restock
+              </span>
+            ) : lowStockCount > 0 ? (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                {lowStockCount} items below threshold
+              </span>
+            ) : (
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                All stock levels healthy
+              </span>
+            )}
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-purple-100 text-sm font-medium">Categories</p>
-              <p className="text-3xl font-bold mt-1">{categories.length}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiGrid className="text-2xl text-white" />
+        <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              Categories
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center shrink-0">
+              <FiGrid className="text-base" />
             </div>
           </div>
+          <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            {categories.length}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            Active product categories
+          </p>
         </div>
       </div>
 

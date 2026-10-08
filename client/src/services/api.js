@@ -11,7 +11,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token') || localStorage.getItem('counterToken');
+    const isConsumer = typeof window !== 'undefined' && (window.location.pathname.startsWith('/consumer') || window.location.pathname === '/');
+    const token = isConsumer
+      ? (localStorage.getItem('counterToken') || localStorage.getItem('token'))
+      : (localStorage.getItem('token') || localStorage.getItem('counterToken'));
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

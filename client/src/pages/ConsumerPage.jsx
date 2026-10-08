@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { logout } from "../redux/slices/authSlice";
 import ConsumerFilterSidebar from "../components/ConsumerFilterSidebar";
 import MobileFilterDrawer from "../components/MobileFilterDrawer";
+import { useTheme } from "../hooks/useTheme";
 
 import {
   FiShoppingCart,
@@ -23,6 +24,8 @@ import {
   FiCoffee,
   FiSmartphone,
   FiBook,
+  FiSun,
+  FiMoon,
   FiLogOut,
   FiMonitor,
   FiFilter,
@@ -32,6 +35,14 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiChevronDown,
+  FiPrinter,
+  FiClock,
+  FiEye,
+  FiRefreshCw,
+  FiCalendar,
+  FiDollarSign,
+  FiCheck,
+  FiList,
 } from "react-icons/fi";
 
 const categoryIcons = {
@@ -44,6 +55,7 @@ const categoryIcons = {
 function ConsumerPageContent() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const cartItems = useSelector((state) => state.cart.items);
   const [user, setUser] = useState(null);
@@ -51,6 +63,361 @@ function ConsumerPageContent() {
 
   // Receipt data — used only for silent print
   const [lastOrder, setLastOrder] = useState(null);
+
+  // ─── Today's Orders & Reprint States ──────────────────────────────────────
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [showTodayOrders, setShowTodayOrders] = useState(false);
+  const [selectedOrderForView, setSelectedOrderForView] = useState(null);
+  const [reprintOrder, setReprintOrder] = useState(null);
+
+  // Filters inside Today's Orders
+  const [todaySearch, setTodaySearch] = useState("");
+  const [todayStatusFilter, setTodayStatusFilter] = useState("ALL");
+  const [todayPaymentFilter, setTodayPaymentFilter] = useState("ALL");
+
+  // Keep ref for user to avoid stale closures in socket events
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Clear reprintOrder after print completes
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setReprintOrder(null);
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
+
+  // IST Date / Time Utilities (strictly Asia/Kolkata timezone)
+  const getISTDateString = (date = new Date()) => {
+    try {
+      return new Date(date).toLocaleDateString("en-CA", {
+        timeZone: "Asia/Kolkata",
+      }); // "YYYY-MM-DD"
+    } catch (e) {
+      return new Date(date).toISOString().split("T")[0];
+    }
+  };
+
+  const isOrderTodayIST = useCallback((createdAt) => {
+    if (!createdAt) return false;
+    return getISTDateString(createdAt) === getISTDateString(new Date());
+  }, []);
+
+  const formatISTTime = (d) => {
+    if (!d) return "--:--";
+    try {
+      return new Date(d).toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch (e) {
+      return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+  };
+
+  const formatISTDate = (d) => {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch (e) {
+      return new Date(d).toLocaleDateString();
+    }
+  };
+
+  const formatISTDateTime = (d) => {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch (e) {
+      return new Date(d).toLocaleString();
+    }
+  };
+
+  // Helper to check if an order belongs to the currently logged in counter
+  const isOrderBelongsToCounter = useCallback((ord, currentUser) => {
+    if (!ord || !currentUser) return false;
+
+    const userCounterId = String(
+      currentUser.counter?._id || currentUser.counterId || currentUser._id || ""
+    ).trim();
+    const userCounterName = String(
+      currentUser.counter?.name || currentUser.counterName || currentUser.name || ""
+    ).trim().toLowerCase();
+
+    const ordCounterId = String(
+      (typeof ord.counter === "object" ? ord.counter?._id : ord.counter) ||
+      ord.counterId ||
+      ""
+    ).trim();
+    const ordCounterName = String(
+      (typeof ord.counter === "object" ? ord.counter?.name : null) ||
+      ord.counterName ||
+      ""
+    ).trim().toLowerCase();
+
+    // 1. Match by Counter ID
+    if (userCounterId && ordCounterId && userCounterId === ordCounterId) {
+      return true;
+    }
+
+    // 2. Match by Counter Name
+    if (userCounterName && ordCounterName && userCounterName === ordCounterName) {
+      return true;
+    }
+
+    // 3. Match by User ID
+    const ordStaffId = String(
+      (typeof ord.staffId === "object" ? ord.staffId?._id : ord.staffId) || ""
+    ).trim();
+    const currentUserId = String(currentUser._id || "").trim();
+    if (currentUserId && ordStaffId && currentUserId === ordStaffId) {
+      return true;
+    }
+
+    // 4. Default for counter role if order counter matches user ID
+    if (currentUser.role === "counter" && (!ordCounterId || ordCounterId === userCounterId)) {
+      return true;
+    }
+
+    return false;
+  }, []);
+
+  // Fetch orders for this counter (scoped to today IST from backend)
+  const fetchOrders = useCallback(async () => {
+    try {
+      setOrdersLoading(true);
+      const res = await api.get("/orders?today=true");
+      if (Array.isArray(res.data)) {
+        setOrders(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch counter orders:", err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchOrders();
+    }
+  }, [isLoggedIn, fetchOrders]);
+
+  // Real-time Socket.IO synchronization for Today's Orders
+  useEffect(() => {
+    if (!socket || !isLoggedIn) return;
+
+    const getCurrentUser = () => {
+      if (userRef.current) return userRef.current;
+      const stored = localStorage.getItem("counterUser");
+      if (stored) {
+        try { return JSON.parse(stored); } catch (e) {}
+      }
+      return null;
+    };
+
+    const handleNewOrder = (newOrder) => {
+      if (!newOrder?._id) return;
+      const currentUser = getCurrentUser();
+      if (currentUser && isOrderBelongsToCounter(newOrder, currentUser)) {
+        setOrders((prev) => {
+          const exists = prev.some((o) => o._id === newOrder._id);
+          if (exists) {
+            return prev.map((o) => (o._id === newOrder._id ? { ...o, ...newOrder } : o));
+          }
+          return [newOrder, ...prev];
+        });
+      }
+    };
+
+    const handleOrderUpdate = (updatedOrder) => {
+      if (!updatedOrder?._id) return;
+      const currentUser = getCurrentUser();
+      if (currentUser && isOrderBelongsToCounter(updatedOrder, currentUser)) {
+        setOrders((prev) => {
+          const exists = prev.some((o) => o._id === updatedOrder._id);
+          if (exists) {
+            return prev.map((o) => (o._id === updatedOrder._id ? { ...o, ...updatedOrder } : o));
+          }
+          return [updatedOrder, ...prev];
+        });
+      }
+    };
+
+    const handleOrderDelete = ({ orderId, id } = {}) => {
+      const targetId = orderId || id;
+      if (!targetId) return;
+      setOrders((prev) => prev.filter((o) => o._id !== targetId));
+    };
+
+    socket.on("newOrder", handleNewOrder);
+    socket.on("orderCreated", handleNewOrder);
+    socket.on("orderConfirmed", handleOrderUpdate);
+    socket.on("orderCancelled", handleOrderUpdate);
+    socket.on("orderReverted", handleOrderUpdate);
+    socket.on("orderUpdated", handleOrderUpdate);
+    socket.on("orderDeleted", handleOrderDelete);
+
+    return () => {
+      socket.off("newOrder", handleNewOrder);
+      socket.off("orderCreated", handleNewOrder);
+      socket.off("orderConfirmed", handleOrderUpdate);
+      socket.off("orderCancelled", handleOrderUpdate);
+      socket.off("orderReverted", handleOrderUpdate);
+      socket.off("orderUpdated", handleOrderUpdate);
+      socket.off("orderDeleted", handleOrderDelete);
+    };
+  }, [isLoggedIn, isOrderBelongsToCounter]);
+
+  // Orders created TODAY in Asia/Kolkata (IST) for THIS counter
+  const todayOrders = useMemo(() => {
+    return orders.filter((o) => {
+      if (!isOrderTodayIST(o.createdAt)) return false;
+      if (user && !isOrderBelongsToCounter(o, user)) return false;
+      return true;
+    });
+  }, [orders, isOrderTodayIST, user, isOrderBelongsToCounter]);
+
+  // Valid today's orders (excluding cancelled / rejected orders)
+  const validTodayOrders = useMemo(() => {
+    return todayOrders.filter((o) => {
+      const s = (o.status || "").toLowerCase();
+      return s !== "cancelled" && s !== "rejected";
+    });
+  }, [todayOrders]);
+
+  const todayOrdersCount = validTodayOrders.length;
+
+  // Filtered Today's Orders based on search, status, payment filters
+  const filteredTodayOrders = useMemo(() => {
+    return todayOrders.filter((ord) => {
+      if (todaySearch.trim()) {
+        const q = todaySearch.trim().toLowerCase();
+        const idMatches =
+          ord._id?.toLowerCase().includes(q) ||
+          ord.billNumber?.toLowerCase().includes(q) ||
+          ord.invoiceNumber?.toLowerCase().includes(q) ||
+          String(ord._id || "").slice(-6).toLowerCase().includes(q);
+        const itemMatches = (ord.items || []).some((it) => {
+          const pName = it.productId?.name || it.name || it.productName || "";
+          return pName.toLowerCase().includes(q);
+        });
+        const customerMatches = ord.customerName?.toLowerCase().includes(q);
+        if (!idMatches && !itemMatches && !customerMatches) return false;
+      }
+
+      if (todayStatusFilter !== "ALL") {
+        const s = (ord.status || "").toLowerCase();
+        if (todayStatusFilter === "CONFIRMED" && s !== "confirmed" && s !== "completed") return false;
+        if (todayStatusFilter === "PENDING" && s !== "pending" && s !== "processing") return false;
+        if (todayStatusFilter === "CANCELLED" && s !== "cancelled" && s !== "rejected") return false;
+      }
+
+      if (todayPaymentFilter !== "ALL") {
+        const p = (ord.payment?.method || ord.paymentMethod || "").toLowerCase();
+        if (todayPaymentFilter === "CASH" && p !== "cash") return false;
+        if (todayPaymentFilter === "ONLINE" && p !== "online" && p !== "upi") return false;
+      }
+
+      return true;
+    });
+  }, [todayOrders, todaySearch, todayStatusFilter, todayPaymentFilter]);
+
+  // Today's summary statistics
+  const todaySummary = useMemo(() => {
+    const totalCount = validTodayOrders.length;
+    const completedOrders = validTodayOrders.filter(
+      (o) => o.status === "Confirmed" || o.status === "Completed"
+    );
+    const completedCount = completedOrders.length;
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    return { totalCount, completedCount, totalRevenue };
+  }, [validTodayOrders]);
+
+  // Format order object to feed into ThermalReceipt component
+  const formatOrderForReceipt = useCallback((ord) => {
+    if (!ord) return null;
+    const items = (ord.items || []).map((it, idx) => ({
+      name: it.name || it.productId?.name || it.productName || `Item ${idx + 1}`,
+      quantity: it.quantity || 1,
+      price: it.price || it.sellingPrice || it.productId?.price || 0,
+    }));
+    const pMethod = ord.payment?.method || ord.paymentMethod || "CASH";
+    const amtReceived =
+      ord.payment?.receivedAmount !== undefined && ord.payment?.receivedAmount !== null
+        ? ord.payment.receivedAmount
+        : ord.amountReceived !== undefined
+        ? ord.amountReceived
+        : ord.totalAmount || 0;
+    const changeGiven =
+      ord.payment?.changeReturned !== undefined && ord.payment?.changeReturned !== null
+        ? ord.payment.changeReturned
+        : ord.changeGiven !== undefined
+        ? ord.changeGiven
+        : 0;
+
+    const counterName =
+      (typeof ord.counter === "object" ? ord.counter?.name : null) ||
+      ord.counterName ||
+      user?.counter?.name ||
+      user?.counterName ||
+      user?.name ||
+      "Counter 1";
+
+    const staffName =
+      ord.staffName ||
+      (typeof ord.staffId === "object" ? ord.staffId?.name : null) ||
+      (typeof ord.confirmedBy === "object" ? ord.confirmedBy?.name : null) ||
+      null;
+
+    return {
+      _id: ord.billNumber || ord.invoiceNumber || ord._id,
+      items,
+      totalAmount: ord.totalAmount || 0,
+      amountReceived: amtReceived,
+      changeGiven: changeGiven,
+      paymentMethod: pMethod,
+      createdAt: ord.createdAt || new Date().toISOString(),
+      customerName: ord.customerName || null,
+      counter: ord.counter || user?.counter || { name: counterName },
+      counterName: counterName,
+      staffName: staffName,
+    };
+  }, [user]);
+
+  // Trigger reprint
+  const handleReprintOrder = useCallback((orderToPrint) => {
+    if (!orderToPrint) return;
+    const formatted = formatOrderForReceipt(orderToPrint);
+    setReprintOrder(formatted);
+    toast.success(`Preparing receipt #${String(formatted._id).slice(-6).toUpperCase()}...`, {
+      icon: "🖨️",
+    });
+    setTimeout(() => {
+      window.print();
+    }, 250);
+  }, [formatOrderForReceipt]);
 
   useEffect(() => {
     const token = localStorage.getItem("counterToken");
@@ -297,6 +664,9 @@ function ConsumerPageContent() {
       };
 
       setLastOrder(receiptOrder);
+      if (data) {
+        setOrders((prev) => [data, ...prev.filter((o) => o._id !== data._id)]);
+      }
 
       toast.success(
         `Order placed successfully! Change: ₹${changeAmount.toFixed(2)} 🎉`,
@@ -419,6 +789,9 @@ function ConsumerPageContent() {
         };
 
         setLastOrder(receiptOrder);
+        if (order) {
+          setOrders((prev) => [order, ...prev.filter((o) => o._id !== order._id)]);
+        }
 
         toast.success("Payment successful! Order placed 🎉", { duration: 4000 });
 
@@ -655,14 +1028,38 @@ function ConsumerPageContent() {
                 placeholder="Search products..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-10 md:h-11 rounded-xl pl-9 pr-3 bg-gray-100 dark:bg-gray-800 border-0 focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium transition-all"
+                className="w-full h-10 md:h-11 rounded-xl pl-9 pr-3 bg-gray-100 dark:bg-gray-800 border-0 focus:ring-2 focus:ring-indigo-500/30 text-sm font-medium transition-all text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               />
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              
+              {/* THEME */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs"
+                title="Toggle theme"
+                aria-label="Toggle theme"
+              >
+                {theme === "dark" ? (
+                  <FiSun className="text-yellow-500 text-base" />
+                ) : (
+                  <FiMoon className="text-slate-600 dark:text-slate-300 text-base" />
+                )}
+              </button>
 
-              
+              {/* Today's Orders Button */}
+              <button
+                onClick={() => setShowTodayOrders(true)}
+                className="h-10 px-3 sm:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-800 dark:text-slate-100 font-semibold text-xs sm:text-sm flex items-center gap-1.5 border border-slate-200/80 dark:border-gray-700 transition-all shadow-xs active:scale-95"
+                title="View Today's Orders (IST)"
+              >
+               
+                <span className="hidden sm:inline">Today&apos;s Orders</span>
+                {/* <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[11px] font-bold leading-none min-w-[20px] text-center">
+                  {todayOrdersCount}
+                </span> */}
+              </button>
 
               <button
                 onClick={handleLogout}
@@ -1018,12 +1415,452 @@ function ConsumerPageContent() {
         isProcessing={isOrderConfirming}
       />
 
-      {/* ✅ Silent print target — invisible on screen, only prints */}
-      {lastOrder && (
-        <div id="thermal-receipt-container" className="hidden print:block">
-          <ThermalReceipt order={lastOrder} counter={user?.counter || { counterName: counterDisplayName, name: counterDisplayName }} />
+      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* 🥈 TODAY'S ORDERS MODAL                                             */}
+      {/* ────────────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showTodayOrders && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 print:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTodayOrders(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-xs border border-indigo-100 dark:border-indigo-900">
+                    🥈
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        Today&apos;s Orders
+                        <span className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                          ({todayOrdersCount} {todayOrdersCount === 1 ? "Order" : "Orders"})
+                        </span>
+                      </h2>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        IST Live
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
+                      <span>{formatISTDate(new Date())}</span>
+                      <span>•</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {counterDisplayName}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTodayOrders(false)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <FiX className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
+                  <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Today&apos;s Orders
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+                    {todayOrdersCount}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
+                  <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                    Completed
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                    {todaySummary.completedCount}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-750 shadow-xs">
+                  <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                    Today&apos;s Revenue
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+                    ₹{todaySummary.totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & Filter Controls */}
+              <div className="p-4 border-b border-gray-200 dark:border-gray-800 space-y-3 bg-white dark:bg-gray-900">
+                <div className="relative">
+                  <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={todaySearch}
+                    onChange={(e) => setTodaySearch(e.target.value)}
+                    placeholder="Search by Order ID (#1045), product name..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-0 text-sm font-medium focus:ring-2 focus:ring-indigo-500/30 dark:text-white placeholder-gray-400"
+                  />
+                  {todaySearch && (
+                    <button
+                      onClick={() => setTodaySearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                    >
+                      <FiX className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  {/* Status Filters */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-gray-400 font-medium mr-1">Status:</span>
+                    {[
+                      { id: "ALL", label: "All" },
+                      { id: "CONFIRMED", label: "Completed" },
+                      { id: "PENDING", label: "Pending" },
+                      { id: "CANCELLED", label: "Cancelled" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setTodayStatusFilter(tab.id)}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                          todayStatusFilter === tab.id
+                            ? "bg-indigo-600 text-white shadow-xs"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Payment Filters */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-gray-400 font-medium mr-1">Payment:</span>
+                    {[
+                      { id: "ALL", label: "All" },
+                      { id: "CASH", label: "Cash" },
+                      { id: "ONLINE", label: "Online" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setTodayPaymentFilter(tab.id)}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                          todayPaymentFilter === tab.id
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Cards List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[260px] max-h-[50vh]">
+                {ordersLoading && orders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-2" />
+                    <p className="text-sm">Loading today&apos;s orders...</p>
+                  </div>
+                ) : filteredTodayOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 text-2xl mb-3">
+                      📦
+                    </div>
+                    <h3 className="text-base font-bold text-gray-700 dark:text-gray-300">
+                      No orders today
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+                      {todaySearch || todayStatusFilter !== "ALL" || todayPaymentFilter !== "ALL"
+                        ? "Try adjusting your search query or filters."
+                        : "Orders created on this counter today will appear here."}
+                    </p>
+                  </div>
+                ) : (
+                  filteredTodayOrders.map((ord) => {
+                    const shortId = `#ORD-${ord.billNumber || ord.invoiceNumber || String(ord._id || "").slice(-6).toUpperCase()}`;
+                    const timeStr = formatISTTime(ord.createdAt);
+                    const itemCount = (ord.items || []).reduce((sum, it) => sum + (it.quantity || 1), 0);
+                    const itemsPreview = (ord.items || [])
+                      .map((it) => `${it.quantity || 1}x ${it.name || it.productId?.name || it.productName || "Item"}`)
+                      .join(", ");
+                    const payMethod = (ord.payment?.method || ord.paymentMethod || "Cash").toUpperCase();
+                    const isConfirmed = ord.status === "Confirmed" || ord.status === "Completed";
+                    const isPending = ord.status === "Pending" || ord.status === "Processing";
+
+                    return (
+                      <div
+                        key={ord._id}
+                        className="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/90 dark:border-gray-750 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all shadow-xs hover:shadow-sm"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          {/* Left Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="font-mono font-bold text-sm text-gray-900 dark:text-white">
+                                {shortId}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <FiClock className="w-3.5 h-3.5" />
+                                {timeStr}
+                              </span>
+                              {/* Status Badge */}
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                                  isConfirmed
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                                    : isPending
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                                    : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                                }`}
+                              >
+                                {ord.status || "Completed"}
+                              </span>
+                              {/* Payment Badge */}
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                {payMethod}
+                              </span>
+                            </div>
+
+                            {/* Items Preview */}
+                            <p className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-lg mt-0.5">
+                              <span className="font-semibold text-gray-700 dark:text-gray-200">
+                                {itemCount} {itemCount === 1 ? "Item" : "Items"}
+                              </span>
+                              {itemsPreview ? ` • ${itemsPreview}` : ""}
+                            </p>
+                          </div>
+
+                          {/* Right Amount & Actions */}
+                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-750">
+                            <div className="text-right">
+                              <div className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                                ₹{(ord.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {/* View Details */}
+                              <button
+                                onClick={() => setSelectedOrderForView(ord)}
+                                className="px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 text-xs font-semibold flex items-center gap-1 transition-colors"
+                              >
+                                <FiEye className="w-3.5 h-3.5" />
+                                <span>View</span>
+                              </button>
+
+                              {/* Reprint Bill */}
+                              <button
+                                onClick={() => handleReprintOrder(ord)}
+                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-indigo-200/60 dark:border-indigo-800/60"
+                                title="Reprint 80mm Receipt"
+                              >
+                                <FiPrinter className="w-3.5 h-3.5" />
+                                <span>Reprint Bill</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  Showing {filteredTodayOrders.length} of {todayOrders.length} orders
+                </span>
+                <button
+                  onClick={() => setShowTodayOrders(false)}
+                  className="px-4 py-1.5 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+
+
+      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* 👁️ ORDER DETAILS MODAL                                             */}
+      {/* ────────────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedOrderForView && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 print:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedOrderForView(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 1, y: 0 }}
+              className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                    Order Details
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    #ORD-{selectedOrderForView.billNumber || selectedOrderForView.invoiceNumber || String(selectedOrderForView._id).slice(-6).toUpperCase()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedOrderForView(null)}
+                  className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Order Meta */}
+              <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
+                    <span className="text-gray-400 block">Date & Time (IST)</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {formatISTDateTime(selectedOrderForView.createdAt)}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
+                    <span className="text-gray-400 block">Status</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {selectedOrderForView.status || "Completed"}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
+                    <span className="text-gray-400 block">Counter</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {(typeof selectedOrderForView.counter === "object" ? selectedOrderForView.counter?.name : null) || selectedOrderForView.counterName || counterDisplayName}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800">
+                    <span className="text-gray-400 block">Payment Mode</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {(selectedOrderForView.payment?.method || selectedOrderForView.paymentMethod || "Cash").toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Items ({selectedOrderForView.items?.length || 0})
+                  </h4>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
+                    {(selectedOrderForView.items || []).map((it, idx) => {
+                      const itemName = it.name || it.productId?.name || it.productName || `Item ${idx + 1}`;
+                      const qty = it.quantity || 1;
+                      const price = it.price || it.sellingPrice || 0;
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-2.5 text-xs bg-white dark:bg-gray-850">
+                          <div>
+                            <span className="font-medium text-gray-800 dark:text-gray-200">
+                              {itemName}
+                            </span>
+                            <span className="text-gray-400 block text-[11px]">
+                              {qty} × ₹{price.toFixed(2)}
+                            </span>
+                          </div>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            ₹{(qty * price).toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Financial Breakdown */}
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 text-xs space-y-1.5 border border-gray-200/60 dark:border-gray-700/60">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                    <span>Grand Total:</span>
+                    <span className="font-bold text-gray-900 dark:text-white text-sm">
+                      ₹{(selectedOrderForView.totalAmount || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  {selectedOrderForView.payment?.receivedAmount !== undefined && (
+                    <div className="flex justify-between text-gray-500">
+                      <span>Amount Received:</span>
+                      <span>₹{(selectedOrderForView.payment.receivedAmount || 0).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {selectedOrderForView.payment?.changeReturned !== undefined && (
+                    <div className="flex justify-between text-gray-500">
+                      <span>Change Returned:</span>
+                      <span>₹{(selectedOrderForView.payment.changeReturned || 0).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-850/70 flex items-center justify-between">
+                <button
+                  onClick={() => setSelectedOrderForView(null)}
+                  className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold text-xs transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    handleReprintOrder(selectedOrderForView);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                >
+                  <FiPrinter className="w-3.5 h-3.5" />
+                  <span>Reprint Bill</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ Thermal Receipt print target — invisible on screen, only prints */}
+      {reprintOrder ? (
+        <div id="reprint-modal-container" className="hidden print:block">
+          <ThermalReceipt
+            order={reprintOrder}
+            counter={user?.counter || { counterName: counterDisplayName, name: counterDisplayName }}
+          />
         </div>
-      )}
+      ) : lastOrder ? (
+        <div id="thermal-receipt-container" className="hidden print:block">
+          <ThermalReceipt
+            order={lastOrder}
+            counter={user?.counter || { counterName: counterDisplayName, name: counterDisplayName }}
+          />
+        </div>
+      ) : null}
 
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {

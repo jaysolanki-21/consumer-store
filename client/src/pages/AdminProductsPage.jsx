@@ -374,10 +374,10 @@ export default function AdminProductsPage() {
       {/* HEADER */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-white">
+          <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
             Product Management
           </h1>
-          <p className="text-slate-500 mt-1 text-sm">
+          <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
             Manage inventory, visibility and stock
           </p>
         </div>
@@ -424,44 +424,98 @@ export default function AdminProductsPage() {
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-indigo-100 text-sm">Total Products</p>
-              <p className="text-3xl font-bold mt-1">{stats.total}</p>
+        {/* Total Products */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Total Products
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/80 dark:border-indigo-500/20 flex items-center justify-center">
+                <FiPackage className="text-base" />
+              </div>
             </div>
-            <FiPackage className="text-3xl text-indigo-200" />
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {stats.total}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Active in catalog
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-100 text-sm">Visible Products</p>
-              <p className="text-3xl font-bold mt-1">{stats.visible}</p>
+        {/* Visible Products */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Visible Products
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-500/20 flex items-center justify-center">
+                <FiEye className="text-base" />
+              </div>
             </div>
-            <FiEye className="text-3xl text-emerald-200" />
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {stats.visible}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Available on customer store & POS
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-slate-300 text-sm">Hidden Products</p>
-              <p className="text-3xl font-bold mt-1">{stats.hidden}</p>
+        {/* Hidden Products */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Hidden Products
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center">
+                <FiEyeOff className="text-base" />
+              </div>
             </div>
-            <FiEyeOff className="text-3xl text-slate-300" />
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {stats.hidden}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Temporarily unlisted from store
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-xl p-4 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-orange-100 text-sm">Low Stock Alerts</p>
-              <p className="text-3xl font-bold mt-1">{stats.lowStock}</p>
+        {/* Low Stock Alerts */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                Low Stock Alerts
+              </span>
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  stats.lowStock > 0
+                    ? "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100/80 dark:border-rose-500/20"
+                    : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-500/20"
+                }`}
+              >
+                <FiAlertTriangle className="text-base" />
+              </div>
             </div>
-            <FiAlertTriangle className="text-3xl text-orange-200" />
+            <p
+              className={`text-2xl sm:text-[28px] font-bold mt-2.5 truncate tabular-nums ${
+                stats.lowStock > 0
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-slate-900 dark:text-[#F8FAFC]"
+              }`}
+            >
+              {stats.lowStock}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            {stats.lowStock > 0
+              ? "Requires inventory restock"
+              : "Healthy inventory levels"}
+          </p>
         </div>
       </div>
 

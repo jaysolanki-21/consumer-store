@@ -272,17 +272,17 @@ export default function AdminCategoriesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
             Category Management
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
             Manage product categories for your store
           </p>
         </div>
 
         <button
           onClick={openAddModal}
-          className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-3 rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-2xl shadow-lg transition active:scale-95 font-semibold text-sm"
         >
           <FiPlus />
           Add Category
@@ -290,33 +290,45 @@ export default function AdminCategoriesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-indigo-100 text-sm font-medium">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        {/* Total Categories */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Categories
-              </p>
-              <p className="text-3xl font-bold mt-1">{categories.length}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/80 dark:border-indigo-500/20 flex items-center justify-center">
+                <FiFolder className="text-base" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiFolder className="text-2xl text-white" />
-            </div>
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {categories.length}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Active store catalog categories
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg hover:-translate-y-1 transition-all duration-300">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-100 text-sm font-medium">
+        {/* Total Products */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Products
-              </p>
-              <p className="text-3xl font-bold mt-1">{products.length}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-500/20 flex items-center justify-center">
+                <FiPackage className="text-base" />
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiPackage className="text-2xl text-white" />
-            </div>
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {products.length}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Catalog items across all categories
+          </p>
         </div>
       </div>
 

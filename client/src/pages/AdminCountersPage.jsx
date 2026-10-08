@@ -309,80 +309,104 @@ export default function AdminCountersPage() {
       {/* ---------- HEADER ---------- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+          <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
             Counter Management
           </h1>
-          <p className="text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
             Manage counter login accounts and availability.
           </p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+          className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 text-sm"
         >
           <FiPlus /> Add Counter
         </button>
       </div>
 
       {/* ---------- STATS CARDS (Realtime Presence Cards) ---------- */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-indigo-100 text-xs font-medium uppercase tracking-wider">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {/* Total Counters */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
                 Total Counters
-              </p>
-              <p className="text-2xl font-bold mt-1">{stats.total}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/80 dark:border-indigo-500/20 flex items-center justify-center">
+                <FiMonitor className="text-base" />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiMonitor className="text-xl text-white" />
-            </div>
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {stats.total}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Configured checkout terminals
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+        {/* Online Counters */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Online
-              </p>
-              <p className="text-2xl font-bold mt-1">{stats.online}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-500/20 flex items-center justify-center">
+                <FiActivity className="text-base" />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiActivity className="text-xl text-white" />
-            </div>
+            <p className="text-2xl sm:text-[28px] font-bold text-emerald-600 dark:text-emerald-400 mt-2.5 truncate tabular-nums">
+              {stats.online}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Active and serving customers
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-500 to-slate-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-slate-200 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-slate-300" />
+        {/* Offline Counters */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
                 Offline
-              </p>
-              <p className="text-2xl font-bold mt-1">{stats.offline}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center">
+                <FiMonitor className="text-base" />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiMonitor className="text-xl text-white" />
-            </div>
+            <p className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] mt-2.5 truncate tabular-nums">
+              {stats.offline}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Inactive or signed out
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-4 text-white shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-rose-100 text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-white" />
+        {/* Disabled Counters */}
+        <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
                 Disabled
-              </p>
-              <p className="text-2xl font-bold mt-1">{stats.disabled}</p>
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100/80 dark:border-rose-500/20 flex items-center justify-center">
+                <FiXCircle className="text-base" />
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <FiXCircle className="text-xl text-white" />
-            </div>
+            <p className={`text-2xl sm:text-[28px] font-bold mt-2.5 truncate tabular-nums ${stats.disabled > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-[#F8FAFC]"}`}>
+              {stats.disabled}
+            </p>
           </div>
+          <p className="text-xs text-slate-500 dark:text-[#94A3B8] mt-3 font-normal">
+            Restricted from billing access
+          </p>
         </div>
       </div>
 

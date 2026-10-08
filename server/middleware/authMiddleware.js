@@ -34,3 +34,11 @@ export const staffOrAdmin = (req, res, next) => {
     res.status(403).json({ message: 'Staff or admin access required' });
   }
 };
+
+export const counterStaffOrAdmin = (req, res, next) => {
+  if (req.user && (req.user.role === 'counter' || req.user.role === 'staff' || req.user.role === 'admin')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Authorized access required' });
+  }
+};

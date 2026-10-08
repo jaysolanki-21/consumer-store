@@ -2,6 +2,7 @@ import express from 'express';
 import { 
   createOrder, 
   getOrders, 
+  getOrderById,
   confirmOrder, 
   cancelOrder, 
   revertOrder, 
@@ -13,19 +14,21 @@ import {
   updatePrintStatus,
   resetReservedStock
 } from '../controllers/orderController.js';
-import { adminOnly, protect, staffOrAdmin } from '../middleware/authMiddleware.js';
+import { adminOnly, protect, staffOrAdmin, counterStaffOrAdmin } from '../middleware/authMiddleware.js';
+import { checkMaintenanceMode } from '../middleware/maintenanceMiddleware.js';
 
 const router = express.Router();
 
 // Public routes (no auth required for creating order)
-router.post('/', createOrder);
+router.post('/', checkMaintenanceMode, createOrder);
 
 // Protected routes
-router.get('/', protect, staffOrAdmin, getOrders);
+router.get('/', protect, counterStaffOrAdmin, getOrders);
+router.get('/:id', protect, counterStaffOrAdmin, getOrderById);
 
 // Order status management
-router.put('/:id/confirm', protect, staffOrAdmin, confirmOrder);
-router.put('/:id/cancel', protect, staffOrAdmin, cancelOrder);
+router.put('/:id/confirm', protect, staffOrAdmin, checkMaintenanceMode, confirmOrder);
+router.put('/:id/cancel', protect, staffOrAdmin, checkMaintenanceMode, cancelOrder);
 router.put('/:id/revert', protect, adminOnly, revertOrder);
 
 // Payment and print management

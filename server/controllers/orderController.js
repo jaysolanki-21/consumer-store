@@ -136,7 +136,77 @@ export const createOrder = async (req, res) => {
 
 export const getOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
+    let query = {};
+    const isCounterRole = req.user && req.user.role === 'counter';
+    const paramCounter = req.query.counterId || req.query.counter;
+
+    if (isCounterRole || paramCounter) {
+      let counterDoc = null;
+      if (isCounterRole) {
+        counterDoc = await Counter.findOne({ userId: req.user._id });
+      } else if (paramCounter && mongoose.Types.ObjectId.isValid(paramCounter)) {
+        counterDoc = await Counter.findById(paramCounter);
+        if (!counterDoc) counterDoc = await Counter.findOne({ userId: paramCounter });
+      } else if (paramCounter && typeof paramCounter === 'string') {
+        counterDoc = await Counter.findOne({ name: paramCounter });
+      }
+
+      const counterConditions = [];
+      if (counterDoc) {
+        counterConditions.push({ counter: counterDoc._id });
+        counterConditions.push({ counterId: counterDoc._id.toString() });
+        counterConditions.push({ counterName: counterDoc.name });
+      }
+      if (paramCounter) {
+        counterConditions.push({ counterId: paramCounter.toString() });
+        counterConditions.push({ counterName: paramCounter.toString() });
+        if (mongoose.Types.ObjectId.isValid(paramCounter)) {
+          counterConditions.push({ counter: paramCounter });
+        }
+      }
+      if (isCounterRole && req.user?._id) {
+        counterConditions.push({ counterId: req.user._id.toString() });
+        counterConditions.push({ counterName: req.user.name });
+        if (mongoose.Types.ObjectId.isValid(req.user._id)) {
+          counterConditions.push({ counter: req.user._id });
+        }
+      }
+      if (counterConditions.length > 0) {
+        query.$or = counterConditions;
+      }
+    }
+
+    // Support Asia/Kolkata (IST) today filtering
+    if (req.query.today === 'true' || req.query.date === 'today') {
+      const now = new Date();
+      const istDateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(now);
+      const [y, m, d] = istDateStr.split('-').map(Number);
+      const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+      const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (5.5 * 60 * 60 * 1000));
+
+      if (query.$or) {
+        query = {
+          $and: [
+            { $or: query.$or },
+            { createdAt: { $gte: startOfDay, $lte: endOfDay } }
+          ]
+        };
+      } else {
+        query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+      }
+    }
+
+    if (req.query.countOnly === 'true') {
+      const count = await Order.countDocuments(query);
+      return res.json({ count });
+    }
+
+    const orders = await Order.find(query)
       .populate('items.productId')
       .populate('confirmedBy', 'name email')
       .populate('staffId', 'name email')
@@ -147,6 +217,64 @@ export const getOrders = async (req, res) => {
       })
       .sort({ createdAt: -1 });
     res.json(orders);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query = { _id: id };
+    } else {
+      query = {
+        $or: [
+          { invoiceNumber: id },
+          { billNumber: id }
+        ]
+      };
+    }
+
+    if (req.user && req.user.role === 'counter') {
+      const counterDoc = await Counter.findOne({ userId: req.user._id });
+      const counterConditions = [
+        { counterId: req.user._id.toString() },
+        { counterName: req.user.name }
+      ];
+      if (counterDoc) {
+        counterConditions.push({ counter: counterDoc._id });
+        counterConditions.push({ counterId: counterDoc._id.toString() });
+        counterConditions.push({ counterName: counterDoc.name });
+      }
+      if (mongoose.Types.ObjectId.isValid(req.user._id)) {
+        counterConditions.push({ counter: req.user._id });
+      }
+      query = {
+        $and: [
+          query,
+          { $or: counterConditions }
+        ]
+      };
+    }
+
+    const order = await Order.findOne(query)
+      .populate('items.productId')
+      .populate('confirmedBy', 'name email')
+      .populate('staffId', 'name email')
+      .populate({
+        path: 'counter',
+        select: 'name description userId',
+        populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
+      });
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    res.json(order);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
