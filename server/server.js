@@ -14,6 +14,7 @@ import cashfreeRoutes from './routes/cashfreeRoutes.js';
 import insightsRoutes from './routes/insightsRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import auditLogRoutes from './routes/auditLogRoutes.js';
+import backupRoutes from './routes/backupRoutes.js';
 import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './sockets/ioInstance.js';
@@ -72,6 +73,7 @@ app.use('/api/payments/cashfree', cashfreeRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/backup', backupRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });

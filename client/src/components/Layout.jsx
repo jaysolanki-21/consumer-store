@@ -248,7 +248,7 @@ export default function Layout({ children }) {
             {!sidebarCollapsed && (
               <div className="leading-tight">
                 <h1 className="text-base font-bold text-slate-900 dark:text-white">
-                  Store
+                  APC Store
                 </h1>
                 <p className="text-[10px] uppercase tracking-wider text-slate-400">
                   Admin Panel
