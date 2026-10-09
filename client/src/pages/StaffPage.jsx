@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
 import socket from "../services/socket";
 import PaginationBar from "../components/PaginationBar";
+import ConfirmationModal from "../components/ConfirmationModal";
 
 import {
   FiCheckCircle,
@@ -342,7 +343,7 @@ function StaffOrderCard({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onConfirm(order._id);
+                      onConfirm(order);
                     }}
                     disabled={isConfirming}
                     className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
@@ -399,8 +400,10 @@ export default function StaffPage() {
   // Accordion: only one order expanded at a time
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  // Action loading state
+  // Action loading state & Confirmation Modal state
   const [confirmingId, setConfirmingId] = useState(null);
+  const [orderToConfirm, setOrderToConfirm] = useState(null);
+  const [isConfirmingModal, setIsConfirmingModal] = useState(false);
 
   // Sound Toggle
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -466,6 +469,7 @@ export default function StaffPage() {
           counter: filterCounter,
           payment: filterPayment,
           paginate: "true",
+          sort: activeTab === "pending" ? "asc" : "desc",
         };
 
         if (filter.trim()) {
@@ -564,72 +568,88 @@ export default function StaffPage() {
     handleDateChange(next);
   };
 
-  // ── CONFIRM ORDER ACTION ──
-  const handleConfirmOrder = useCallback(
-    async (orderId) => {
-      if (confirmingId) return;
-      try {
-        setConfirmingId(orderId);
+  // ── OPEN CONFIRMATION MODAL ──
+  const handleOpenConfirmModal = useCallback((order) => {
+    if (!order) return;
+    setOrderToConfirm(order);
+  }, []);
 
-        // Track local confirmation to avoid double-processing when Socket.IO event arrives
-        processedEventsRef.current.add(`confirm-${orderId}`);
+  // ── CONFIRM ORDER ACTION (TRIGGERED FROM CONFIRMATION MODAL) ──
+  const handleConfirmModalSubmit = useCallback(async () => {
+    if (!orderToConfirm || confirmingId) return;
+    const orderId = orderToConfirm._id;
+    try {
+      setIsConfirmingModal(true);
+      setConfirmingId(orderId);
 
-        // 1. Immediately remove from current list if on pending tab
-        if (activeTab === "pending") {
-          setOrders((prev) => prev.filter((o) => o._id !== orderId));
-          setTotalItems((prev) => Math.max(0, prev - 1));
-        }
+      // Track local confirmation to avoid double-processing when Socket.IO event arrives
+      processedEventsRef.current.add(`confirm-${orderId}`);
 
-        // 2. Immediately update badge stats
-        setStats((prev) => ({
-          ...prev,
-          pending: Math.max(0, (prev.pending || 1) - 1),
-          confirmed: (prev.confirmed || 0) + 1,
-        }));
+      // Send API request
+      const { data } = await api.put(`/orders/${orderId}/confirm`);
 
-        // 3. Close expanded accordion
-        if (expandedOrderId === orderId) {
-          setExpandedOrderId(null);
-        }
-
-        toast.success("Order confirmed successfully", {
-          id: `confirm-${orderId}`,
-          ...STAFF_TOAST_CONFIG,
+      // 1. Immediately remove from current list if on pending tab
+      if (activeTab === "pending") {
+        setOrders((prev) => prev.filter((o) => o._id !== orderId));
+        setTotalItems((prev) => {
+          const next = Math.max(0, prev - 1);
+          setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+          return next;
         });
-
-        // 4. Send API request
-        const { data } = await api.put(`/orders/${orderId}/confirm`);
-
-        // 5. If user is currently on confirmed tab, add/update it
-        if (activeTab === "confirmed" && data) {
-          setOrders((prev) => {
-            if (prev.some((o) => o._id === orderId)) {
-              return prev.map((o) =>
-                o._id === orderId ? { ...o, ...data, status: "Confirmed" } : o
-              );
-            }
-            return [{ ...data, status: "Confirmed" }, ...prev.slice(0, pageSize - 1)];
-          });
-          setTotalItems((prev) => prev + 1);
-        }
-
-        // 6. If page became empty on pending tab and page > 1, go to previous page
-        if (activeTab === "pending" && orders.length <= 1 && page > 1) {
-          setPage((p) => Math.max(1, p - 1));
-        }
-      } catch (err) {
-        console.error("Failed to confirm order:", err);
-        // Rollback on error
-        fetchOrders();
-        toast.error(err.response?.data?.message || "Failed to confirm order", {
-          ...STAFF_TOAST_CONFIG,
-        });
-      } finally {
-        setConfirmingId(null);
       }
-    },
-    [confirmingId, orders, activeTab, expandedOrderId, page, pageSize, fetchOrders]
-  );
+
+      // 2. Immediately update badge stats
+      setStats((prev) => ({
+        ...prev,
+        pending: Math.max(0, (prev.pending || 1) - 1),
+        confirmed: (prev.confirmed || 0) + 1,
+      }));
+
+      // 3. Close expanded accordion if this order was expanded
+      if (expandedOrderId === orderId) {
+        setExpandedOrderId(null);
+      }
+
+      toast.success("Order confirmed successfully", {
+        id: `confirm-${orderId}`,
+        ...STAFF_TOAST_CONFIG,
+      });
+
+      // 4. Close confirmation dialog on success
+      setOrderToConfirm(null);
+
+      // 5. If user is currently on confirmed tab, add/update it
+      if (activeTab === "confirmed" && data) {
+        setOrders((prev) => {
+          if (prev.some((o) => o._id === orderId)) {
+            return prev.map((o) =>
+              o._id === orderId ? { ...o, ...data, status: "Confirmed" } : o
+            );
+          }
+          return [{ ...data, status: "Confirmed" }, ...prev.slice(0, pageSize - 1)];
+        });
+        setTotalItems((prev) => {
+          const next = prev + 1;
+          setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+          return next;
+        });
+      }
+
+      // 6. If page became empty on pending tab and page > 1, go to previous page
+      if (activeTab === "pending" && orders.length <= 1 && page > 1) {
+        setPage((p) => Math.max(1, p - 1));
+      }
+    } catch (err) {
+      console.error("Failed to confirm order:", err);
+      // On failure, keep the order unchanged and show error message
+      toast.error(err.response?.data?.message || "Failed to confirm order", {
+        ...STAFF_TOAST_CONFIG,
+      });
+    } finally {
+      setIsConfirmingModal(false);
+      setConfirmingId(null);
+    }
+  }, [orderToConfirm, confirmingId, activeTab, expandedOrderId, pageSize, orders.length, page]);
 
   // ── REALTIME SOCKET.IO EVENT HANDLERS ──
   useEffect(() => {
@@ -655,17 +675,22 @@ export default function StaffPage() {
         total: (prev.total || 0) + 1,
       }));
 
-      // If viewing pending tab on page 1 and matches filters, prepend to current page
+      // If viewing pending tab and matches filters, append to the bottom of the list
       if (
         activeTab === "pending" &&
-        page === 1 &&
         matchesFilters(order, { filterDate, filterCounter, filterPayment, filter })
       ) {
         setOrders((prev) => {
+          // Prevent duplicates
           if (prev.some((o) => o._id === order._id)) return prev;
-          return [order, ...prev.slice(0, pageSize - 1)];
+          // Append newly received order at the bottom of the list
+          return [...prev, order];
         });
-        setTotalItems((prev) => prev + 1);
+        setTotalItems((prev) => {
+          const next = prev + 1;
+          setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+          return next;
+        });
       }
     };
 
@@ -676,7 +701,7 @@ export default function StaffPage() {
       setLivePulse(true);
       setTimeout(() => setLivePulse(false), 1500);
 
-      // Check if we already handled this order locally via handleConfirmOrder
+      // Check if we already handled this order locally via handleConfirmModalSubmit
       const wasLocalConfirm = processedEventsRef.current.has(`confirm-${id}`);
 
       if (!wasLocalConfirm) {
@@ -692,11 +717,17 @@ export default function StaffPage() {
       if (activeTab === "pending") {
         setOrders((prev) => prev.filter((o) => o._id !== id));
         if (!wasLocalConfirm) {
-          setTotalItems((prev) => Math.max(0, prev - 1));
+          setTotalItems((prev) => {
+            const next = Math.max(0, prev - 1);
+            setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+            return next;
+          });
         }
         if (expandedOrderId === id) {
           setExpandedOrderId(null);
         }
+        // If modal was open for this order, close it
+        setOrderToConfirm((current) => (current?._id === id ? null : current));
       }
 
       // If viewing confirmed tab, ADD/UPDATE the order if it matches filters
@@ -711,7 +742,11 @@ export default function StaffPage() {
             return [order, ...prev.slice(0, pageSize - 1)];
           });
           if (!wasLocalConfirm) {
-            setTotalItems((prev) => prev + 1);
+            setTotalItems((prev) => {
+              const next = prev + 1;
+              setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+              return next;
+            });
           }
         }
       }
@@ -733,10 +768,16 @@ export default function StaffPage() {
       // If viewing pending tab, remove it
       if (activeTab === "pending") {
         setOrders((prev) => prev.filter((o) => o._id !== id));
-        setTotalItems((prev) => Math.max(0, prev - 1));
+        setTotalItems((prev) => {
+          const next = Math.max(0, prev - 1);
+          setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+          return next;
+        });
         if (expandedOrderId === id) {
           setExpandedOrderId(null);
         }
+        // If modal was open for this order, close it
+        setOrderToConfirm((current) => (current?._id === id ? null : current));
       }
     };
 
@@ -754,21 +795,29 @@ export default function StaffPage() {
         confirmed: Math.max(0, (prev.confirmed || 1) - 1),
       }));
 
-      // If on pending tab, add it if it matches filters
+      // If on pending tab, append it at the bottom if it matches filters
       if (activeTab === "pending") {
         if (matchesFilters(order, { filterDate, filterCounter, filterPayment, filter })) {
           setOrders((prev) => {
             if (prev.some((o) => o._id === id)) return prev;
-            return [order, ...prev.slice(0, pageSize - 1)];
+            return [...prev, order];
           });
-          setTotalItems((prev) => prev + 1);
+          setTotalItems((prev) => {
+            const next = prev + 1;
+            setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+            return next;
+          });
         }
       }
 
       // If on confirmed tab, remove it
       if (activeTab === "confirmed") {
         setOrders((prev) => prev.filter((o) => o._id !== id));
-        setTotalItems((prev) => Math.max(0, prev - 1));
+        setTotalItems((prev) => {
+          const next = Math.max(0, prev - 1);
+          setTotalPages(Math.max(1, Math.ceil(next / pageSize)));
+          return next;
+        });
         if (expandedOrderId === id) {
           setExpandedOrderId(null);
         }
@@ -1022,7 +1071,7 @@ export default function StaffPage() {
                   prev === order._id ? null : order._id
                 )
               }
-              onConfirm={handleConfirmOrder}
+              onConfirm={handleOpenConfirmModal}
               isConfirming={confirmingId === order._id}
             />
           ))
@@ -1049,6 +1098,27 @@ export default function StaffPage() {
           />
         </div>
       )}
+
+      {/* ── CONFIRMATION MODAL ── */}
+      <ConfirmationModal
+        isOpen={Boolean(orderToConfirm)}
+        onClose={() => {
+          if (!isConfirmingModal) {
+            setOrderToConfirm(null);
+          }
+        }}
+        onConfirm={handleConfirmModalSubmit}
+        type="confirm"
+        title="Confirm Order"
+        subtitle="Review the order details before confirming it."
+        headline="Confirm this order?"
+        subtext="Stock will be deducted and the order will be marked as confirmed."
+        order={orderToConfirm}
+        counterName={orderToConfirm ? getCounterName(orderToConfirm) : undefined}
+        confirmText="Confirm Order"
+        confirmLoadingText="Confirming..."
+        isLoading={isConfirmingModal}
+      />
     </div>
   );
 }

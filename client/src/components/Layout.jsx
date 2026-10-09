@@ -23,6 +23,7 @@ import {
   FiChevronRight,
   FiChevronDown,
   FiSettings,
+  FiShield,
 } from "react-icons/fi";
 
 export default function Layout({ children }) {
@@ -135,7 +136,10 @@ export default function Layout({ children }) {
   // =========================
   // LOGOUT
   // =========================
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (e) {}
     if (user && user._id) {
       socket.emit("userDisconnected", user._id);
     }
@@ -189,6 +193,7 @@ export default function Layout({ children }) {
     { path: "/admin/counters", label: "Counters", icon: FiGrid },
     { path: "/admin/insights", label: "Insights", icon: FiBarChart2 },
     { path: "/admin/reports", label: "Reports", icon: FiFileText },
+    { path: "/admin/audit", label: "Audit & Logs", icon: FiShield },
     { path: "/admin/settings", label: "Settings", icon: FiSettings },
   ];
 

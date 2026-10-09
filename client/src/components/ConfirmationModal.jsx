@@ -136,18 +136,32 @@ export default function ConfirmationModal({
   // Build summary rows from order object if provided
   const summaryRows = [];
   if (order) {
-    const orderIdStr = order._id ? `#${String(order._id).slice(-8)}` : "N/A";
+    const orderIdStr = order.billNumber
+      ? `#${order.billNumber}`
+      : order.invoiceNumber
+      ? `#${order.invoiceNumber}`
+      : order._id
+      ? `#${String(order._id).slice(-8)}`
+      : "N/A";
     const orderCounter =
       counterName ||
       (order.counter && typeof order.counter === "object" ? order.counter.name : null) ||
       order.counterName ||
       "Counter 1";
-    const amountVal = `₹${Number(order.totalAmount || 0).toLocaleString("en-IN")}`;
+    const paymentMethodVal =
+      order.paymentMethod ||
+      order.payment?.method ||
+      "Cash";
+    const amountVal = `₹${Number(order.totalAmount || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
     const placedTime = formatSummaryDate(order.createdAt);
 
     summaryRows.push({ label: "Order ID", value: orderIdStr, isMono: true });
     summaryRows.push({ label: "Counter", value: orderCounter });
-    summaryRows.push({ label: "Amount", value: amountVal, isAmount: true });
+    summaryRows.push({ label: "Payment Method", value: paymentMethodVal });
+    summaryRows.push({ label: "Total Amount", value: amountVal, isAmount: true });
     summaryRows.push({ label: "Placed", value: placedTime });
   } else if (rows && rows.length > 0) {
     rows.forEach(([k, v]) => {

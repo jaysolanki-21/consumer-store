@@ -24,6 +24,7 @@ import AdminAlertsPage from "./pages/AdminAlertsPage";
 import InsightsPage from "./pages/InsightsPage";
 import AdminCountersPage from "./pages/AdminCountersPage";
 import SalesReportPage from "./pages/SalesReportPage";
+import AdminAuditLogsPage from "./pages/AdminAuditLogsPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 
 function App() {
@@ -359,6 +360,14 @@ function App() {
           element={
             <ProtectedRoute roles={["admin"]}>
               <Layout><AdminCountersPage /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/audit"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <Layout><AdminAuditLogsPage /></Layout>
             </ProtectedRoute>
           }
         />

@@ -1,6 +1,7 @@
 import Product from '../models/Product.js';
 import imagekit from '../config/imagekit.js';
 import Order from '../models/Order.js';
+import { recordAuditLog } from '../utils/auditLogger.js';
 
 // Helper function to parse boolean values
 const parseBoolean = (value, fallback = true) => {
@@ -113,6 +114,24 @@ export const createProduct = async (req, res) => {
       io.emit('stockUpdated', product);
     }
 
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'PRODUCT_CREATED',
+      module: 'Products',
+      targetType: 'Product',
+      targetId: product._id,
+      targetName: product.name,
+      newValue: {
+        price: product.sellingPrice,
+        costPrice: product.costPrice,
+        stock: product.stock,
+      },
+      description: `${req.user?.name || 'Admin'} created product "${product.name}" (Stock: ${product.stock}, Price: ₹${product.sellingPrice})`,
+      status: 'Success'
+    }, req);
+
     res.status(201).json(product);
   } catch (error) {
     console.error('Create product error:', error);
@@ -183,6 +202,15 @@ export const updateProduct = async (req, res) => {
       imageUrl = result.url;
     }
 
+    const oldValues = {
+      name: product.name,
+      sellingPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      stock: product.stock,
+      visibility: product.visibility,
+      lowStockThreshold: product.lowStockThreshold
+    };
+
     // Update product fields
     product.name = name;
     product.costPrice = finalCostPrice;
@@ -202,6 +230,46 @@ export const updateProduct = async (req, res) => {
       io.emit('productUpdated', product);
       io.emit('stockUpdated', product);
     }
+
+    if (oldValues.stock !== finalStock) {
+      const stockDiff = finalStock - oldValues.stock;
+      await recordAuditLog({
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: stockDiff > 0 ? 'STOCK_ADDED' : 'STOCK_REMOVED',
+        module: 'Inventory',
+        targetType: 'Product',
+        targetId: product._id,
+        targetName: product.name,
+        previousValue: oldValues.stock,
+        newValue: finalStock,
+        change: `${stockDiff >= 0 ? '+' : ''}${stockDiff}`,
+        description: `${req.user?.name || 'Admin'} adjusted ${product.name} stock from ${oldValues.stock} to ${finalStock}`,
+        status: 'Success'
+      }, req);
+    }
+
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'PRODUCT_UPDATED',
+      module: 'Products',
+      targetType: 'Product',
+      targetId: product._id,
+      targetName: product.name,
+      previousValue: oldValues,
+      newValue: {
+        name: product.name,
+        sellingPrice: product.sellingPrice,
+        costPrice: product.costPrice,
+        stock: product.stock,
+        visibility: product.visibility
+      },
+      description: `${req.user?.name || 'Admin'} updated product "${product.name}"`,
+      status: 'Success'
+    }, req);
 
     res.json(product);
   } catch (error) {
@@ -237,12 +305,6 @@ export const deleteProduct = async (req, res) => {
       });
     }
 
-    // Optional: Delete image from ImageKit
-    // if (product.image) {
-    //   const fileId = product.image.split('/').pop().split('.')[0];
-    //   await imagekit.deleteFile(fileId);
-    // }
-
     await Product.findByIdAndDelete(req.params.id);
 
     // Emit socket event
@@ -250,6 +312,20 @@ export const deleteProduct = async (req, res) => {
     if (io) {
       io.emit('productDeleted', { _id: product._id });
     }
+
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'PRODUCT_DELETED',
+      module: 'Products',
+      targetType: 'Product',
+      targetId: product._id,
+      targetName: product.name,
+      previousValue: { name: product.name, stock: product.stock, price: product.sellingPrice },
+      description: `${req.user?.name || 'Admin'} deleted product "${product.name}"`,
+      status: 'Success'
+    }, req);
 
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
@@ -280,6 +356,7 @@ export const refillStock = async (req, res) => {
       });
     }
 
+    const previousStock = product.stock;
     const newStock = product.stock + delta;
     if (newStock < 0) {
       return res.status(400).json({ message: 'Stock cannot become negative' });
@@ -294,6 +371,22 @@ export const refillStock = async (req, res) => {
       io.emit('stockRefilled', { product, delta });
       io.emit('stockUpdated', product);
     }
+
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: delta > 0 ? 'STOCK_ADDED' : 'STOCK_REMOVED',
+      module: 'Inventory',
+      targetType: 'Product',
+      targetId: product._id,
+      targetName: product.name,
+      previousValue: previousStock,
+      newValue: newStock,
+      change: `${delta > 0 ? '+' : ''}${delta}`,
+      description: `${req.user?.name || 'Admin'} ${delta > 0 ? 'added +' + delta : 'removed ' + delta} units to ${product.name} (Stock: ${previousStock} → ${newStock})`,
+      status: 'Success'
+    }, req);
 
     res.json({ 
       message: `Stock ${delta > 0 ? 'increased' : 'decreased'} by ${Math.abs(delta)}`, 
@@ -432,6 +525,19 @@ export const resetReservedStockByProduct = async (req, res) => {
       io.emit('reservedStockReset', { productId, product });
     }
 
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'STOCK_CORRECTION',
+      module: 'Inventory',
+      targetType: 'Product',
+      targetId: product._id,
+      targetName: product.name,
+      description: `${req.user?.name || 'Admin'} reset reserved stock to 0 for "${product.name}"`,
+      status: 'Success'
+    }, req);
+
     res.json({
       message: `${product.name} reserved stock reset successfully`,
       product
@@ -475,16 +581,31 @@ export const bulkUpdateVisibility = async (req, res) => {
       return res.status(400).json({ message: 'Product IDs array is required' });
     }
 
+    const isVisible = parseBoolean(visibility, true);
     const result = await Product.updateMany(
       { _id: { $in: productIds } },
-      { visibility: parseBoolean(visibility, true) }
+      { visibility: isVisible }
     );
 
     // Emit socket event
     const io = req.app.get('io');
     if (io) {
-      io.emit('productsBulkUpdated', { productIds, visibility });
+      io.emit('productsBulkUpdated', { productIds, visibility: isVisible });
     }
+
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'PRODUCT_VISIBILITY_CHANGED',
+      module: 'Products',
+      targetType: 'Product',
+      targetName: `${result.modifiedCount} Products`,
+      previousValue: null,
+      newValue: isVisible ? 'Visible' : 'Hidden',
+      description: `${req.user?.name || 'Admin'} updated visibility for ${result.modifiedCount} products to ${isVisible ? 'Visible' : 'Hidden'}`,
+      status: 'Success'
+    }, req);
 
     res.json({
       message: `${result.modifiedCount} products updated successfully`,

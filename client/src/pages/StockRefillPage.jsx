@@ -14,6 +14,8 @@ import {
   FiArrowDown,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
+  FiChevronDown,
   FiX,
   FiCheckCircle
 } from 'react-icons/fi';
@@ -105,14 +107,34 @@ export default function StockRefillPage() {
         });
         break;
       case 'name':
-        result.sort((a, b) => a.name.localeCompare(b.name));
+        result.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         break;
-      case 'stock':
-        result.sort((a, b) => a.stock - b.stock);
+      case 'category':
+        result.sort((a, b) =>
+          (a.categoryId?.name || '').localeCompare(b.categoryId?.name || '')
+        );
         break;
       case 'price':
-        result.sort((a, b) => a.price - b.price);
+        result.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
         break;
+      case 'stock':
+        result.sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0));
+        break;
+      case 'threshold':
+        result.sort(
+          (a, b) =>
+            Number(a.lowStockThreshold || 0) - Number(b.lowStockThreshold || 0)
+        );
+        break;
+      case 'status': {
+        const getRank = (p) => {
+          if (p.stock <= 5) return 1;
+          if (p.stock <= p.lowStockThreshold) return 2;
+          return 3;
+        };
+        result.sort((a, b) => getRank(a) - getRank(b));
+        break;
+      }
       default:
         break;
     }
@@ -386,75 +408,7 @@ export default function StockRefillPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">Sort by:</span>
-            <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
-              <button
-                onClick={() => toggleSort('lowStock')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                  sortBy === 'lowStock'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300'
-                }`}
-              >
-                Low Stock
-                {sortBy === 'lowStock' &&
-                  (sortOrder === 'asc' ? (
-                    <FiArrowUp className="text-xs" />
-                  ) : (
-                    <FiArrowDown className="text-xs" />
-                  ))}
-              </button>
-              <button
-                onClick={() => toggleSort('name')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                  sortBy === 'name'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300'
-                }`}
-              >
-                Name
-                {sortBy === 'name' &&
-                  (sortOrder === 'asc' ? (
-                    <FiArrowUp className="text-xs" />
-                  ) : (
-                    <FiArrowDown className="text-xs" />
-                  ))}
-              </button>
-              <button
-                onClick={() => toggleSort('stock')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                  sortBy === 'stock'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300'
-                }`}
-              >
-                Stock
-                {sortBy === 'stock' &&
-                  (sortOrder === 'asc' ? (
-                    <FiArrowUp className="text-xs" />
-                  ) : (
-                    <FiArrowDown className="text-xs" />
-                  ))}
-              </button>
-              <button
-                onClick={() => toggleSort('price')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                  sortBy === 'price'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300'
-                }`}
-              >
-                Price
-                {sortBy === 'price' &&
-                  (sortOrder === 'asc' ? (
-                    <FiArrowUp className="text-xs" />
-                  ) : (
-                    <FiArrowDown className="text-xs" />
-                  ))}
-              </button>
-            </div>
-          </div>
+         
         </div>
       </div>
 
@@ -478,14 +432,104 @@ export default function StockRefillPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800/60">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold">
-                  <th className="px-5 py-3">Product</th>
-                  <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Stock</th>
-                  <th className="px-5 py-3">Threshold</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Refill</th>
+                <tr className="text-left text-[11px] uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-slate-800">
+                  <th
+                    onClick={() => toggleSort('name')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'name'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Product Name"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Product</span>
+                      <span className={sortBy === 'name' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'name' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('category')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'category'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Category"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Category</span>
+                      <span className={sortBy === 'category' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'category' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('price')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'price'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Price"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Price</span>
+                      <span className={sortBy === 'price' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'price' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('stock')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'stock'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Stock Quantity"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Stock</span>
+                      <span className={sortBy === 'stock' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'stock' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('threshold')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'threshold'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Low Stock Threshold"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Threshold</span>
+                      <span className={sortBy === 'threshold' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'threshold' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('status')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'status'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Status"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Status</span>
+                      <span className={sortBy === 'status' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'status' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-right text-gray-500 dark:text-gray-400">Refill</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">

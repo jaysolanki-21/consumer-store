@@ -733,21 +733,21 @@ export default function AdminOrdersPage() {
     switch (status) {
       case "Pending":
         return (
-          <div className="flex items-center gap-1.5 bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold">
-            <FiClock /> Pending
-          </div>
+          <span className="inline-flex items-center gap-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+            <FiClock className="text-xs" /> Pending
+          </span>
         );
       case "Confirmed":
         return (
-          <div className="flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
-            <FiCheckCircle /> Confirmed
-          </div>
+          <span className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+            <FiCheckCircle className="text-xs" /> Confirmed
+          </span>
         );
       case "Cancelled":
         return (
-          <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-semibold">
-            <FiXCircle /> Cancelled
-          </div>
+          <span className="inline-flex items-center gap-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200/80 dark:border-rose-500/20 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+            <FiXCircle className="text-xs" /> Cancelled
+          </span>
         );
       default:
         return null;
@@ -798,10 +798,10 @@ export default function AdminOrdersPage() {
       {/* ✅ Main dashboard (hidden during print) */}
       <div className="space-y-6 print:hidden">
         {/* HEADER */}
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                 Live Order Monitoring
               </h1>
               <AnimatePresence>
@@ -810,270 +810,307 @@ export default function AdminOrdersPage() {
                     initial={{ scale: 0.7, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.7, opacity: 0 }}
-                    className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1 rounded-full text-xs font-semibold"
+                    className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-full text-xs font-semibold"
                   >
-                    <FiActivity className="animate-pulse" />
-                    LIVE UPDATE
+                    <FiActivity className="animate-pulse text-xs" />
+                    <span>LIVE</span>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
-            <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
-              Real-time order tracking & management dashboard
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-normal">
+              Real-time order tracking & live fulfillment dashboard
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex gap-2 flex-wrap">
+            {/* Destructive Batch Actions */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={deleteAllPendingOrders}
                 disabled={pendingOrdersForDate === 0}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition ${
                   pendingOrdersForDate > 0
-                    ? "bg-yellow-500 hover:bg-yellow-600 text-white shadow-md"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                    ? "bg-amber-50/80 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200/80 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/40 shadow-2xs"
+                    : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-600 border-slate-200/60 dark:border-slate-800 cursor-not-allowed opacity-50"
                 }`}
+                title={pendingOrdersForDate > 0 ? `Delete all ${pendingOrdersForDate} pending orders for this date` : "No pending orders to delete"}
               >
-                <FiTrash2 className="text-sm" /> Delete Pending (
-                {pendingOrdersForDate})
+                <FiTrash2 className="text-xs" />
+                <span>Delete Pending</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${pendingOrdersForDate > 0 ? "bg-amber-200/70 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300" : "bg-slate-200 dark:bg-slate-800"}`}>
+                  {pendingOrdersForDate}
+                </span>
               </button>
               <button
                 onClick={deleteAllCancelledOrders}
                 disabled={cancelledOrdersForDate === 0}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition ${
                   cancelledOrdersForDate > 0
-                    ? "bg-red-500 hover:bg-red-600 text-white shadow-md"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                    ? "bg-rose-50/80 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200/80 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 shadow-2xs"
+                    : "bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-600 border-slate-200/60 dark:border-slate-800 cursor-not-allowed opacity-50"
                 }`}
+                title={cancelledOrdersForDate > 0 ? `Delete all ${cancelledOrdersForDate} cancelled orders for this date` : "No cancelled orders to delete"}
               >
-                <FiTrash className="text-sm" /> Delete Cancelled (
-                {cancelledOrdersForDate})
+                <FiTrash className="text-xs" />
+                <span>Delete Cancelled</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${cancelledOrdersForDate > 0 ? "bg-rose-200/70 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300" : "bg-slate-200 dark:bg-slate-800"}`}>
+                  {cancelledOrdersForDate}
+                </span>
               </button>
               <button
                 onClick={deleteAllRecordsForDate}
                 disabled={ordersForDateCount === 0}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
                   ordersForDateCount > 0
-                    ? "bg-red-600 hover:bg-red-700 text-white shadow-md"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                    ? "bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white shadow-xs"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50"
                 }`}
+                title={ordersForDateCount > 0 ? `Delete all ${ordersForDateCount} orders for this date` : "No orders to delete"}
               >
-                <FiTrash className="text-sm" /> Delete All (
-                {ordersForDateCount})
+                <FiTrash className="text-xs" />
+                <span>Delete All</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${ordersForDateCount > 0 ? "bg-rose-700 text-white" : "bg-slate-300 dark:bg-slate-700"}`}>
+                  {ordersForDateCount}
+                </span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-2xl shadow-sm">
+            {/* Date Picker Toolbar */}
+            <div className="inline-flex items-center bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
               <button
                 onClick={goPrevDay}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                title="Previous Day"
               >
-                <FiChevronLeft />
+                <FiChevronLeft className="text-base" />
               </button>
-              <FiCalendar className="text-indigo-500" />
-              <input
-                type="date"
-                value={filterDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                max={getTodayLocal()}
-                className="bg-transparent outline-none"
-              />
+              <div className="flex items-center gap-1.5 px-2 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
+                <FiCalendar className="text-indigo-500 shrink-0" />
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  max={getTodayLocal()}
+                  className="bg-transparent outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] text-slate-800 dark:text-slate-200 font-medium text-xs sm:text-sm"
+                />
+              </div>
               <button
                 onClick={goNextDay}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                disabled={filterDate >= getTodayLocal()}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Next Day"
               >
-                <FiChevronRight />
+                <FiChevronRight className="text-base" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* DATE DISPLAY */}
-        <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <FiCalendar className="text-indigo-500" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Showing orders for:
-            </span>
-            <span className="text-sm font-semibold text-gray-800 dark:text-white">
+        {/* DATE DISPLAY BAR */}
+        <div className="flex items-center justify-between flex-wrap gap-2 px-0.5">
+          <div className="flex items-center gap-2 flex-wrap text-sm">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <FiCalendar className="text-indigo-500 text-xs" />
+              <span>Showing orders for:</span>
+            </div>
+            <span className="font-semibold text-slate-900 dark:text-white">
               {displayDate}
             </span>
             {filterSummary && (
-              <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 px-2.5 py-0.5 rounded-full">
                 {filterSummary}
               </span>
             )}
           </div>
-          {/* ✅ FIXED: reflects total matching server count */}
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            {totalItems}{" "}
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <span className="font-semibold text-slate-700 dark:text-slate-200">{totalItems}</span>{" "}
             {totalItems === 1 ? "order" : "orders"} found
           </div>
         </div>
 
-        {/* STATS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+        {/* STATS / KPI CARDS */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-3.5">
+          {/* 1. Total Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Total Orders
               </span>
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0">
-                <FiShoppingBag className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0">
+                <FiShoppingBag className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.total}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
               All transactions
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 2. Pending Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Pending Orders
               </span>
-              <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center shrink-0">
-                <FiClock className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center shrink-0">
+                <FiClock className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.pending}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
               Awaiting fulfillment
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 3. Confirmed Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                Confirmed Orders
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                Confirmed
               </span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center shrink-0">
-                <FiCheckCircle className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center shrink-0">
+                <FiCheckCircle className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.confirmed}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
               Fulfilled successfully
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 4. Cancelled Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                Cancelled Orders
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                Cancelled
               </span>
-              <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 flex items-center justify-center shrink-0">
-                <FiXCircle className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 flex items-center justify-center shrink-0">
+                <FiXCircle className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.cancelled}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
               Voided transactions
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 5. Total Revenue */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Total Revenue
               </span>
-              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center shrink-0">
-                <FiTrendingUp className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center shrink-0">
+                <FiTrendingUp className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
-              ₹{stats.revenue.toLocaleString()}
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2 truncate">
+              ₹{Number(stats.revenue || 0).toLocaleString()}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
-              Gross sales today
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
+              Gross sales for date
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 6. Cash Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Cash Orders
               </span>
-              <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center shrink-0">
-                <FiPackage className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center shrink-0">
+                <FiPackage className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.cashCount}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
-              Physical cash payments
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
+              Physical cash
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition duration-150">
+          {/* 7. Online Orders */}
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Online Orders
               </span>
-              <div className="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/50 flex items-center justify-center shrink-0">
-                <FiCreditCard className="text-base" />
+              <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/50 flex items-center justify-center shrink-0">
+                <FiCreditCard className="text-sm" />
               </div>
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight tabular-nums mt-2.5">
+            <div className="text-2xl sm:text-[26px] font-bold text-slate-900 dark:text-white tracking-tight tabular-nums mt-2">
               {stats.onlineCount}
             </div>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-normal mt-3">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-normal mt-2 truncate">
               UPI & card payments
             </p>
           </div>
         </div>
 
         {/* FILTERS & SEARCH ROW */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* STATUS FILTERS */}
-          <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+          {/* STATUS TABS */}
+          <div className="inline-flex p-1 bg-slate-100 dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl gap-1">
             {[
-              ["all", "All"],
-              ["pending", "Pending"],
-              ["confirmed", "Confirmed"],
-              ["cancelled", "Cancelled"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => {
-                  setFilterStatus(value);
-                  setPage(1);
-                  setExpandedOrderId(null);
-                }}
-                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
-                  filterStatus === value
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                    : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+              ["all", "All", stats.total],
+              ["pending", "Pending", stats.pending],
+              ["confirmed", "Confirmed", stats.confirmed],
+              ["cancelled", "Cancelled", stats.cancelled],
+            ].map(([value, label, count]) => {
+              const isActive = filterStatus === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => {
+                    setFilterStatus(value);
+                    setPage(1);
+                    setExpandedOrderId(null);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    isActive
+                      ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      isActive
+                        ? "bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300"
+                        : "bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                    }`}
+                  >
+                    {count ?? 0}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* SEARCH BAR */}
           <div className="relative w-full md:w-80">
-            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search by order #, item, bill #..."
+              placeholder="Search order #, items, bill #..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setPage(1);
                 setExpandedOrderId(null);
               }}
-              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+              className="w-full h-10 pl-9 pr-9 text-xs sm:text-sm rounded-xl bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs"
             />
             {searchQuery && (
               <button
@@ -1086,34 +1123,32 @@ export default function AdminOrdersPage() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 title="Clear search"
               >
-                <FiX className="w-4 h-4" />
+                <FiX className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
 
         {/* COUNTER FILTER */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 mr-1">
             <FiMonitor className="text-indigo-500" />
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Counter:
-            </span>
+            <span>Counter:</span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 flex-nowrap sm:flex-wrap">
             <button
               onClick={() => {
                 setFilterCounter("all");
                 setPage(1);
                 setExpandedOrderId(null);
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 ${
                 filterCounter === "all"
-                  ? "bg-indigo-600 text-white shadow-md"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  ? "bg-indigo-600 text-white shadow-2xs"
+                  : "bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              All
+              All Counters
             </button>
             {allCounters.map((counter) => (
               <button
@@ -1123,14 +1158,13 @@ export default function AdminOrdersPage() {
                   setPage(1);
                   setExpandedOrderId(null);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-1 ${
                   filterCounter === counter.name
-                    ? "bg-indigo-600 text-white shadow-md"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                    ? "bg-indigo-600 text-white shadow-2xs"
+                    : "bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
-                <FiMonitor className="text-xs" />
-                {counter.name}
+                <span>{counter.name}</span>
               </button>
             ))}
           </div>
@@ -1138,17 +1172,19 @@ export default function AdminOrdersPage() {
 
         {/* ORDERS LIST */}
         {filteredOrders.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-16 text-center">
-            <FiPackage className="mx-auto text-6xl text-slate-300 mb-4" />
-            <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200">
+          <div className="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-12 sm:p-16 text-center shadow-2xs">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-500">
+              <FiPackage className="text-3xl" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
               No Orders Found
             </h3>
-            <p className="text-slate-500 mt-2">
-              No orders available for selected date, status & counter.
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+              No orders matched the selected date, status, counter, or search criteria.
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {filteredOrders.map((order) => {
               const completionTime = getCompletionTime(order);
               const isExpanded = expandedOrderId === order._id;
@@ -1158,84 +1194,124 @@ export default function AdminOrdersPage() {
                 order.payment?.method || order.paymentMethod || "Cash";
               const isCashOrder = paymentMethodRaw.toLowerCase() === "cash";
 
+              const borderClass =
+                order.status === "Pending"
+                  ? "border-amber-300 dark:border-amber-500/30 hover:border-amber-400 dark:hover:border-amber-500/50"
+                  : order.status === "Confirmed"
+                  ? "border-emerald-300 dark:border-emerald-500/30 hover:border-emerald-400 dark:hover:border-emerald-500/50"
+                  : "border-rose-300 dark:border-rose-500/30 hover:border-rose-400 dark:hover:border-rose-500/50";
+
+              const leftAccentClass =
+                order.status === "Pending"
+                  ? "bg-amber-500"
+                  : order.status === "Confirmed"
+                  ? "bg-emerald-500"
+                  : "bg-rose-500";
+
               return (
                 <div
                   key={order._id}
-                  className={`bg-white dark:bg-slate-800 rounded-3xl shadow-sm border overflow-hidden ${
-                    order.status === "Pending"
-                      ? "border-yellow-300"
-                      : order.status === "Confirmed"
-                        ? "border-green-300"
-                        : "border-red-300"
-                  }`}
+                  className={`relative bg-white dark:bg-[#111827] rounded-2xl shadow-sm border ${borderClass} overflow-hidden transition-all duration-200`}
                 >
-                  {/* TOP BAR */}
+                  {/* Subtle left status strip */}
+                  <div
+                    className={`absolute left-0 top-0 bottom-0 w-1 ${leftAccentClass}`}
+                  />
+
+                  {/* TOP SUMMARY BAR */}
                   <div
                     onClick={() => toggleExpand(order._id)}
-                    className="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                    className="pl-5 pr-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition select-none"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <h2 className="font-bold text-lg">
-                          Order #{order._id.slice(-8)}
-                        </h2>
-                        {getStatusBadge(order.status)}
-                        {completionTime && (
-                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
-                            <FiTime className="text-xs" />
-                            {completionTime}
-                          </div>
-                        )}
-                        {(order.counter || order.counterName || order.counterId) && (
-                          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">
-                            <FiMonitor className="text-xs" />
-                            <span>{counterName}</span>
-                          </div>
-                        )}
+                    <div className="flex-1 min-w-0">
+                      {/* Top Badges Line */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight">
+                          #{order._id.slice(-8).toUpperCase()}
+                        </span>
 
-                        <div
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                        {getStatusBadge(order.status)}
+
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                             isCashOrder
-                              ? "bg-green-100 text-green-700"
-                              : "bg-blue-100 text-blue-700"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50"
+                              : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50"
                           }`}
                         >
                           {isCashOrder ? (
-                            <FaRupeeSign className="text-xs" />
+                            <FaRupeeSign className="text-[10px]" />
                           ) : (
                             <FiCreditCard className="text-xs" />
                           )}
-                          {isCashOrder ? "Cash" : "Online"}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
-                        <span>
-                          {new Date(order.createdAt).toLocaleString()}
+                          <span>{isCashOrder ? "Cash" : "Online"}</span>
                         </span>
-                        {order.status === "Confirmed" && order.confirmedBy && (
-                          <span className="inline-flex items-center gap-1">
-                            <FiUserCheck className="text-green-600" />
-                            Confirmed by:{" "}
-                            <span className="font-semibold text-green-700 dark:text-green-300">
-                              {order.confirmedBy.name}
-                            </span>
+
+                        {(order.counter || order.counterName || order.counterId) && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-medium border border-slate-200/80 dark:border-slate-700">
+                            <FiMonitor className="text-xs text-slate-400" />
+                            <span>{counterName}</span>
                           </span>
+                        )}
+
+                        {completionTime && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 text-xs font-medium border border-slate-200/70 dark:border-slate-700">
+                            <FiClock className="text-xs text-slate-400" />
+                            <span>{completionTime}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Meta Information Line */}
+                      <div className="flex flex-wrap items-center gap-y-1 gap-x-4 mt-2.5 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300">
+                          {formatISTTime(order.createdAt)}
+                        </span>
+
+                        <span className="text-slate-300 dark:text-slate-700">•</span>
+
+                        <span>
+                          {order.items?.length || 0} {(order.items?.length === 1 ? "item" : "items")}
+                        </span>
+
+                        {order.customerName && (
+                          <>
+                            <span className="text-slate-300 dark:text-slate-700">•</span>
+                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[180px]">
+                              Cust: {order.customerName}
+                            </span>
+                          </>
+                        )}
+
+                        {order.status === "Confirmed" && order.confirmedBy && (
+                          <>
+                            <span className="text-slate-300 dark:text-slate-700">•</span>
+                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                              <FiUserCheck className="text-xs" />
+                              <span>By: {order.confirmedBy.name}</span>
+                            </span>
+                          </>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm text-slate-500">Total Amount</p>
-                        <h2 className="text-3xl font-bold text-indigo-600">
-                          ₹{order.totalAmount}
-                        </h2>
+                    {/* Amount & Chevron */}
+                    <div className="flex items-center justify-between md:justify-end gap-5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
+                      <div className="text-left md:text-right">
+                        <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-slate-500 block leading-none mb-1">
+                          Total Amount
+                        </span>
+                        <div className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white flex items-baseline md:justify-end gap-0.5">
+                          <span className="text-base text-slate-500 dark:text-slate-400 font-sans">₹</span>
+                           <span className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white ml-2">{Number(order.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } )}</span>
+                        </div>
                       </div>
-                      <div className="p-1.5 rounded-lg">
+
+                      <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition hover:bg-slate-200 dark:hover:bg-slate-700">
                         {isExpanded ? (
-                          <FiChevronUp className="text-slate-600 dark:text-slate-400 text-2xl" />
+                          <FiChevronUp className="w-5 h-5" />
                         ) : (
-                          <FiChevronDown className="text-slate-600 dark:text-slate-400 text-2xl" />
+                          <FiChevronDown className="w-5 h-5" />
                         )}
                       </div>
                     </div>
@@ -1248,55 +1324,87 @@ export default function AdminOrdersPage() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
+                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                        className="overflow-hidden border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60"
                       >
-                        <div className="p-6 border-t border-gray-200 dark:border-slate-700">
-                          {/* ITEMS */}
-                          <div className="space-y-3">
-                            <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                              Order Items
-                            </h4>
-                            {order.items.map((item, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 rounded-2xl px-4 py-3"
-                              >
-                                <div>
-                                  <p className="font-semibold">
-                                    {item.productId?.name || "Deleted Product"}
-                                  </p>
-                                  <p className="text-sm text-slate-500">
-                                    Qty: {item.quantity}
-                                  </p>
+                        <div className="p-5 sm:p-6 space-y-5">
+                          {/* ITEMS LIST */}
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                                Order Items ({order.items?.length || 0})
+                              </h4>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)} Total Units
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                              {order.items?.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between bg-white dark:bg-[#111827] rounded-xl px-4 py-3 border border-slate-200/80 dark:border-slate-800 shadow-xs"
+                                >
+                                  <div className="min-w-0 pr-3">
+                                    <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
+                                      {item.productId?.name || "Product"}
+                                    </p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      Qty: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.quantity}</span> × ₹{item.price}
+                                    </p>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="font-bold text-sm font-mono text-slate-900 dark:text-slate-100">
+                                      ₹{(item.quantity * item.price).toFixed(2)}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-bold text-lg">
-                                    ₹{item.quantity * item.price}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    ₹{item.price} each
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
 
-                          {/* ACTIONS */}
-                          <div className="flex flex-wrap gap-3 mt-6">
+                          {/* STATUS BANNER */}
+                          {order.status === "Confirmed" && (
+                            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium">
+                              <FiCheckCircle className="text-emerald-600 dark:text-emerald-400 text-sm flex-shrink-0" />
+                              <div className="flex-1">
+                                <span>Order confirmed successfully</span>
+                                {order.confirmedBy && (
+                                  <span className="font-semibold"> by {order.confirmedBy.name}</span>
+                                )}
+                                {completionTime && (
+                                  <span className="text-emerald-600 dark:text-emerald-400 ml-1.5 font-normal">
+                                    (completed in {completionTime})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {order.status === "Cancelled" && (
+                            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/40 text-rose-800 dark:text-rose-300 text-xs font-medium">
+                              <FiAlertCircle className="text-rose-600 dark:text-rose-400 text-sm flex-shrink-0" />
+                              <span>This order has been cancelled and cannot be fulfilled.</span>
+                            </div>
+                          )}
+
+                          {/* ACTION BUTTONS TOOLBAR */}
+                          <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
                             {order.status === "Pending" && (
                               <>
                                 <button
+                                  type="button"
                                   onClick={() => confirmOrder(order)}
-                                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] shadow-xs transition"
                                 >
-                                  <FiCheck /> Confirm Order
+                                  <FiCheck className="text-sm" /> Confirm Order
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => cancelOrder(order)}
-                                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-800 active:scale-[0.98] transition"
                                 >
-                                  <FiX /> Cancel Order
+                                  <FiX className="text-sm" /> Cancel Order
                                 </button>
                               </>
                             )}
@@ -1304,72 +1412,58 @@ export default function AdminOrdersPage() {
                             {(order.status === "Confirmed" ||
                               order.status === "Cancelled") && (
                               <button
+                                type="button"
                                 onClick={() => revertOrder(order)}
                                 disabled={revertingId === order._id}
-                                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl font-semibold transition disabled:opacity-50"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800 active:scale-[0.98] transition disabled:opacity-50"
                               >
-                                <FiRotateCcw /> Revert to Pending
+                                <FiRotateCcw className="text-sm" /> Revert to Pending
                               </button>
                             )}
 
                             {order.status === "Confirmed" && (
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   reprintOrder(order);
                                 }}
-                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 active:scale-[0.98] transition shadow-xs"
                               >
-                                <FiPrinter className="text-lg" />
+                                <FiPrinter className="text-sm text-indigo-500" />
                                 Reprint Bill
                               </button>
                             )}
 
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 showOrderInfo(order);
                               }}
-                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-semibold transition"
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 active:scale-[0.98] transition shadow-xs"
                             >
-                              <FiActivity className="text-lg" />
+                              <FiActivity className="text-sm text-blue-500" />
                               Order Info
                             </button>
 
                             {(order.status === "Cancelled" ||
                               order.status === "Pending") && (
                               <button
+                                type="button"
                                 onClick={() => deleteOrder(order)}
                                 disabled={deletingId === order._id}
-                                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl font-semibold transition ml-auto"
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200/80 dark:border-rose-900/50 active:scale-[0.98] transition ml-auto disabled:opacity-50"
                               >
                                 {deletingId === order._id ? (
-                                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
-                                  <FiTrash2 className="text-lg" />
+                                  <FiTrash2 className="text-sm" />
                                 )}
                                 Delete Order
                               </button>
                             )}
                           </div>
-
-                          {order.status === "Confirmed" && (
-                            <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold">
-                              <FiCheckCircle /> Order successfully confirmed
-                              {order.confirmedBy &&
-                                ` by ${order.confirmedBy.name}`}
-                              {completionTime && (
-                                <span className="ml-2 text-sm text-blue-600">
-                                  Completed in {completionTime}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {order.status === "Cancelled" && (
-                            <div className="mt-6 flex items-center gap-2 text-red-600 font-semibold">
-                              <FiAlertCircle /> Order cancelled by admin
-                            </div>
-                          )}
                         </div>
                       </motion.div>
                     )}

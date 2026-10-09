@@ -22,6 +22,8 @@ import {
   FiLink,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
+  FiChevronDown,
 } from "react-icons/fi";
 
 import { FaRupeeSign } from "react-icons/fa";
@@ -36,6 +38,19 @@ export default function AdminProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+
+  // ✅ Sorting
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
+
+  const toggleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+  };
 
   // ✅ Pagination
   const [page, setPage] = useState(1);
@@ -330,15 +345,73 @@ export default function AdminProductsPage() {
     }
   };
 
-  /* ---------- FILTER ---------- */
+  /* ---------- FILTER & SORT ---------- */
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    let result = products.filter((p) => {
       const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
       const matchesCategory =
         !selectedCategory || p.categoryId?._id === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [products, search, selectedCategory]);
+
+    if (sortBy) {
+      result.sort((a, b) => {
+        let valA, valB;
+        switch (sortBy) {
+          case "name":
+            return sortOrder === "asc"
+              ? (a.name || "").localeCompare(b.name || "")
+              : (b.name || "").localeCompare(a.name || "");
+          case "category": {
+            const catA = a.categoryId?.name || "";
+            const catB = b.categoryId?.name || "";
+            return sortOrder === "asc"
+              ? catA.localeCompare(catB)
+              : catB.localeCompare(catA);
+          }
+          case "sellingPrice": {
+            valA = Number(a.sellingPrice ?? a.price ?? 0);
+            valB = Number(b.sellingPrice ?? b.price ?? 0);
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "costPrice": {
+            valA = Number(a.costPrice ?? 0);
+            valB = Number(b.costPrice ?? 0);
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "profit": {
+            valA = Number(a.sellingPrice ?? a.price ?? 0) - Number(a.costPrice ?? 0);
+            valB = Number(b.sellingPrice ?? b.price ?? 0) - Number(b.costPrice ?? 0);
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "stock": {
+            valA = Number(a.stock ?? 0);
+            valB = Number(b.stock ?? 0);
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "reserved": {
+            valA = Number(a.reservedStock ?? 0);
+            valB = Number(b.reservedStock ?? 0);
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "available": {
+            valA = Number((a.stock ?? 0) - (a.reservedStock ?? 0));
+            valB = Number((b.stock ?? 0) - (b.reservedStock ?? 0));
+            return sortOrder === "asc" ? valA - valB : valB - valA;
+          }
+          case "visibility": {
+            valA = a.visibility ? 1 : 0;
+            valB = b.visibility ? 1 : 0;
+            return sortOrder === "asc" ? valB - valA : valA - valB;
+          }
+          default:
+            return 0;
+        }
+      });
+    }
+
+    return result;
+  }, [products, search, selectedCategory, sortBy, sortOrder]);
 
   /* ---------- PAGINATION ---------- */
   const totalItems = filteredProducts.length;
@@ -351,7 +424,7 @@ export default function AdminProductsPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [search, selectedCategory, pageSize]);
+  }, [search, selectedCategory, pageSize, sortBy, sortOrder]);
 
   const startIndex = (page - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
@@ -803,31 +876,154 @@ export default function AdminProductsPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
-            <thead className="bg-slate-50 dark:bg-slate-900">
+          <table className="w-full min-w-[1250px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Product
+                <th
+                  onClick={() => toggleSort("name")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "name"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Product"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Product</span>
+                    <span className={sortBy === "name" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "name" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Category
+                <th
+                  onClick={() => toggleSort("category")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "category"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Category"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Category</span>
+                    <span className={sortBy === "category" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "category" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Price
+                <th
+                  onClick={() => toggleSort("sellingPrice")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "sellingPrice"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Selling Price"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Selling Price</span>
+                    <span className={sortBy === "sellingPrice" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "sellingPrice" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Stock
+                <th
+                  onClick={() => toggleSort("costPrice")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "costPrice"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Cost Price"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Cost Price</span>
+                    <span className={sortBy === "costPrice" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "costPrice" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Reserved
+                <th
+                  onClick={() => toggleSort("profit")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "profit"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Profit"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Profit</span>
+                    <span className={sortBy === "profit" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "profit" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Available
+                <th
+                  onClick={() => toggleSort("stock")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "stock"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Stock"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Stock</span>
+                    <span className={sortBy === "stock" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "stock" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Visibility
+                <th
+                  onClick={() => toggleSort("reserved")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "reserved"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Reserved Stock"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Reserved</span>
+                    <span className={sortBy === "reserved" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "reserved" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
                 </th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                <th
+                  onClick={() => toggleSort("available")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "available"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Available Stock"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Available</span>
+                    <span className={sortBy === "available" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "available" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th
+                  onClick={() => toggleSort("visibility")}
+                  className={`text-left px-5 py-3.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group transition-colors ${
+                    sortBy === "visibility"
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                  title="Sort by Visibility"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Visibility</span>
+                    <span className={sortBy === "visibility" ? "text-indigo-600 dark:text-indigo-400" : "opacity-0 group-hover:opacity-40 transition-opacity"}>
+                      {sortBy === "visibility" && sortOrder === "desc" ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </th>
+                <th className="text-right px-5 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -837,23 +1033,28 @@ export default function AdminProductsPage() {
                 const reserved = p.reservedStock || 0;
                 const available = (p.stock || 0) - reserved;
                 const isLowStock = available <= p.lowStockThreshold;
+                const sellingPrice = Number(p.sellingPrice ?? p.price ?? 0);
+                const costPrice = Number(p.costPrice ?? 0);
+                const profit = sellingPrice - costPrice;
+                const margin = p.profitMargin || (sellingPrice > 0 ? ((profit / sellingPrice) * 100).toFixed(1) : 0);
+
                 return (
                   <tr
                     key={p._id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition duration-150"
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
                         <img
                           src={p.image || "https://via.placeholder.com/60"}
                           alt={p.name}
-                          className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                           onError={(e) => {
                             e.target.src = "https://via.placeholder.com/60";
                           }}
                         />
                         <div>
-                          <p className="font-semibold text-base text-slate-800 dark:text-white">
+                          <p className="font-semibold text-sm text-slate-800 dark:text-white">
                             {p.name}
                           </p>
                           <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -862,18 +1063,28 @@ export default function AdminProductsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-sm font-medium">
+                    <td className="px-5 py-4">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-medium whitespace-nowrap">
                         <FiLayers className="text-xs" />{" "}
                         {p.categoryId?.name || "No Category"}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-base text-green-600 dark:text-green-400">
-                        ₹{p.sellingPrice ?? p.price}
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <span className="font-semibold text-sm text-emerald-600 dark:text-emerald-400">
+                        ₹{sellingPrice}
                       </span>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Cost: ₹{p.costPrice ?? 0}
+                    </td>
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        ₹{costPrice}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <span className={`font-semibold text-sm ${profit >= 0 ? "text-slate-800 dark:text-white" : "text-rose-500"}`}>
+                        ₹{profit.toFixed(2)}
+                      </span>
+                      <p className={`text-xs font-medium mt-0.5 ${profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"}`}>
+                        {margin}%
                       </p>
                     </td>
                     <td className="px-6 py-4">

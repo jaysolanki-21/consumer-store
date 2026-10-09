@@ -1,6 +1,7 @@
 import Setting from '../models/Setting.js';
 import { getIO } from '../sockets/ioInstance.js';
 import { invalidateMaintenanceCache } from '../middleware/maintenanceMiddleware.js';
+import { recordAuditLog } from '../utils/auditLogger.js';
 
 /**
  * Get current maintenance mode status
@@ -50,6 +51,10 @@ export const updateMaintenanceStatus = async (req, res) => {
       setting = new Setting({ key: 'system_settings' });
     }
 
+    const previousEnabled = setting.maintenanceMode?.enabled ?? false;
+    const previousTitle = setting.maintenanceMode?.title || 'System Under Maintenance';
+    const previousMessage = setting.maintenanceMode?.message || '';
+
     if (typeof enabled === 'boolean') {
       setting.maintenanceMode.enabled = enabled;
     }
@@ -74,6 +79,33 @@ export const updateMaintenanceStatus = async (req, res) => {
     if (io) {
       io.emit('maintenanceModeChanged', setting.maintenanceMode);
     }
+
+    const newEnabled = setting.maintenanceMode.enabled;
+    const modeToggled = previousEnabled !== newEnabled;
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Administrator',
+        role: req.user?.role || 'admin',
+        action: modeToggled ? 'MAINTENANCE_TOGGLED' : 'SETTINGS_UPDATED',
+        module: 'Settings',
+        targetType: 'Setting',
+        targetName: 'Maintenance Mode',
+        previousValue: previousEnabled ? 'ON' : 'OFF',
+        newValue: newEnabled ? 'ON' : 'OFF',
+        change: modeToggled
+          ? `${previousEnabled ? 'ON' : 'OFF'} → ${newEnabled ? 'ON' : 'OFF'}`
+          : 'Config updated',
+        description: `${req.user?.name || 'Administrator'} changed Maintenance Mode from ${previousEnabled ? 'ON' : 'OFF'} to ${newEnabled ? 'ON' : 'OFF'}`,
+        status: newEnabled ? 'Warning' : 'Success',
+        metadata: {
+          title: setting.maintenanceMode.title,
+          message: setting.maintenanceMode.message,
+        },
+      },
+      req
+    );
 
     res.json({
       success: true,

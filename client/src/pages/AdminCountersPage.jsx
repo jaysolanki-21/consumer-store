@@ -13,6 +13,8 @@ import {
   FiMail,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
+  FiChevronDown,
   FiCheckCircle,
   FiXCircle,
   FiClock,
@@ -121,6 +123,19 @@ export default function AdminCountersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // ✅ Sorting
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  const toggleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
+
   const fetchCounters = async () => {
     try {
       const { data } = await api.get('/counters');
@@ -160,9 +175,9 @@ export default function AdminCountersPage() {
     return { total, online, offline, disabled };
   }, [counters]);
 
-  /* ---------- SEARCH + STATUS FILTER ---------- */
+  /* ---------- SEARCH + STATUS FILTER + SORT ---------- */
   const filteredCounters = useMemo(() => {
-    let list = counters;
+    let list = [...counters];
 
     if (search.trim()) {
       const term = search.toLowerCase().trim();
@@ -182,8 +197,48 @@ export default function AdminCountersPage() {
       list = list.filter(c => getCounterStatus(c) === 'DISABLED');
     }
 
+    if (sortBy) {
+      list.sort((a, b) => {
+        let valA, valB;
+        switch (sortBy) {
+          case 'name':
+            return sortOrder === 'asc'
+              ? (a.name || '').localeCompare(b.name || '')
+              : (b.name || '').localeCompare(a.name || '');
+          case 'email': {
+            const emailA = a.userId?.email || '';
+            const emailB = b.userId?.email || '';
+            return sortOrder === 'asc'
+              ? emailA.localeCompare(emailB)
+              : emailB.localeCompare(emailA);
+          }
+          case 'status': {
+            const getRank = (c) => {
+              const s = getCounterStatus(c);
+              if (s === 'ONLINE') return 1;
+              if (s === 'OFFLINE') return 2;
+              return 3;
+            };
+            return sortOrder === 'asc' ? getRank(a) - getRank(b) : getRank(b) - getRank(a);
+          }
+          case 'lastLogin': {
+            valA = a.userId?.lastLogin ? new Date(a.userId.lastLogin).getTime() : 0;
+            valB = b.userId?.lastLogin ? new Date(b.userId.lastLogin).getTime() : 0;
+            return sortOrder === 'asc' ? valA - valB : valB - valA;
+          }
+          case 'lastSeen': {
+            valA = a.userId?.lastSeen ? new Date(a.userId.lastSeen).getTime() : (a.userId?.lastLogin ? new Date(a.userId.lastLogin).getTime() : 0);
+            valB = b.userId?.lastSeen ? new Date(b.userId.lastSeen).getTime() : (b.userId?.lastLogin ? new Date(b.userId.lastLogin).getTime() : 0);
+            return sortOrder === 'asc' ? valA - valB : valB - valA;
+          }
+          default:
+            return 0;
+        }
+      });
+    }
+
     return list;
-  }, [counters, search, statusFilter]);
+  }, [counters, search, statusFilter, sortBy, sortOrder]);
 
   /* ---------- PAGINATION ---------- */
   const totalItems = filteredCounters.length;
@@ -192,6 +247,11 @@ export default function AdminCountersPage() {
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [totalPages, page]);
+
+  // Reset page when filters or sort change
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, sortBy, sortOrder, pageSize]);
 
   const startIndex = (page - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
@@ -516,13 +576,88 @@ export default function AdminCountersPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-800/60">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                  <th className="px-5 py-3">Counter</th>
-                  <th className="px-5 py-3">Login Email</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Last Login</th>
-                  <th className="px-5 py-3">Last Seen</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
+                <tr className="text-left text-[11px] uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-slate-800">
+                  <th
+                    onClick={() => toggleSort('name')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'name'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Counter Name"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Counter</span>
+                      <span className={sortBy === 'name' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'name' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('email')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'email'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Login Email"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Login Email</span>
+                      <span className={sortBy === 'email' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'email' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('status')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'status'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Status"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Status</span>
+                      <span className={sortBy === 'status' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'status' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('lastLogin')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'lastLogin'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Last Login"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Last Login</span>
+                      <span className={sortBy === 'lastLogin' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'lastLogin' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('lastSeen')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'lastSeen'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Last Seen"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Last Seen</span>
+                      <span className={sortBy === 'lastSeen' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'lastSeen' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-right text-slate-500 dark:text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

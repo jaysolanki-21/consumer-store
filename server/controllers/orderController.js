@@ -3,6 +3,7 @@ import Product from '../models/Product.js';
 import Counter from '../models/Counter.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
+import { recordAuditLog } from '../utils/auditLogger.js';
 
 export const createOrder = async (req, res) => {
   try {
@@ -126,6 +127,26 @@ export const createOrder = async (req, res) => {
     const io = req.app.get('io');
     io.emit('newOrder', populatedOrder);
     io.emit('stockUpdated');
+
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id || null,
+      userName: req.user?.name || resolvedCounterName,
+      role: req.user?.role || 'counter',
+      action: 'ORDER_CREATED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      counterId: resolvedCounterId ? resolvedCounterId.toString() : null,
+      counterName: resolvedCounterName,
+      amount: totalAmount,
+      paymentMethod: paymentData.method,
+      newValue: { status: 'Pending', totalAmount, itemsCount: orderItems.length },
+      description: `${req.user?.name || resolvedCounterName} created Order ${orderShortId} for ₹${totalAmount} at ${resolvedCounterName}`,
+      status: 'Success'
+    }, req);
 
     res.status(201).json(populatedOrder);
   } catch (error) {
@@ -326,7 +347,7 @@ export const getOrders = async (req, res) => {
             select: 'name description userId',
             populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
           })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: req.query.sort === 'asc' ? 1 : -1 })
           .skip(skip)
           .limit(limit)
       ]);
@@ -420,7 +441,7 @@ export const getOrders = async (req, res) => {
         select: 'name description userId',
         populate: { path: 'userId', select: 'name email isOnline lastLogin lastSeen' }
       })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: req.query.sort === 'asc' ? 1 : -1 });
 
     res.json(orders);
   } catch (error) {
@@ -542,6 +563,28 @@ export const confirmOrder = async (req, res) => {
     io.emit('orderConfirmed', populatedOrder);
     io.emit('stockUpdated');
 
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Staff User',
+      role: req.user?.role || 'staff',
+      action: 'ORDER_CONFIRMED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      counterId: order.counter ? String(order.counter) : null,
+      counterName: order.counterName || null,
+      amount: order.totalAmount,
+      paymentMethod: order.payment?.method || 'Cash',
+      previousValue: 'Pending',
+      newValue: 'Confirmed',
+      change: 'PENDING → CONFIRMED',
+      description: `${req.user?.name || 'Staff User'} confirmed Order ${orderShortId} for ₹${order.totalAmount} at ${order.counterName || 'Counter'}`,
+      status: 'Success'
+    }, req);
+
     res.json(populatedOrder);
   } catch (error) {
     console.error(error);
@@ -592,6 +635,28 @@ export const cancelOrder = async (req, res) => {
     const io = req.app.get('io');
     io.emit('orderCancelled', populatedOrder || order);
     io.emit('stockUpdated');
+
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'User',
+      role: req.user?.role || 'staff',
+      action: 'ORDER_CANCELLED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      counterId: order.counter ? String(order.counter) : null,
+      counterName: order.counterName || null,
+      amount: order.totalAmount,
+      paymentMethod: order.payment?.method || 'Cash',
+      previousValue: 'Pending',
+      newValue: 'Cancelled',
+      change: 'PENDING → CANCELLED',
+      description: `${req.user?.name || 'User'} cancelled Order ${orderShortId} (₹${order.totalAmount})`,
+      status: 'Success'
+    }, req);
 
     res.json({ message: 'Order cancelled', order: populatedOrder || order });
   } catch (error) {
@@ -660,6 +725,24 @@ export const revertOrder = async (req, res) => {
     io.emit('orderReverted', populatedOrder || order);
     io.emit('stockUpdated');
 
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'User',
+      role: req.user?.role || 'admin',
+      action: 'ORDER_REVERTED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      previousValue: originalStatus,
+      newValue: 'Pending',
+      change: `${originalStatus.toUpperCase()} → PENDING`,
+      description: `${req.user?.name || 'User'} reverted Order ${orderShortId} from ${originalStatus} to Pending`,
+      status: 'Success'
+    }, req);
+
     res.json({ message: 'Order reverted to Pending', order: populatedOrder || order });
   } catch (error) {
     console.error(error);
@@ -700,6 +783,22 @@ export const deleteOrder = async (req, res) => {
     const io = req.app.get('io');
     io.emit('stockUpdated');
     io.emit('orderDeleted', order._id);
+
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'ORDER_DELETED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      amount: order.totalAmount,
+      description: `${req.user?.name || 'Admin'} deleted Order ${orderShortId} (Status: ${order.status}, Amount: ₹${order.totalAmount})`,
+      status: 'Success'
+    }, req);
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {
@@ -749,6 +848,19 @@ export const bulkDeletePendingOrders = async (req, res) => {
     io.emit('stockUpdated');
     io.emit('ordersBulkDeleted');
 
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'ORDER_BULK_DELETED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetName: `${result.deletedCount} Pending Orders`,
+      description: `${req.user?.name || 'Admin'} deleted ${result.deletedCount} pending orders for date ${date}`,
+      status: 'Success',
+      metadata: { deletedCount: result.deletedCount, date }
+    }, req);
+
     res.json({
       message: `${result.deletedCount} pending orders deleted`,
       count: result.deletedCount
@@ -793,6 +905,22 @@ export const deleteSingleOrder = async (req, res) => {
     const io = req.app.get('io');
     io.emit('stockUpdated');
     io.emit('orderDeleted', orderId);
+
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Admin',
+      role: req.user?.role || 'admin',
+      action: 'ORDER_DELETED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      amount: order.totalAmount,
+      description: `${req.user?.name || 'Admin'} deleted Order ${orderShortId} (Status: ${order.status}, Amount: ₹${order.totalAmount})`,
+      status: 'Success'
+    }, req);
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {
@@ -953,6 +1081,26 @@ export const updatePaymentStatus = async (req, res) => {
     const io = req.app.get('io');
     io.emit('orderUpdated', populatedOrder);
 
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Staff User',
+      role: req.user?.role || 'staff',
+      action: 'PAYMENT_STATUS_UPDATED',
+      module: 'Payments',
+      targetType: 'Payment',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      amount: order.totalAmount,
+      paymentMethod: order.payment?.method || 'Cash',
+      previousValue: order.payment?.status,
+      newValue: paymentStatus,
+      change: `${order.payment?.status} → ${paymentStatus}`,
+      description: `${req.user?.name || 'Staff User'} updated payment status for Order ${orderShortId} to ${paymentStatus} (₹${order.totalAmount})`,
+      status: 'Success'
+    }, req);
+
     res.json(populatedOrder);
   } catch (error) {
     console.error(error);
@@ -977,6 +1125,21 @@ export const updatePrintStatus = async (req, res) => {
     }
 
     await order.save();
+
+    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
+    await recordAuditLog({
+      userId: req.user?._id,
+      userName: req.user?.name || 'Staff User',
+      role: req.user?.role || 'staff',
+      action: 'RECEIPT_PRINTED',
+      module: 'Orders',
+      targetType: 'Order',
+      targetId: order._id,
+      targetName: orderShortId,
+      orderId: order._id.toString(),
+      description: `${req.user?.name || 'Staff User'} printed receipt for Order ${orderShortId}`,
+      status: 'Success'
+    }, req);
 
     res.json({ message: 'Print status updated', order });
   } catch (error) {

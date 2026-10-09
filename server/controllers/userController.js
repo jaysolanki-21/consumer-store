@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import imagekit from '../config/imagekit.js';
+import { recordAuditLog } from '../utils/auditLogger.js';
 
 const uploadToImageKit = (file, folder = '/staff') =>
   new Promise((resolve, reject) => {
@@ -8,7 +9,7 @@ const uploadToImageKit = (file, folder = '/staff') =>
       {
         file: file.buffer,
         fileName: `${Date.now()}-${file.originalname}`,
-        folder
+        folder,
       },
       (err, result) => (err ? reject(err) : resolve(result))
     );
@@ -43,16 +44,36 @@ export const createStaff = async (req, res) => {
     }
 
     const user = await User.create({
-      name, email, password, role: 'staff',
-      image: imageUrl, imageFileId,
+      name,
+      email,
+      password,
+      role: 'staff',
+      image: imageUrl,
+      imageFileId,
       isActive: true,
       isOnline: false,
-      lastSeen: new Date()
+      lastSeen: new Date(),
     });
 
     const { password: _, ...userData } = user.toJSON();
     const io = req.app.get('io');
     if (io) io.emit('usersUpdated');
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: 'STAFF_CREATED',
+        module: 'Staff',
+        targetType: 'Staff',
+        targetId: user._id,
+        targetName: user.name,
+        description: `${req.user?.name || 'Admin'} created staff account for ${user.name} (${user.email})`,
+        status: 'Success',
+      },
+      req
+    );
 
     res.status(201).json(userData);
   } catch (error) {
@@ -68,9 +89,13 @@ export const updateStaff = async (req, res) => {
     if (user.role !== 'staff')
       return res.status(400).json({ message: 'Not a staff account' });
 
+    const previousProfile = { name: user.name, email: user.email };
+
     if (req.file) {
       if (user.imageFileId) {
-        try { await imagekit.deleteFile(user.imageFileId); } catch {}
+        try {
+          await imagekit.deleteFile(user.imageFileId);
+        } catch {}
       }
       const uploaded = await uploadToImageKit(req.file);
       user.image = uploaded.url;
@@ -84,6 +109,24 @@ export const updateStaff = async (req, res) => {
     const { password, ...userData } = user.toJSON();
     const io = req.app.get('io');
     if (io) io.emit('usersUpdated');
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: 'STAFF_UPDATED',
+        module: 'Staff',
+        targetType: 'Staff',
+        targetId: user._id,
+        targetName: user.name,
+        previousValue: previousProfile,
+        newValue: { name: user.name, email: user.email },
+        description: `${req.user?.name || 'Admin'} updated staff profile for ${user.name}`,
+        status: 'Success',
+      },
+      req
+    );
 
     res.json(userData);
   } catch (error) {
@@ -99,6 +142,8 @@ export const setStaffStatus = async (req, res) => {
     if (user.role !== 'staff')
       return res.status(400).json({ message: 'Not a staff account' });
 
+    const wasActive = user.isActive && (!user.disabledUntil || new Date(user.disabledUntil) <= new Date());
+
     user.isActive = Boolean(isActive);
     user.disabledUntil = disabledUntil || null;
 
@@ -112,11 +157,33 @@ export const setStaffStatus = async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       if (isCurrentlyDisabled) {
-        io.emit('userForceLogout', { userId: String(user._id), message: 'Your staff account has been deactivated by administrator.' });
+        io.emit('userForceLogout', {
+          userId: String(user._id),
+          message: 'Your staff account has been deactivated by administrator.',
+        });
       }
       io.emit('usersUpdated');
       io.emit('countersUpdated');
     }
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: 'STAFF_STATUS_CHANGED',
+        module: 'Staff',
+        targetType: 'Staff',
+        targetId: user._id,
+        targetName: user.name,
+        previousValue: wasActive ? 'Active' : 'Disabled',
+        newValue: isCurrentlyDisabled ? 'Disabled' : 'Active',
+        change: `${wasActive ? 'Active' : 'Disabled'} → ${isCurrentlyDisabled ? 'Disabled' : 'Active'}`,
+        description: `${req.user?.name || 'Admin'} ${isCurrentlyDisabled ? 'disabled' : 'enabled'} staff account: ${user.name}`,
+        status: isCurrentlyDisabled ? 'Warning' : 'Success',
+      },
+      req
+    );
 
     const { password, ...userData } = user.toJSON();
     res.json(userData);
@@ -141,9 +208,28 @@ export const resetStaffPassword = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('userForceLogout', { userId: String(user._id), message: 'Password has been reset. Please log in again.' });
+      io.emit('userForceLogout', {
+        userId: String(user._id),
+        message: 'Password has been reset. Please log in again.',
+      });
       io.emit('usersUpdated');
     }
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: 'STAFF_PASSWORD_RESET',
+        module: 'Staff',
+        targetType: 'Staff',
+        targetId: user._id,
+        targetName: user.name,
+        description: `${req.user?.name || 'Admin'} reset password for staff member: ${user.name}`,
+        status: 'Warning',
+      },
+      req
+    );
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
@@ -158,8 +244,13 @@ export const deleteStaff = async (req, res) => {
     if (user.role !== 'staff')
       return res.status(400).json({ message: 'Not a staff account' });
 
+    const staffName = user.name;
+    const staffEmail = user.email;
+
     if (user.imageFileId) {
-      try { await imagekit.deleteFile(user.imageFileId); } catch {}
+      try {
+        await imagekit.deleteFile(user.imageFileId);
+      } catch {}
     }
 
     const io = req.app.get('io');
@@ -169,6 +260,23 @@ export const deleteStaff = async (req, res) => {
     }
 
     await user.deleteOne();
+
+    await recordAuditLog(
+      {
+        userId: req.user?._id,
+        userName: req.user?.name || 'Admin',
+        role: req.user?.role || 'admin',
+        action: 'STAFF_DELETED',
+        module: 'Staff',
+        targetType: 'Staff',
+        targetId: user._id,
+        targetName: staffName,
+        description: `${req.user?.name || 'Admin'} deleted staff account: ${staffName} (${staffEmail})`,
+        status: 'Warning',
+      },
+      req
+    );
+
     res.json({ message: 'Staff deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -182,8 +290,8 @@ export const getLoginHistory = async (req, res) => {
       .lean();
 
     const history = [];
-    users.forEach(u => {
-      (u.loginHistory || []).forEach(h => {
+    users.forEach((u) => {
+      (u.loginHistory || []).forEach((h) => {
         history.push({
           userId: u._id,
           name: u.name,
@@ -192,7 +300,7 @@ export const getLoginHistory = async (req, res) => {
           loginAt: h.loginAt,
           logoutAt: h.logoutAt,
           ip: h.ip,
-          userAgent: h.userAgent
+          userAgent: h.userAgent,
         });
       });
     });

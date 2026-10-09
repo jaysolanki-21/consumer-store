@@ -13,6 +13,8 @@ import {
   FiSearch,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
+  FiChevronDown,
   FiArrowUp,
   FiArrowDown
 } from 'react-icons/fi';
@@ -353,59 +355,7 @@ export default function AdminCategoriesPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">Sort by:</span>
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-            <button
-              onClick={() => toggleSort('name')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                sortBy === 'name'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              Name
-              {sortBy === 'name' &&
-                (sortOrder === 'asc' ? (
-                  <FiArrowUp className="text-xs" />
-                ) : (
-                  <FiArrowDown className="text-xs" />
-                ))}
-            </button>
-            <button
-              onClick={() => toggleSort('products')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                sortBy === 'products'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              Products
-              {sortBy === 'products' &&
-                (sortOrder === 'asc' ? (
-                  <FiArrowUp className="text-xs" />
-                ) : (
-                  <FiArrowDown className="text-xs" />
-                ))}
-            </button>
-            <button
-              onClick={() => toggleSort('createdAt')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                sortBy === 'createdAt'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              Created
-              {sortBy === 'createdAt' &&
-                (sortOrder === 'asc' ? (
-                  <FiArrowUp className="text-xs" />
-                ) : (
-                  <FiArrowDown className="text-xs" />
-                ))}
-            </button>
-          </div>
-        </div>
+        
       </div>
 
       {/* Category Table */}
@@ -424,11 +374,56 @@ export default function AdminCategoriesPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-800/60">
-                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                  <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Products</th>
-                  <th className="px-5 py-3">Created</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
+                <tr className="text-left text-[11px] uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-slate-800">
+                  <th
+                    onClick={() => toggleSort('name')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'name'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Category"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Category</span>
+                      <span className={sortBy === 'name' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'name' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('products')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'products'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Product Count"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Products</span>
+                      <span className={sortBy === 'products' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'products' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => toggleSort('createdAt')}
+                    className={`px-5 py-3 cursor-pointer select-none group transition-colors ${
+                      sortBy === 'createdAt'
+                        ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title="Sort by Creation Date"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Created</span>
+                      <span className={sortBy === 'createdAt' ? 'text-indigo-600 dark:text-indigo-400' : 'opacity-0 group-hover:opacity-40 transition-opacity'}>
+                        {sortBy === 'createdAt' && sortOrder === 'desc' ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronUp className="w-3.5 h-3.5" />}
+                      </span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-right text-slate-500 dark:text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
