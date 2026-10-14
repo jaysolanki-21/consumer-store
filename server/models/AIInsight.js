@@ -18,6 +18,7 @@ const aiInsightSchema = new mongoose.Schema(
     period: {
       from: { type: String, required: true },
       to: { type: String, required: true },
+      days: { type: Number, default: 30 },
     },
     filters: {
       counter: { type: String, default: 'all' },
@@ -28,9 +29,34 @@ const aiInsightSchema = new mongoose.Schema(
     metadata: {
       ordersAnalyzed: { type: Number, default: 0 },
       revenueAnalyzed: { type: Number, default: 0 },
-      model: { type: String, default: 'Groq / LLaMA' },
+      model: { type: String, default: 'Groq / Qwen' },
+      generatedInMs: { type: Number, default: 0 },
+      dataVersion: { type: String, default: '' },
     },
+    dataVersion: {
+      type: String,
+      default: '',
+    },
+    // Complete canonical analytics metrics stored alongside AI observations
+    metrics: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    comparison: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    breakdown: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    inventory: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    // Exactly 3 executive takeaways: performance, products/inventory, store operations
     takeaways: [{ type: String }],
+    // Categorized detailed insights: Sales, Profit, Inventory, Operations
     sections: [
       {
         type: {
@@ -46,8 +72,26 @@ const aiInsightSchema = new mongoose.Schema(
         },
       },
     ],
-    rawInsights: { type: String, required: true },
-    status: { type: String, default: 'completed' },
+    // Structured actionable recommendations
+    recommendations: [
+      {
+        title: { type: String },
+        priority: {
+          type: String,
+          enum: ['LOW', 'MEDIUM', 'HIGH'],
+          default: 'MEDIUM',
+        },
+        evidence: { type: String },
+        action: { type: String },
+        benefit: { type: String },
+      },
+    ],
+    rawInsights: { type: String, default: '' },
+    status: {
+      type: String,
+      enum: ['generating', 'completed', 'failed'],
+      default: 'completed',
+    },
   },
   { timestamps: true }
 );

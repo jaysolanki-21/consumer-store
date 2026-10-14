@@ -55,6 +55,12 @@ import {
 // DATE & PERIOD CALCULATION UTILITIES
 // ==========================================
 
+export const formatDateKeyIST = (date) => {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+    new Date(date)
+  );
+};
+
 export const getPeriodDateRange = (period, customStart, customEnd) => {
   const now = new Date();
   let start = new Date();
@@ -325,10 +331,10 @@ export default function InsightsPage() {
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 29);
-    return d.toISOString().split("T")[0];
+    return formatDateKeyIST(d);
   });
   const [customEndDate, setCustomEndDate] = useState(() => {
-    return new Date().toISOString().split("T")[0];
+    return formatDateKeyIST(new Date());
   });
 
   const [chartGranularity, setChartGranularity] = useState("daily");
@@ -338,6 +344,7 @@ export default function InsightsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [counters, setCounters] = useState([]);
+  const [canonicalAnalytics, setCanonicalAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState(new Date());
@@ -555,46 +562,101 @@ export default function InsightsPage() {
 
   const aiFilters = useMemo(() => {
     return {
-      from: currentRange.start.toISOString().split("T")[0],
-      to: currentRange.end.toISOString().split("T")[0],
+      from: formatDateKeyIST(currentRange.start),
+      to: formatDateKeyIST(currentRange.end),
     };
   }, [currentRange]);
+
+  // Fetch canonical analytics from single backend source of truth
+  const fetchCanonicalAnalytics = useCallback(async () => {
+    try {
+      const { data } = await api.get("/insights/analytics", {
+        params: {
+          from: formatDateKeyIST(currentRange.start),
+          to: formatDateKeyIST(currentRange.end),
+        },
+      });
+      if (data?.analytics) {
+        setCanonicalAnalytics(data.analytics);
+      }
+    } catch (err) {
+      console.warn("Could not fetch canonical analytics:", err);
+    }
+  }, [currentRange]);
+
+  useEffect(() => {
+    fetchCanonicalAnalytics();
+  }, [fetchCanonicalAnalytics]);
 
   // ==========================================
   // 1. KPIs
   // ==========================================
 
   const kpis = useMemo(() => {
-    const curRevenue = currentPeriodOrders.reduce(
-      (sum, o) => sum + (Number(o.totalAmount) || 0),
-      0,
-    );
-    const curProfit = currentPeriodOrders.reduce(
-      (sum, o) => sum + calculateOrderProfit(o),
-      0,
-    );
-    const curCost = curRevenue - curProfit;
+    const isPeriodMatched =
+      canonicalAnalytics?.period?.from === formatDateKeyIST(currentRange.start) &&
+      canonicalAnalytics?.period?.to === formatDateKeyIST(currentRange.end);
+
+    const curRevenue =
+      isPeriodMatched && canonicalAnalytics?.metrics?.revenue != null
+        ? canonicalAnalytics.metrics.revenue
+        : currentPeriodOrders.reduce(
+            (sum, o) => sum + (Number(o.totalAmount) || 0),
+            0
+          );
+
+    const curProfit =
+      isPeriodMatched && canonicalAnalytics?.metrics?.profit != null
+        ? canonicalAnalytics.metrics.profit
+        : currentPeriodOrders.reduce(
+            (sum, o) => sum + calculateOrderProfit(o),
+            0
+          );
+
+    const curCost =
+      isPeriodMatched && canonicalAnalytics?.metrics?.cogs != null
+        ? canonicalAnalytics.metrics.cogs
+        : curRevenue - curProfit;
+
     const curMargin =
-      curRevenue > 0 ? Math.round((curProfit / curRevenue) * 1000) / 10 : 0;
-    const curOrdersCount = currentPeriodOrders.length;
-    const curAOV = curOrdersCount > 0 ? Math.round(curRevenue / curOrdersCount) : 0;
-    const curItemsSold = currentPeriodOrders.reduce(
-      (sum, o) =>
-        sum +
-        (o.items || []).reduce(
-          (s, it) => s + (Number(it.quantity) || 1),
-          0,
-        ),
-      0,
-    );
+      isPeriodMatched && canonicalAnalytics?.metrics?.margin != null
+        ? canonicalAnalytics.metrics.margin
+        : curRevenue > 0
+        ? Math.round((curProfit / curRevenue) * 1000) / 10
+        : 0;
+
+    const curOrdersCount =
+      isPeriodMatched && canonicalAnalytics?.metrics?.orders != null
+        ? canonicalAnalytics.metrics.orders
+        : currentPeriodOrders.length;
+
+    const curAOV =
+      isPeriodMatched && canonicalAnalytics?.metrics?.averageOrderValue != null
+        ? canonicalAnalytics.metrics.averageOrderValue
+        : curOrdersCount > 0
+        ? Math.round(curRevenue / curOrdersCount)
+        : 0;
+
+    const curItemsSold =
+      isPeriodMatched && canonicalAnalytics?.metrics?.itemsSold != null
+        ? canonicalAnalytics.metrics.itemsSold
+        : currentPeriodOrders.reduce(
+            (sum, o) =>
+              sum +
+              (o.items || []).reduce(
+                (s, it) => s + (Number(it.quantity) || 1),
+                0
+              ),
+            0
+          );
 
     const compRevenue = comparePeriodOrders.reduce(
       (sum, o) => sum + (Number(o.totalAmount) || 0),
-      0,
+      0
     );
     const compProfit = comparePeriodOrders.reduce(
       (sum, o) => sum + calculateOrderProfit(o),
-      0,
+      0
     );
     const compCost = compRevenue - compProfit;
     const compMargin =
@@ -607,13 +669,19 @@ export default function InsightsPage() {
         sum +
         (o.items || []).reduce(
           (s, it) => s + (Number(it.quantity) || 1),
-          0,
+          0
         ),
-      0,
+      0
     );
 
     const marginDiff = Math.round((curMargin - compMargin) * 10) / 10;
     const hasCompData = comparePeriodOrders.length > 0;
+
+    // Use canonical deltas if available
+    const canonicalDeltas =
+      isPeriodMatched && canonicalAnalytics?.comparison?.deltas
+        ? canonicalAnalytics.comparison.deltas
+        : null;
 
     return {
       revenue: curRevenue,
@@ -625,23 +693,26 @@ export default function InsightsPage() {
       itemsSold: curItemsSold,
       hasCompData,
 
-      revenueDelta: computeDelta(curRevenue, compRevenue),
-      profitDelta: computeDelta(curProfit, compProfit),
-      marginDelta: {
-        hasPrev: hasCompData && compRevenue > 0,
-        rawDiff: marginDiff,
-        percent: Math.abs(marginDiff),
-        direction: marginDiff > 0.05 ? "up" : marginDiff < -0.05 ? "down" : "neutral",
-        label:
-          hasCompData && compRevenue > 0
-            ? `${marginDiff >= 0 ? "+" : ""}${marginDiff}% pts vs previous`
-            : "No previous-period data",
-      },
-      ordersDelta: computeDelta(curOrdersCount, compOrdersCount),
-      aovDelta: computeDelta(curAOV, compAOV),
-      itemsSoldDelta: computeDelta(curItemsSold, compItemsSold),
+      revenueDelta: canonicalDeltas?.revenue || computeDelta(curRevenue, compRevenue),
+      profitDelta: canonicalDeltas?.profit || computeDelta(curProfit, compProfit),
+      marginDelta:
+        canonicalDeltas?.margin || {
+          hasPrev: hasCompData && compRevenue > 0,
+          rawDiff: marginDiff,
+          percent: Math.abs(marginDiff),
+          direction:
+            marginDiff > 0.05 ? "up" : marginDiff < -0.05 ? "down" : "neutral",
+          label:
+            hasCompData && compRevenue > 0
+              ? `${marginDiff >= 0 ? "+" : ""}${marginDiff}% pts vs previous`
+              : "No previous-period data",
+        },
+      ordersDelta: canonicalDeltas?.orders || computeDelta(curOrdersCount, compOrdersCount),
+      aovDelta: canonicalDeltas?.aov || computeDelta(curAOV, compAOV),
+      itemsSoldDelta:
+        canonicalDeltas?.itemsSold || computeDelta(curItemsSold, compItemsSold),
     };
-  }, [currentPeriodOrders, comparePeriodOrders]);
+  }, [currentPeriodOrders, comparePeriodOrders, canonicalAnalytics, currentRange]);
 
   // Comparison period label for display
   const comparisonLabel = useMemo(() => {
@@ -1870,8 +1941,10 @@ export default function InsightsPage() {
       {/* ========================================================= */}
       <AIInsights
         filters={aiFilters}
-        currentLiveOrders={currentPeriodOrders.length}
+        currentLiveOrders={kpis.orders}
         currentLiveRevenue={kpis.revenue}
+        canonicalAnalytics={canonicalAnalytics}
+        onRefreshAnalytics={fetchCanonicalAnalytics}
       />
 
       {/* ========================================================= */}

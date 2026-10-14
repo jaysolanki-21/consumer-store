@@ -1,388 +1,361 @@
-import Order from '../models/Order.js';
-import Product from '../models/Product.js';
-import Category from '../models/Category.js';
 import AIInsight from '../models/AIInsight.js';
+import { calculateCanonicalAnalytics, formatDateKeyIST } from '../services/analyticsService.js';
 
-const responseCache = new Map();
-const IST_OFFSET_MS = 330 * 60 * 1000;
+// In-memory set to prevent concurrent duplicate generation runs for the exact same period
+const activeGenerations = new Set();
 
-const dateBounds = (date) => {
-  const [year, month, day] = date.split('-').map(Number);
-  const start = new Date(Date.UTC(year, month - 1, day) - IST_OFFSET_MS);
-  return { start, end: new Date(start.getTime() + 86400000 - 1) };
-};
+/**
+ * Clean and parse Groq JSON response safely.
+ */
+function parseGroqResponse(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
 
-// Evidence-bound parser to turn AI text response into structured takeaways and sections
-function parseInsightsOutput(text, summary) {
-  const takeaways = [];
-  const sections = [];
-
-  if (!text || typeof text !== 'string') {
-    return { takeaways, sections, rawInsights: '' };
-  }
-
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-
-  let currentSection = null;
-  let inTakeaways = false;
-
-  for (const line of lines) {
-    // Check if this line signals KEY TAKEAWAYS section
-    if (/^#*\s*key takeaways/i.test(line)) {
-      inTakeaways = true;
-      continue;
+  try {
+    let clean = rawText.trim();
+    // Remove markdown code fences if present
+    if (clean.startsWith('```json')) {
+      clean = clean.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+    } else if (clean.startsWith('```')) {
+      clean = clean.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
 
-    if (/^#*\s*detailed insights/i.test(line)) {
-      inTakeaways = false;
-      continue;
+    const parsed = JSON.parse(clean);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
     }
-
-    // Check for takeaways bullet
-    if (inTakeaways && /^[-*•]\s*(.+)/.test(line)) {
-      const match = line.match(/^[-*•]\s*(.+)/);
-      if (match && match[1]) {
-        takeaways.push(match[1].trim());
-        continue;
-      }
-    }
-
-    // Pattern for section header: e.g. "Sales Insight: ...", "* Sales Insight: ...", "[Sales Insight | Priority: HIGH]: ..."
-    const sectionMatch = line.match(
-      /^[-*•#\s]*\[?([A-Za-z\s]+?)(?:\s*\|\s*Priority:\s*([A-Za-z]+))?\]?:\s*(.+)$/i
-    );
-
-    if (sectionMatch) {
-      const rawTitle = sectionMatch[1].trim();
-      const rawPriority = (sectionMatch[2] || '').toUpperCase();
-      const content = sectionMatch[3].trim();
-
-      let type = 'general';
-      let title = rawTitle;
-      let priority = ['LOW', 'MEDIUM', 'HIGH'].includes(rawPriority) ? rawPriority : 'MEDIUM';
-
-      const lowerTitle = rawTitle.toLowerCase();
-      if (lowerTitle.includes('sale') || lowerTitle.includes('revenue')) {
-        type = 'sales';
-        title = 'Sales Performance';
-      } else if (lowerTitle.includes('profit') || lowerTitle.includes('margin')) {
-        type = 'profit';
-        title = 'Profit Margin & Contribution';
-      } else if (lowerTitle.includes('inventory') || lowerTitle.includes('stock')) {
-        type = 'inventory';
-        title = 'Inventory & Stock Risk';
-        if (!rawPriority) priority = 'HIGH';
-      } else if (lowerTitle.includes('operation') || lowerTitle.includes('counter') || lowerTitle.includes('staff')) {
-        type = 'operations';
-        title = 'Store Operations';
-      } else if (lowerTitle.includes('recommend') || lowerTitle.includes('action')) {
-        type = 'recommendation';
-        title = 'Actionable Recommendation';
-        if (!rawPriority) priority = 'HIGH';
-      } else if (lowerTitle.includes('payment')) {
-        type = 'payment';
-        title = 'Payment Methods';
-      }
-
-      currentSection = { type, title, content, priority };
-      sections.push(currentSection);
-      continue;
-    }
-
-    // If it's a bullet under current section, or continued text
-    if (currentSection && line) {
-      currentSection.content += ' ' + line.replace(/^[-*•]\s*/, '');
-    } else if (/^[-*•]\s*(.+)/.test(line) && takeaways.length < 4) {
-      takeaways.push(line.replace(/^[-*•]\s*/, ''));
+  } catch (err) {
+    // If not strict JSON, attempt to locate JSON substring
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        const substr = rawText.substring(firstBrace, lastBrace + 1);
+        const parsed = JSON.parse(substr);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      } catch (e) {}
     }
   }
-
-  // Fallback takeaways from actual summary metrics if none parsed
-  if (takeaways.length === 0) {
-    if (summary.sales?.revenue) {
-      takeaways.push(`Total revenue ₹${Number(summary.sales.revenue).toLocaleString('en-IN')} across ${summary.sales.orders} orders.`);
-    }
-    if (summary.sales?.peakHours?.length) {
-      takeaways.push(`Peak sales volume observed at hour ${summary.sales.peakHours[0].hour}:00.`);
-    }
-    if (summary.inventory?.lowStock?.length) {
-      takeaways.push(`${summary.inventory.lowStock.length} product(s) currently at or below low stock threshold.`);
-    }
-    if (summary.products?.mostProfitable?.length) {
-      takeaways.push(`Highest profit contributor: ${summary.products.mostProfitable[0].name}.`);
-    }
-  }
-
-  // Fallback section if no sections found
-  if (sections.length === 0 && text) {
-    sections.push({
-      type: 'sales',
-      title: 'Business Observation',
-      content: text,
-      priority: 'MEDIUM',
-    });
-  }
-
-  return { takeaways: takeaways.slice(0, 4), sections, rawInsights: text };
+  return null;
 }
 
+/**
+ * Deterministic fallback generator using exact canonical metrics.
+ * Ensures 100% data integrity even if LLM service is offline or invalid.
+ */
+function generateDeterministicInsights(canonical) {
+  const { metrics, comparison, products, inventory, operations, period } = canonical;
+
+  const revFormatted = `₹${metrics.revenue.toLocaleString('en-IN')}`;
+  const profitFormatted = `₹${metrics.profit.toLocaleString('en-IN')}`;
+  const topProduct = products.top[0]?.name || 'Top catalog items';
+  const peakHour = operations.peakHours[0]
+    ? `${operations.peakHours[0].hour % 12 === 0 ? 12 : operations.peakHours[0].hour % 12}:00 ${
+        operations.peakHours[0].hour >= 12 ? 'PM' : 'AM'
+      }`
+    : 'Afternoon';
+
+  // Exactly 3 executive takeaways
+  const takeaways = [
+    // 1. Overall Performance Takeaway
+    comparison.deltas.revenue.hasPrev
+      ? `Store generated ${revFormatted} across ${metrics.orders} orders (${comparison.deltas.revenue.label}, ${metrics.margin}% gross margin).`
+      : `Store recorded ${revFormatted} in gross revenue across ${metrics.orders} confirmed orders at an average order value of ₹${metrics.averageOrderValue.toLocaleString('en-IN')}.`,
+
+    // 2. Products & Inventory Takeaway
+    inventory.outOfStock.length > 0 || inventory.lowStock.length > 0
+      ? `${topProduct} led product sales with ${products.top[0]?.quantity || 0} units, while ${inventory.outOfStock.length} items are out of stock and ${inventory.lowStock.length} require reordering.`
+      : `${topProduct} is the primary volume driver (${products.top[0]?.quantity || 0} units sold), supporting a healthy ${metrics.margin}% store-wide margin.`,
+
+    // 3. Store Operations Takeaway
+    `Peak shopping activity concentrated around ${peakHour}, with ${operations.payments.cash.percentage}% cash and ${operations.payments.online.percentage}% online/UPI payment adoption.`,
+  ];
+
+  // 4 Categorized Sections
+  const sections = [
+    {
+      type: 'sales',
+      title: 'Sales Performance',
+      priority: comparison.deltas.revenue.direction === 'down' ? 'HIGH' : 'MEDIUM',
+      content: `The store completed ${metrics.orders} confirmed orders resulting in ${revFormatted} total sales and an Average Order Value (AOV) of ₹${metrics.averageOrderValue.toLocaleString('en-IN')}. ${
+        comparison.deltas.revenue.hasPrev
+          ? `Comparative revenue shifted ${comparison.deltas.revenue.direction === 'up' ? '+' : ''}${comparison.deltas.revenue.percent}% compared to the prior period (${metrics.orders - (comparison.metrics?.orders || 0)} order delta).`
+          : 'Comparative baseline established with steady transaction volume across the selected period.'
+      }`,
+    },
+    {
+      type: 'profit',
+      title: 'Profit Margin & Contribution',
+      priority: metrics.margin < 15 ? 'HIGH' : 'MEDIUM',
+      content: `Total gross profit reached ${profitFormatted} against ₹${metrics.cogs.toLocaleString('en-IN')} in Cost of Goods Sold (COGS), yielding a net gross margin of ${metrics.margin}%. ${
+        products.mostProfitable[0]
+          ? `The highest profit contributor was ${products.mostProfitable[0].name} generating ₹${Math.round(products.mostProfitable[0].profit).toLocaleString('en-IN')} in margin.`
+          : 'Product contributions remained evenly distributed.'
+      }`,
+    },
+    {
+      type: 'inventory',
+      title: 'Inventory & Stock Risk',
+      priority: inventory.outOfStock.length > 0 ? 'HIGH' : 'MEDIUM',
+      content: `${inventory.outOfStock.length} products are currently completely out of stock, and ${inventory.lowStock.length} products have reached minimum reorder limits. ${
+        inventory.stockRisk[0]
+          ? `Immediate attention is required for "${inventory.stockRisk[0].name}" with an estimated ${inventory.stockRisk[0].estimatedDaysOfStock ?? '< 3'} days of stock remaining at current velocity.`
+          : 'Fast-moving SKUs are currently operating within manageable inventory buffers.'
+      }`,
+    },
+    {
+      type: 'operations',
+      title: 'Store Operations',
+      priority: 'MEDIUM',
+      content: `Transactions peaked during the ${peakHour} window. ${
+        operations.counters[0]
+          ? `${operations.counters[0].name} handled the majority of transactions (₹${operations.counters[0].revenue.toLocaleString('en-IN')} across ${operations.counters[0].orders} orders).`
+          : 'POS counters operated with balanced throughput.'
+      } Customer settlement split: ${operations.payments.cash.percentage}% Cash vs ${operations.payments.online.percentage}% Digital/UPI.`,
+    },
+  ];
+
+  // Actionable recommendations
+  const recommendations = [
+    {
+      title: 'Replenish Depleting & Fast-Moving Stock',
+      priority: inventory.outOfStock.length > 0 ? 'HIGH' : 'MEDIUM',
+      evidence: `${inventory.outOfStock.length} products out of stock and ${inventory.lowStock.length} items at critical thresholds.`,
+      action: 'Initiate purchase orders for low-stock SKUs before peak sales cycles to avoid missed revenue.',
+      benefit: 'Prevents customer stockouts and protects daily order fulfillment velocity.',
+    },
+    {
+      title: 'Feature High-Margin Category Anchors',
+      priority: 'MEDIUM',
+      evidence: `Gross margin is ${metrics.margin}%, driven by top categories such as ${products.mostProfitable[0]?.name || 'top sellers'}.`,
+      action: 'Position top-margin products near checkouts and train staff to suggest complementary add-ons.',
+      benefit: 'Increases average basket size and elevates gross margin by 1.5–3%.',
+    },
+    {
+      title: 'Optimize Peak-Hour Staff & Counter Coverage',
+      priority: 'MEDIUM',
+      evidence: `Highest customer throughput concentrated around ${peakHour}.`,
+      action: 'Ensure all billing counters are active and staffed 30 minutes prior to peak trading windows.',
+      benefit: 'Reduces queue waiting times and improves checkout conversion during busy hours.',
+    },
+  ];
+
+  return { takeaways, sections, recommendations };
+}
+
+/**
+ * GET /api/insights/analytics
+ * Provides single canonical analytics for the selected date range and filters.
+ */
+export const getCanonicalAnalytics = async (req, res) => {
+  try {
+    const analytics = await calculateCanonicalAnalytics(req.query);
+    return res.json({ analytics });
+  } catch (error) {
+    console.error('Error computing canonical analytics:', error);
+    return res.status(400).json({ message: error.message || 'Failed to compute store analytics.' });
+  }
+};
+
+/**
+ * POST /api/insights/ai
+ * Generates and persists AI Business Insights using the canonical analytics engine.
+ */
 export const getBusinessInsights = async (req, res) => {
+  const startTime = Date.now();
+  const lockKey = `${req.body.from || ''}_${req.body.to || ''}_${req.body.counter || 'all'}`;
+
+  // Concurrency guard: prevent multiple identical AI generation runs from firing at the same time
+  if (activeGenerations.has(lockKey)) {
+    return res.status(429).json({
+      message: 'An analysis is currently being generated for this period. Please wait a moment.',
+    });
+  }
+
+  activeGenerations.add(lockKey);
+
   try {
     const apiKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({ message: 'Groq is not configured on the server.' });
-    }
 
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-    const defaultFrom = new Date(Date.now() - 29 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.body.from || '') ? req.body.from : defaultFrom;
-    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.body.to || '') ? req.body.to : today;
+    // 1. Calculate Single Canonical Analytics (Source of Truth)
+    const canonical = await calculateCanonicalAnalytics(req.body);
+    const { from, to, days } = canonical.period;
 
-    if (from > to) {
-      return res.status(400).json({ message: 'Start date must be on or before end date.' });
-    }
-
-    const key = JSON.stringify({
-      from,
-      to,
-      counter: req.body.counter || '',
-      category: req.body.category || '',
-      payment: req.body.payment || '',
-      staff: req.body.staff || '',
-    });
-
-    const cached = responseCache.get(key);
-    if (!req.body.forceRefresh && cached && cached.expires > Date.now()) {
-      return res.json({ ...cached.value, cached: true });
-    }
-
-    const start = dateBounds(from).start;
-    const end = dateBounds(to).end;
-
-    const [orders, products, categories] = await Promise.all([
-      Order.find({ status: 'Confirmed', createdAt: { $gte: start, $lte: end } })
-        .select('items totalAmount payment.method counter counterName counterId staffId staffName confirmedBy confirmedAt createdAt')
-        .populate('items.productId', 'name categoryId')
-        .populate('staffId', 'name')
-        .populate('confirmedBy', 'name')
-        .populate('counter', 'name')
-        .lean(),
-      Product.find()
-        .select('name stock reservedStock lowStockThreshold costPrice sellingPrice categoryId')
-        .populate('categoryId', 'name')
-        .lean(),
-      Category.find().select('name').lean(),
-    ]);
-
-    const categoriesById = new Map(categories.map((c) => [String(c._id), c.name]));
-    const productSales = new Map();
-    const categorySales = new Map();
-    const hourSales = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, revenue: 0 }));
-    const daySales = new Map();
-    const counterSales = new Map();
-    const staffSales = new Map();
-    const paymentSales = { cash: 0, online: 0 };
-    let revenue = 0, cost = 0, profit = 0, orderCount = 0;
-
-    const selectedOrders = orders.filter((order) => {
-      const counterName = order.counter?.name || order.counterName || order.counterId || 'Unassigned';
-      const staffName = order.staffName || order.confirmedBy?.name || order.staffId?.name || 'Unassigned';
-      const method = (order.payment?.method || 'Cash').toLowerCase() === 'cash' ? 'cash' : 'online';
-
-      if (req.body.counter && req.body.counter !== 'all' && counterName !== req.body.counter) return false;
-      if (req.body.staff && req.body.staff !== 'all' && staffName !== req.body.staff) return false;
-      if (req.body.payment && req.body.payment !== 'all' && method !== req.body.payment.toLowerCase()) return false;
-      return true;
-    });
-
-    selectedOrders.forEach((order) => {
-      let orderRevenue = Number(order.totalAmount || 0), orderCost = 0, orderProfit = 0, matchingRevenue = 0, matchingCost = 0;
-      const time = order.confirmedAt || order.createdAt;
-      const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(time));
-      const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hourCycle: 'h23' }).format(new Date(time)));
-
-      let itemCategoryMatch = !req.body.category || req.body.category === 'all';
-      (order.items || []).forEach((item) => {
-        const productId = String(item.productId?._id || item.productId);
-        const productName = item.productId?.name || 'Deleted product';
-        const categoryName = item.productId?.categoryId?.name || categoriesById.get(String(item.productId?.categoryId)) || 'Uncategorized';
-
-        if (req.body.category && req.body.category !== 'all' && categoryName !== req.body.category) return;
-        itemCategoryMatch = true;
-
-        const quantity = Number(item.quantity || 0);
-        const itemRevenue = Number(item.price ?? item.sellingPrice ?? 0) * quantity;
-        const itemCost = Number(item.costPrice || 0) * quantity;
-
-        orderCost += itemCost;
-        orderProfit += itemRevenue - itemCost;
-        matchingRevenue += itemRevenue;
-        matchingCost += itemCost;
-
-        const p = productSales.get(productId) || { name: productName, category: categoryName, quantity: 0, revenue: 0, cost: 0, profit: 0 };
-        p.quantity += quantity; p.revenue += itemRevenue; p.cost += itemCost; p.profit += itemRevenue - itemCost;
-        productSales.set(productId, p);
-
-        const c = categorySales.get(categoryName) || { category: categoryName, quantity: 0, revenue: 0, cost: 0, profit: 0 };
-        c.quantity += quantity; c.revenue += itemRevenue; c.cost += itemCost; c.profit += itemRevenue - itemCost;
-        categorySales.set(categoryName, c);
-      });
-
-      if (!itemCategoryMatch) return;
-      if (req.body.category && req.body.category !== 'all') {
-        orderRevenue = matchingRevenue;
-        orderCost = matchingCost;
-        orderProfit = matchingRevenue - matchingCost;
-      }
-
-      orderCount++;
-      revenue += orderRevenue;
-      cost += orderRevenue - orderProfit;
-      profit += orderProfit;
-
-      const day = daySales.get(dayKey) || { date: dayKey, orders: 0, revenue: 0, profit: 0 };
-      day.orders++; day.revenue += orderRevenue; day.profit += orderProfit;
-      daySales.set(dayKey, day);
-
-      hourSales[hour].orders++;
-      hourSales[hour].revenue += orderRevenue;
-
-      const paymentKey = (order.payment?.method || 'Cash').toLowerCase() === 'cash' ? 'cash' : 'online';
-      paymentSales[paymentKey] += orderRevenue;
-
-      const counterName = order.counter?.name || order.counterName || order.counterId || 'Unassigned';
-      const staffName = order.staffName || order.confirmedBy?.name || order.staffId?.name || 'Unassigned';
-
-      const counter = counterSales.get(counterName) || { name: counterName, orders: 0, revenue: 0 };
-      counter.orders++; counter.revenue += orderRevenue;
-      counterSales.set(counterName, counter);
-
-      const staff = staffSales.get(staffName) || { name: staffName, orders: 0, revenue: 0 };
-      staff.orders++; staff.revenue += orderRevenue;
-      staffSales.set(staffName, staff);
-    });
-
-    const inventoryRisks = products.map((product) => {
-      const available = Math.max(0, Number(product.stock || 0) - Number(product.reservedStock || 0));
-      const sold = productSales.get(String(product._id))?.quantity || 0;
-      const days = Math.max(1, (dateBounds(to).start - dateBounds(from).start) / 86400000 + 1);
-      return {
-        name: product.name,
-        available,
-        lowThreshold: Number(product.lowStockThreshold || 0),
-        unitsSold: sold,
-        estimatedDaysOfStock: sold ? Math.round((available / (sold / days)) * 10) / 10 : null,
-      };
-    });
-
-    const summary = {
-      period: { from, to },
-      sales: {
-        revenue,
-        orders: orderCount,
-        averageOrderValue: orderCount ? revenue / orderCount : 0,
-        cogs: cost,
-        profit,
-        margin: revenue ? (profit / revenue) * 100 : 0,
-        daily: [...daySales.values()].sort((a, b) => a.date.localeCompare(b.date)),
-        hourly: hourSales.filter((row) => row.orders),
-        peakHours: [...hourSales].sort((a, b) => b.revenue - a.revenue).slice(0, 3),
-      },
-      products: {
-        top: [...productSales.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5),
-        least: [...productSales.values()].sort((a, b) => a.quantity - b.quantity).slice(0, 5),
-        mostProfitable: [...productSales.values()].sort((a, b) => b.profit - a.profit).slice(0, 5),
-        lowestMargin: [...productSales.values()]
-          .filter((row) => row.revenue > 0)
-          .map((row) => ({ ...row, margin: (row.profit / row.revenue) * 100 }))
-          .sort((a, b) => a.margin - b.margin)
-          .slice(0, 5),
-      },
-      categories: [...categorySales.values()].sort((a, b) => b.revenue - a.revenue),
-      operations: {
-        counters: [...counterSales.values()],
-        staff: [...staffSales.values()],
-        payments: paymentSales,
-      },
-      inventory: {
-        lowStock: inventoryRisks.filter((p) => p.available > 0 && p.available <= p.lowThreshold).slice(0, 20),
-        outOfStock: inventoryRisks.filter((p) => p.available <= 0).slice(0, 20),
-        fastMoving: [...inventoryRisks].sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 10),
-        stockRisk: inventoryRisks.filter((p) => p.estimatedDaysOfStock !== null).sort((a, b) => a.estimatedDaysOfStock - b.estimatedDaysOfStock).slice(0, 10),
-      },
-    };
-
-    if (!orderCount && !products.length) {
+    // Check if empty dataset
+    if (canonical.metrics.orders === 0 && canonical.metrics.revenue === 0) {
+      activeGenerations.delete(lockKey);
       return res.json({
-        insights: 'Insufficient data for the selected period.',
-        takeaways: ['Insufficient transactions recorded for analysis.'],
-        sections: [],
-        metadata: { ordersAnalyzed: 0, revenueAnalyzed: 0 },
-        cached: false,
+        empty: true,
+        period: canonical.period,
+        metrics: canonical.metrics,
+        takeaways: ['No confirmed orders found in the selected date range.'],
+        sections: [
+          {
+            type: 'sales',
+            title: 'Sales Performance',
+            content: 'No transactions were recorded during this period.',
+            priority: 'LOW',
+          },
+        ],
+        recommendations: [],
+        dataVersion: canonical.dataVersion,
       });
     }
 
-    const prompt = `You are an evidence-bound supermarket business analyst. Use only the JSON data below. Never infer or invent counts, amounts, products, or trends. If a section lacks enough evidence, explicitly say "Insufficient data". Cite specific values only when present.
+    let aiOutput = null;
+    let rawContent = '';
 
-Respond strictly in this structured format:
+    // 2. Call Groq LLM if API Key is configured
+    if (apiKey) {
+      const prompt = `You are a strict, evidence-bound senior retail business analyst for "APC Store".
+You are provided with canonical store performance data below.
+DO NOT invent, guess, recalculate, or contradict the numbers provided.
+Use ONLY the exact metrics, amounts, and counts provided in the DATA block.
 
-KEY TAKEAWAYS:
-- [Short takeaway 1 with specific metric]
-- [Short takeaway 2 with specific metric]
-- [Short takeaway 3 with specific metric]
+Return ONLY a valid, parseable JSON object matching this schema:
+{
+  "takeaways": [
+    "Overall Performance: short takeaway with exact revenue ₹${canonical.metrics.revenue} and ${canonical.metrics.orders} orders",
+    "Products & Inventory: short takeaway citing top product and stock risk counts",
+    "Store Operations: short takeaway citing peak hour and payment split"
+  ],
+  "sections": [
+    {
+      "type": "sales",
+      "title": "Sales Performance",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "content": "Professional executive analysis citing exact orders (${canonical.metrics.orders}), revenue (₹${canonical.metrics.revenue}), and AOV (₹${canonical.metrics.averageOrderValue})."
+    },
+    {
+      "type": "profit",
+      "title": "Profit Margin & Contribution",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "content": "Analysis citing gross profit (₹${canonical.metrics.profit}), margin (${canonical.metrics.margin}%), and COGS (₹${canonical.metrics.cogs})."
+    },
+    {
+      "type": "inventory",
+      "title": "Inventory & Stock Risk",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "content": "Analysis citing low stock count, out of stock items, and estimated days of stock until depletion."
+    },
+    {
+      "type": "operations",
+      "title": "Store Operations",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "content": "Analysis citing top counter, peak hours, and cash vs online payment split."
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "Clear action title",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "evidence": "Exact metric from the data",
+      "action": "Concrete operational step",
+      "benefit": "Measurable business outcome"
+    }
+  ]
+}
 
-DETAILED INSIGHTS:
-Sales Insight: [Detailed sales analysis citing exact numbers]
-Profit Insight: [Detailed profit analysis citing exact numbers]
-Inventory Alert: [Inventory risk and stock levels citing products and days of stock]
-Operations: [Counter, staff, or peak hours observation]
-Recommendation: [Specific, data-driven, actionable business recommendation]
+DATA:
+${JSON.stringify({
+  period: canonical.period,
+  metrics: canonical.metrics,
+  comparison: canonical.comparison,
+  topProducts: canonical.products.top,
+  mostProfitable: canonical.products.mostProfitable,
+  categories: canonical.categories.slice(0, 5),
+  operations: {
+    counters: canonical.operations.counters.slice(0, 3),
+    payments: canonical.operations.payments,
+    peakHours: canonical.operations.peakHours,
+  },
+  inventory: {
+    outOfStockCount: canonical.inventory.outOfStock.length,
+    lowStockCount: canonical.inventory.lowStock.length,
+    highestRisk: canonical.inventory.stockRisk.slice(0, 3),
+  },
+})}`;
 
-DATA: ${JSON.stringify(summary)}`;
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), 25000);
 
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 25000);
-    let groqResponse;
+      try {
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          signal: abort.signal,
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.2,
+            max_tokens: 1000,
+            response_format: { type: 'json_object' },
+          }),
+        });
 
-    try {
-      groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        signal: abort.signal,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.2,
-          max_tokens: 750,
-        }),
-      });
-    } finally {
-      clearTimeout(timer);
+        if (groqResponse.ok) {
+          const json = await groqResponse.json();
+          rawContent = json.choices?.[0]?.message?.content?.trim() || '';
+          aiOutput = parseGroqResponse(rawContent);
+        } else {
+          console.warn('Groq response not OK:', groqResponse.status);
+        }
+      } catch (err) {
+        console.warn('Groq generation request encountered an error, falling back to deterministic:', err.message);
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
-    if (!groqResponse.ok) {
-      const providerError = await groqResponse.json().catch(() => ({}));
-      console.error('Groq request failed:', groqResponse.status, providerError.error?.message || 'Provider error');
-      return res.status(502).json({ message: 'Groq could not generate insights. Please try again later.' });
+    // 3. Fallback to deterministic if AI output was not obtained or invalid
+    if (
+      !aiOutput ||
+      !Array.isArray(aiOutput.takeaways) ||
+      aiOutput.takeaways.length < 3 ||
+      !Array.isArray(aiOutput.sections) ||
+      aiOutput.sections.length === 0
+    ) {
+      aiOutput = generateDeterministicInsights(canonical);
     }
 
-    const rawContent = (await groqResponse.json()).choices?.[0]?.message?.content?.trim();
-    if (!rawContent) {
-      return res.status(502).json({ message: 'Groq returned an empty response.' });
+    // 4. Ensure takeaways are exactly 3
+    const finalizedTakeaways = (aiOutput.takeaways || []).slice(0, 3);
+    if (finalizedTakeaways.length < 3) {
+      const fallback = generateDeterministicInsights(canonical);
+      while (finalizedTakeaways.length < 3) {
+        finalizedTakeaways.push(fallback.takeaways[finalizedTakeaways.length]);
+      }
     }
 
-    // Parse into structured takeaways and sections
-    const parsed = parseInsightsOutput(rawContent, summary);
+    // 5. Ensure sections have the 4 required pillars
+    const finalizedSections = aiOutput.sections || [];
+    const hasType = (t) => finalizedSections.some((s) => s.type === t);
+    const fallbackData = generateDeterministicInsights(canonical);
 
-    // PERSIST TO DATABASE
+    ['sales', 'profit', 'inventory', 'operations'].forEach((type) => {
+      if (!hasType(type)) {
+        const missing = fallbackData.sections.find((s) => s.type === type);
+        if (missing) finalizedSections.push(missing);
+      }
+    });
+
+    const finalizedRecommendations =
+      Array.isArray(aiOutput.recommendations) && aiOutput.recommendations.length > 0
+        ? aiOutput.recommendations.slice(0, 4)
+        : fallbackData.recommendations;
+
+    const generatedInMs = Date.now() - startTime;
+
+    // 6. Persist full canonical snapshot to MongoDB
     const savedInsight = await AIInsight.create({
       generatedAt: new Date(),
       generatedBy: req.user?._id,
       generatedByName: req.user?.name || 'Administrator',
-      period: summary.period,
+      period: { from, to, days },
       filters: {
         counter: req.body.counter || 'all',
         category: req.body.category || 'all',
@@ -390,42 +363,62 @@ DATA: ${JSON.stringify(summary)}`;
         staff: req.body.staff || 'all',
       },
       metadata: {
-        ordersAnalyzed: orderCount,
-        revenueAnalyzed: revenue,
-        model: process.env.GROQ_MODEL || 'Groq / Qwen',
+        ordersAnalyzed: canonical.metrics.orders,
+        revenueAnalyzed: canonical.metrics.revenue,
+        model: process.env.GROQ_MODEL || 'Groq / LLaMA',
+        generatedInMs,
+        dataVersion: canonical.dataVersion,
       },
-      takeaways: parsed.takeaways,
-      sections: parsed.sections,
-      rawInsights: rawContent,
+      dataVersion: canonical.dataVersion,
+      metrics: canonical.metrics,
+      comparison: canonical.comparison,
+      breakdown: {
+        products: canonical.products,
+        categories: canonical.categories,
+        operations: canonical.operations,
+      },
+      inventory: canonical.inventory,
+      takeaways: finalizedTakeaways,
+      sections: finalizedSections,
+      recommendations: finalizedRecommendations,
+      rawInsights: rawContent || JSON.stringify(aiOutput),
       status: 'completed',
     });
 
-    const responsePayload = {
+    activeGenerations.delete(lockKey);
+
+    return res.json({
       _id: savedInsight._id,
-      insights: rawContent,
-      takeaways: savedInsight.takeaways,
-      sections: savedInsight.sections,
-      metadata: savedInsight.metadata,
       period: savedInsight.period,
       filters: savedInsight.filters,
+      metrics: savedInsight.metrics,
+      comparison: savedInsight.comparison,
+      breakdown: savedInsight.breakdown,
+      inventory: savedInsight.inventory,
+      takeaways: savedInsight.takeaways,
+      sections: savedInsight.sections,
+      recommendations: savedInsight.recommendations,
+      metadata: savedInsight.metadata,
+      dataVersion: savedInsight.dataVersion,
       generatedAt: savedInsight.generatedAt.toISOString(),
       generatedByName: savedInsight.generatedByName,
+      isFresh: true,
       cached: false,
-    };
-
-    if (responseCache.size > 100) responseCache.clear();
-    responseCache.set(key, { value: responsePayload, expires: Date.now() + 5 * 60 * 1000 });
-
-    return res.json(responsePayload);
+    });
   } catch (error) {
-    console.error('AI insights error:', error.message);
-    return res.status(error.name === 'AbortError' ? 504 : 500).json({
-      message: error.name === 'AbortError' ? 'Groq request timed out.' : 'Failed to generate business insights.',
+    activeGenerations.delete(lockKey);
+    console.error('AI insights generation failed:', error);
+    return res.status(500).json({
+      message: error.message || 'Failed to generate business insights.',
     });
   }
 };
 
-// GET /insights/ai/latest
+/**
+ * GET /api/insights/ai/latest
+ * Fetches the latest saved snapshot for the given period.
+ * Strict: If from & to are provided, returns snapshot ONLY for that exact period (no falling back to wrong periods).
+ */
 export const getLatestBusinessInsight = async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -435,26 +428,30 @@ export const getLatestBusinessInsight = async (req, res) => {
       query = { 'period.from': from, 'period.to': to };
     }
 
-    let insight = await AIInsight.findOne(query).sort({ generatedAt: -1 }).lean();
-
-    // If query was for specific period and not found, fallback to the latest available insight overall
-    if (!insight && (from || to)) {
-      insight = await AIInsight.findOne().sort({ generatedAt: -1 }).lean();
-    }
+    const insight = await AIInsight.findOne(query).sort({ generatedAt: -1 }).lean();
 
     if (!insight) {
-      return res.json({ insight: null });
+      return res.json({ insight: null, hasSnapshot: false });
     }
 
     return res.json({
+      hasSnapshot: true,
       insight: {
         _id: insight._id,
-        insights: insight.rawInsights,
-        takeaways: insight.takeaways || [],
-        sections: insight.sections || [],
-        metadata: insight.metadata || { ordersAnalyzed: 0, revenueAnalyzed: 0 },
         period: insight.period,
         filters: insight.filters || {},
+        metrics: insight.metrics || {
+          orders: insight.metadata?.ordersAnalyzed || 0,
+          revenue: insight.metadata?.revenueAnalyzed || 0,
+        },
+        comparison: insight.comparison || null,
+        breakdown: insight.breakdown || null,
+        inventory: insight.inventory || null,
+        takeaways: insight.takeaways || [],
+        sections: insight.sections || [],
+        recommendations: insight.recommendations || [],
+        metadata: insight.metadata || { ordersAnalyzed: 0, revenueAnalyzed: 0 },
+        dataVersion: insight.dataVersion || '',
         generatedAt: insight.generatedAt ? new Date(insight.generatedAt).toISOString() : new Date().toISOString(),
         generatedByName: insight.generatedByName || 'Administrator',
       },
@@ -465,18 +462,38 @@ export const getLatestBusinessInsight = async (req, res) => {
   }
 };
 
-// GET /insights/ai/history
+/**
+ * GET /api/insights/ai/history
+ * Returns the 15 most recent snapshots across all periods.
+ */
 export const getBusinessInsightHistory = async (req, res) => {
   try {
     const history = await AIInsight.find()
       .sort({ generatedAt: -1 })
-      .limit(10)
-      .select('generatedAt period metadata status takeaways generatedByName')
+      .limit(15)
+      .select('generatedAt period metadata status takeaways recommendations generatedByName metrics')
       .lean();
 
     return res.json({ history });
   } catch (error) {
     console.error('Error fetching AI insight history:', error);
     return res.status(500).json({ message: 'Failed to fetch insight history.' });
+  }
+};
+
+/**
+ * GET /api/insights/ai/:id
+ * Fetches a specific historical snapshot by ID.
+ */
+export const getInsightById = async (req, res) => {
+  try {
+    const insight = await AIInsight.findById(req.params.id).lean();
+    if (!insight) {
+      return res.status(404).json({ message: 'Insight snapshot not found.' });
+    }
+    return res.json({ insight });
+  } catch (error) {
+    console.error('Error fetching insight by ID:', error);
+    return res.status(500).json({ message: 'Failed to fetch insight snapshot.' });
   }
 };
