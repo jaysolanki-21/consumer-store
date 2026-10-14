@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import User from '../models/User.js';
 import Counter from '../models/Counter.js';
 import { disconnectUserBeacon } from '../sockets/socketHandler.js';
-import { recordAuditLog, extractClientInfo } from '../utils/auditLogger.js';
 
 const generateToken = (id) => {
   if (!process.env.JWT_SECRET) {
@@ -15,84 +14,25 @@ const generateToken = (id) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const clientInfo = extractClientInfo(req);
 
     // Validate input
     if (!email || !password) {
-      await recordAuditLog(
-        {
-          action: 'FAILED_LOGIN',
-          module: 'Authentication',
-          targetType: 'Session',
-          targetName: email || 'Unknown',
-          description: `Login attempted without required credentials`,
-          status: 'Failed',
-          failureReason: 'Missing email or password',
-          role: 'anonymous',
-          userName: email || 'Anonymous',
-        },
-        req
-      );
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      await recordAuditLog(
-        {
-          action: 'FAILED_LOGIN',
-          module: 'Authentication',
-          targetType: 'Session',
-          targetName: email,
-          description: `Failed login attempt: account ${email} not found`,
-          status: 'Failed',
-          failureReason: 'Account not found',
-          role: 'anonymous',
-          userName: email,
-        },
-        req
-      );
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
-      await recordAuditLog(
-        {
-          userId: user._id,
-          userName: user.name,
-          role: user.role,
-          action: 'FAILED_LOGIN',
-          module: 'Authentication',
-          targetType: 'Session',
-          targetName: user.email,
-          description: `Failed login attempt for ${user.name} (${user.email}): incorrect password`,
-          status: 'Failed',
-          failureReason: 'Incorrect password',
-        },
-        req
-      );
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Check if user is active / disabled
     if (!user.isActive || (user.disabledUntil && new Date(user.disabledUntil) > new Date())) {
-      await recordAuditLog(
-        {
-          userId: user._id,
-          userName: user.name,
-          role: user.role,
-          action: 'FAILED_LOGIN',
-          module: 'Authentication',
-          targetType: 'Session',
-          targetName: user.email,
-          description: `Login rejected for ${user.name} (${user.role.toUpperCase()}): account is deactivated`,
-          status: 'Warning',
-          failureReason: 'Account deactivated by administrator',
-        },
-        req
-      );
       return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
     }
 
@@ -128,7 +68,7 @@ export const login = async (req, res) => {
     user.loginHistory.push({
       loginAt: new Date(),
       logoutAt: null,
-      ip: clientInfo.ipAddress,
+      ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '127.0.0.1',
       userAgent: req.headers['user-agent'] || '',
     });
     if (user.loginHistory.length > 50) {
@@ -141,32 +81,6 @@ export const login = async (req, res) => {
       io.emit('usersUpdated');
       io.emit('countersUpdated');
     }
-
-    // Record Successful Login Audit Log
-    await recordAuditLog(
-      {
-        userId: user._id,
-        userName: user.name,
-        role: user.role,
-        action: 'LOGIN',
-        module: 'Authentication',
-        targetType: 'Session',
-        targetName: user.name,
-        counterId: counterDoc?._id ? String(counterDoc._id) : null,
-        counterName: counterDoc?.name || null,
-        description: `${user.name} (${user.role.toUpperCase()}) logged in from ${clientInfo.deviceName}`,
-        status: 'Success',
-        metadata: {
-          email: user.email,
-          loginTime: new Date(),
-          device: clientInfo.deviceName,
-          os: clientInfo.os,
-          browser: clientInfo.browser,
-          ip: clientInfo.ipAddress,
-        },
-      },
-      req
-    );
 
     res.json(response);
   } catch (error) {
@@ -181,7 +95,6 @@ export const login = async (req, res) => {
 export const logoutUser = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const clientInfo = extractClientInfo(req);
 
     if (userId) {
       const user = await User.findById(userId);
@@ -189,38 +102,13 @@ export const logoutUser = async (req, res) => {
         user.isOnline = false;
         user.lastSeen = new Date();
 
-        let sessionDurationMs = 0;
         if (user.loginHistory && user.loginHistory.length > 0) {
           const lastEntry = user.loginHistory[user.loginHistory.length - 1];
           if (lastEntry && !lastEntry.logoutAt) {
             lastEntry.logoutAt = new Date();
-            sessionDurationMs = Math.max(0, new Date().getTime() - new Date(lastEntry.loginAt).getTime());
           }
         }
         await user.save();
-
-        const durationMinutes = Math.round(sessionDurationMs / 60000);
-        const durationFormatted = durationMinutes > 0 ? `${durationMinutes}m` : `${Math.round(sessionDurationMs / 1000)}s`;
-
-        await recordAuditLog(
-          {
-            userId: user._id,
-            userName: user.name,
-            role: user.role,
-            action: 'LOGOUT',
-            module: 'Authentication',
-            targetType: 'Session',
-            targetName: user.name,
-            description: `${user.name} (${user.role.toUpperCase()}) logged out (Session: ${durationFormatted})`,
-            status: 'Success',
-            metadata: {
-              sessionDurationMs,
-              sessionDuration: durationFormatted,
-              logoutAt: new Date(),
-            },
-          },
-          req
-        );
 
         const io = req.app.get('io');
         if (io) {
@@ -251,23 +139,6 @@ export const beaconDisconnect = async (req, res) => {
     const userId = body?.userId;
     if (userId) {
       await disconnectUserBeacon(userId);
-      const user = await User.findById(userId);
-      if (user) {
-        await recordAuditLog(
-          {
-            userId: user._id,
-            userName: user.name,
-            role: user.role,
-            action: 'LOGOUT',
-            module: 'Authentication',
-            targetType: 'Session',
-            targetName: user.name,
-            description: `${user.name} session ended (Browser/Tab closed)`,
-            status: 'Success',
-          },
-          req
-        );
-      }
     }
     res.status(200).send('OK');
   } catch (err) {
@@ -310,44 +181,12 @@ export const changePassword = async (req, res) => {
 
     const isMatch = await user.matchPassword(currentPassword);
     if (!isMatch) {
-      await recordAuditLog(
-        {
-          userId: user._id,
-          userName: user.name,
-          role: user.role,
-          action: 'PASSWORD_CHANGE_FAILED',
-          module: 'Authentication',
-          targetType: 'User',
-          targetId: user._id,
-          targetName: user.name,
-          description: `Failed password change attempt for ${user.name}: incorrect current password`,
-          status: 'Failed',
-          failureReason: 'Incorrect current password',
-        },
-        req
-      );
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
     // Assign new password (hashed by pre-save hook)
     user.password = newPassword;
     await user.save();
-
-    await recordAuditLog(
-      {
-        userId: user._id,
-        userName: user.name,
-        role: user.role,
-        action: 'PASSWORD_CHANGED',
-        module: 'Authentication',
-        targetType: 'User',
-        targetId: user._id,
-        targetName: user.name,
-        description: `${user.name} successfully updated their account password`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.json({
       success: true,
@@ -416,22 +255,6 @@ export const createAdmin = async (req, res) => {
     if (io) {
       io.emit('usersUpdated');
     }
-
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'ADMIN_CREATED',
-        module: 'Security',
-        targetType: 'User',
-        targetId: newAdmin._id,
-        targetName: newAdmin.name,
-        description: `${req.user?.name || 'Admin'} created a new administrator account: ${newAdmin.name} (${newAdmin.email})`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.status(201).json({
       success: true,

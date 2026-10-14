@@ -192,7 +192,7 @@ const REPORT_DESCRIPTIONS = {
   "Fast Moving Stock": "High-velocity items with fast turnover rates and current stock on hand.",
   "Reserved Stock": "Inventory units currently held or reserved in active checkout carts and queues.",
   "Staff Performance & Activity": "Staff member billing performance, total orders processed, speed, and active status.",
-  "Staff Login History": "Authentication audit trail of staff login and logout sessions with IP and duration.",
+  "Staff Login History": "Authentication history of staff login and logout sessions with IP and duration.",
   "Working & Active Time": "Total working session duration and active shifts logged per staff member.",
   "Today vs Yesterday": "Comparative analysis of sales, revenue, orders, and average ticket size between today and yesterday.",
   "This Week vs Last Week": "Weekly performance comparison tracking daily revenue and order trends.",

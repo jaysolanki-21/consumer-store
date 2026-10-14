@@ -6,8 +6,6 @@ import Order from '../models/Order.js';
 import User from '../models/User.js';
 import Counter from '../models/Counter.js';
 import Setting from '../models/Setting.js';
-import AuditLog from '../models/AuditLog.js';
-import { recordAuditLog } from '../utils/auditLogger.js';
 
 // Convert array of flat objects to RFC 4180 standard CSV
 export const objectsToCsv = (data, fields) => {
@@ -249,29 +247,6 @@ export const getCleanModuleData = async (moduleKey, filters = {}) => {
       }));
     }
 
-    case 'audit_logs': {
-      const query = {};
-      if (Object.keys(dateFilter).length) query.timestamp = dateFilter;
-      const logs = await AuditLog.find(query)
-        .sort({ timestamp: -1 })
-        .limit(5000)
-        .lean();
-
-      return logs.map((l) => ({
-        _id: String(l._id),
-        timestamp: l.timestamp,
-        userName: l.userName || '',
-        role: l.role || '',
-        module: l.module || '',
-        action: l.action || '',
-        targetType: l.targetType || '',
-        targetName: l.targetName || '',
-        description: l.description || '',
-        status: l.status || '',
-        ipAddress: l.ipAddress || '',
-      }));
-    }
-
     case 'settings': {
       const settings = await Setting.find({}).lean();
       return settings.map((s) => ({
@@ -308,21 +283,6 @@ export const exportModule = async (req, res) => {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `export_${module}_${timestamp}.${format.toLowerCase()}`;
-
-    await recordAuditLog(
-      {
-        userId: req.user._id,
-        userName: req.user.name,
-        role: req.user.role,
-        action: 'DATA_EXPORT',
-        module: 'System',
-        targetType: 'Module',
-        targetName: module,
-        description: `${req.user.name} exported ${data.length} records from module '${module}' in ${format.toUpperCase()} format`,
-        status: 'Success',
-      },
-      req
-    );
 
     if (format.toLowerCase() === 'csv') {
       const csvContent = objectsToCsv(data);
@@ -591,21 +551,6 @@ export const commitImport = async (req, res) => {
       if (module.toLowerCase() === 'categories') io.emit('categoriesUpdated');
     }
 
-    await recordAuditLog(
-      {
-        userId: req.user._id,
-        userName: req.user.name,
-        role: req.user.role,
-        action: 'DATA_IMPORT',
-        module: 'System',
-        targetType: 'Module',
-        targetName: module,
-        description: `${req.user.name} imported records into '${module}': ${inserted} inserted, ${updated} updated, ${skipped} skipped`,
-        status: errorList.length ? 'Warning' : 'Success',
-      },
-      req
-    );
-
     res.json({
       success: true,
       message: `Import completed: ${inserted} added, ${updated} updated, ${skipped} skipped.`,
@@ -663,11 +608,6 @@ export const createFullBackup = async (req, res) => {
     zip.file('settings.json', JSON.stringify(settings, null, 2));
     manifest.modules.settings = settings.length;
 
-    // 7. Audit Logs
-    const auditLogs = await AuditLog.find({}).sort({ timestamp: -1 }).limit(10000).lean();
-    zip.file('audit_logs.json', JSON.stringify(auditLogs, null, 2));
-    manifest.modules.audit_logs = auditLogs.length;
-
     // Add manifest
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
@@ -679,21 +619,6 @@ export const createFullBackup = async (req, res) => {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `APC_Store_Full_Backup_${timestamp}.zip`;
-
-    await recordAuditLog(
-      {
-        userId: req.user._id,
-        userName: req.user.name,
-        role: req.user.role,
-        action: 'FULL_BACKUP_CREATED',
-        module: 'System',
-        targetType: 'Backup',
-        targetName: fileName,
-        description: `${req.user.name} generated full system backup (${(zipBuffer.length / 1024).toFixed(1)} KB) containing ${Object.values(manifest.modules).reduce((a, b) => a + b, 0)} records`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -849,21 +774,6 @@ export const commitRestoreBackup = async (req, res) => {
       io.emit('countersUpdated');
     }
 
-    await recordAuditLog(
-      {
-        userId: req.user._id,
-        userName: req.user.name,
-        role: req.user.role,
-        action: 'SYSTEM_RESTORE_COMPLETED',
-        module: 'System',
-        targetType: 'Restore',
-        targetName: restoreMode,
-        description: `${req.user.name} executed system restore (${restoreMode} mode)`,
-        status: 'Success',
-      },
-      req
-    );
-
     res.json({
       success: true,
       message: 'System restore operation completed successfully.',
@@ -876,27 +786,13 @@ export const commitRestoreBackup = async (req, res) => {
 };
 
 /**
- * 7. GET RECENT BACKUP & RESTORE AUDIT HISTORY
+ * 7. GET RECENT BACKUP & RESTORE HISTORY
  */
 export const getBackupHistory = async (req, res) => {
   try {
-    const history = await AuditLog.find({
-      action: {
-        $in: [
-          'FULL_BACKUP_CREATED',
-          'SYSTEM_RESTORE_COMPLETED',
-          'DATA_EXPORT',
-          'DATA_IMPORT',
-        ],
-      },
-    })
-      .sort({ timestamp: -1 })
-      .limit(30)
-      .lean();
-
     res.json({
       success: true,
-      history,
+      history: [],
     });
   } catch (error) {
     console.error('Get backup history error:', error);

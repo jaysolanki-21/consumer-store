@@ -1,7 +1,6 @@
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import imagekit from '../config/imagekit.js';
-import { recordAuditLog } from '../utils/auditLogger.js';
 
 const uploadToImageKit = (file, folder = '/staff') =>
   new Promise((resolve, reject) => {
@@ -59,22 +58,6 @@ export const createStaff = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.emit('usersUpdated');
 
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'STAFF_CREATED',
-        module: 'Staff',
-        targetType: 'Staff',
-        targetId: user._id,
-        targetName: user.name,
-        description: `${req.user?.name || 'Admin'} created staff account for ${user.name} (${user.email})`,
-        status: 'Success',
-      },
-      req
-    );
-
     res.status(201).json(userData);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -109,24 +92,6 @@ export const updateStaff = async (req, res) => {
     const { password, ...userData } = user.toJSON();
     const io = req.app.get('io');
     if (io) io.emit('usersUpdated');
-
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'STAFF_UPDATED',
-        module: 'Staff',
-        targetType: 'Staff',
-        targetId: user._id,
-        targetName: user.name,
-        previousValue: previousProfile,
-        newValue: { name: user.name, email: user.email },
-        description: `${req.user?.name || 'Admin'} updated staff profile for ${user.name}`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.json(userData);
   } catch (error) {
@@ -166,25 +131,6 @@ export const setStaffStatus = async (req, res) => {
       io.emit('countersUpdated');
     }
 
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'STAFF_STATUS_CHANGED',
-        module: 'Staff',
-        targetType: 'Staff',
-        targetId: user._id,
-        targetName: user.name,
-        previousValue: wasActive ? 'Active' : 'Disabled',
-        newValue: isCurrentlyDisabled ? 'Disabled' : 'Active',
-        change: `${wasActive ? 'Active' : 'Disabled'} → ${isCurrentlyDisabled ? 'Disabled' : 'Active'}`,
-        description: `${req.user?.name || 'Admin'} ${isCurrentlyDisabled ? 'disabled' : 'enabled'} staff account: ${user.name}`,
-        status: isCurrentlyDisabled ? 'Warning' : 'Success',
-      },
-      req
-    );
-
     const { password, ...userData } = user.toJSON();
     res.json(userData);
   } catch (error) {
@@ -215,22 +161,6 @@ export const resetStaffPassword = async (req, res) => {
       io.emit('usersUpdated');
     }
 
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'STAFF_PASSWORD_RESET',
-        module: 'Staff',
-        targetType: 'Staff',
-        targetId: user._id,
-        targetName: user.name,
-        description: `${req.user?.name || 'Admin'} reset password for staff member: ${user.name}`,
-        status: 'Warning',
-      },
-      req
-    );
-
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -260,22 +190,6 @@ export const deleteStaff = async (req, res) => {
     }
 
     await user.deleteOne();
-
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'STAFF_DELETED',
-        module: 'Staff',
-        targetType: 'Staff',
-        targetId: user._id,
-        targetName: staffName,
-        description: `${req.user?.name || 'Admin'} deleted staff account: ${staffName} (${staffEmail})`,
-        status: 'Warning',
-      },
-      req
-    );
 
     res.json({ message: 'Staff deleted successfully' });
   } catch (error) {

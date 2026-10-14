@@ -82,10 +82,6 @@ export default function AdminSettingsPage() {
   const [isSavingText, setIsSavingText] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Retention Policy State
-  const [retentionPolicy, setRetentionPolicy] = useState('forever');
-  const [retentionLoading, setRetentionLoading] = useState(false);
-
   // Confirmation Modal state: 'enable' | 'disable' | null
   const [confirmModal, setConfirmModal] = useState(null);
 
@@ -107,16 +103,9 @@ export default function AdminSettingsPage() {
   const fetchStatus = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const [maintRes, retRes] = await Promise.allSettled([
-        api.get('/settings/maintenance'),
-        api.get('/audit-logs/retention/policy'),
-      ]);
-
-      if (maintRes.status === 'fulfilled' && maintRes.value?.data?.maintenanceMode) {
-        dispatch(setMaintenanceMode(maintRes.value.data.maintenanceMode));
-      }
-      if (retRes.status === 'fulfilled' && retRes.value?.data?.policy) {
-        setRetentionPolicy(retRes.value.data.policy);
+      const maintRes = await api.get('/settings/maintenance');
+      if (maintRes?.data?.maintenanceMode) {
+        dispatch(setMaintenanceMode(maintRes.data.maintenanceMode));
       }
     } catch (err) {
       console.error('Failed to fetch settings status:', err);
@@ -125,18 +114,6 @@ export default function AdminSettingsPage() {
       setIsRefreshing(false);
     }
   }, [dispatch]);
-
-  const handleSaveRetention = async () => {
-    try {
-      setRetentionLoading(true);
-      await api.put('/audit-logs/retention/policy', { policy: retentionPolicy });
-      toast.success(`Audit Retention updated to ${retentionPolicy === 'forever' ? 'Forever' : retentionPolicy + ' Days'}`);
-    } catch (err) {
-      toast.error('Failed to update retention policy');
-    } finally {
-      setRetentionLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchStatus();
@@ -849,13 +826,13 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Audit Information & Security Details */}
+          {/* RIGHT COLUMN: Maintenance Information & Security Details */}
           <div className="space-y-6">
-            {/* Audit Info Card */}
+            {/* Maintenance Info Card */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <FiClock className="text-indigo-600 dark:text-indigo-400" />
-                <span>Audit Trail</span>
+                <span>Maintenance Information</span>
               </h3>
 
               <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-800 text-xs">
@@ -913,60 +890,6 @@ export default function AdminSettingsPage() {
                   </span>
                 </li>
               </ul>
-            </div>
-
-            {/* Audit Logs & Governance Card */}
-            <div className="bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FiActivity className="text-indigo-500" />
-                  <span>Audit & System Governance</span>
-                </h3>
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Active
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Automated 360° activity logging is enabled for all transactions, user logins, inventory movements, and settings changes.
-              </p>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Audit Log Retention Policy:
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    value={retentionPolicy}
-                    onChange={(e) => setRetentionPolicy(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200"
-                  >
-                    <option value="forever">Forever (Indefinite)</option>
-                    <option value="30">30 Days</option>
-                    <option value="90">90 Days</option>
-                    <option value="180">180 Days (6 Months)</option>
-                    <option value="365">1 Year (365 Days)</option>
-                  </select>
-                  <button
-                    onClick={handleSaveRetention}
-                    disabled={retentionLoading}
-                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-xl transition shadow-xs disabled:opacity-50"
-                  >
-                    {retentionLoading ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800">
-                <Link
-                  to="/admin/audit"
-                  className="w-full py-2.5 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-xs"
-                >
-                  <FiShield />
-                  <span>Open 360° Audit & Activity Logs</span>
-                </Link>
-              </div>
             </div>
           </div>
         </div>
@@ -1417,10 +1340,6 @@ export default function AdminSettingsPage() {
                     <span className="text-indigo-500 font-bold">•</span>
                     <span>Admin accounts bypass Maintenance Mode restrictions at all times.</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-indigo-500 font-bold">•</span>
-                    <span>Creation activities are automatically tracked in the 360° Audit Log.</span>
-                  </li>
                 </ul>
               </div>
             </div>
@@ -1542,7 +1461,7 @@ export default function AdminSettingsPage() {
                   <span>Data Export, Import & System Disaster Recovery</span>
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-                  Manage individual business module exports/imports (Products, Categories, Orders, Audit Logs) and generate complete compressed backup packages.
+                  Manage individual business module exports/imports (Products, Categories, Orders) and generate complete compressed backup packages.
                 </p>
               </div>
 
@@ -1601,7 +1520,6 @@ export default function AdminSettingsPage() {
                     <option value="staff">Staff Accounts</option>
                     <option value="counters">Counter Terminals</option>
                     <option value="admins">Admin Accounts</option>
-                    <option value="audit_logs">Audit & Activity Logs</option>
                     <option value="settings">System Settings</option>
                   </select>
                 </div>
@@ -1639,8 +1557,7 @@ export default function AdminSettingsPage() {
 
                 {/* Optional Date Range Filters */}
                 {(exportModuleSelect === 'orders' ||
-                  exportModuleSelect === 'order_items' ||
-                  exportModuleSelect === 'audit_logs') && (
+                  exportModuleSelect === 'order_items') && (
                   <div className="grid grid-cols-2 gap-3 pt-2">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -2034,7 +1951,7 @@ export default function AdminSettingsPage() {
             )}
           </div>
 
-          {/* BACKUP & RESTORE AUDIT HISTORY */}
+          {/* BACKUP & RESTORE HISTORY */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
             <div className="flex items-center justify-between">
               <div>

@@ -11,7 +11,6 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Counter from '../models/Counter.js';
 import User from '../models/User.js';
-import { recordAuditLog } from '../utils/auditLogger.js';
 
 // ─── Cashfree SDK Configuration ───────────────────────────────────────────────
 // Configured once at module load from environment variables.
@@ -231,26 +230,6 @@ export const createCashfreeSession = async (req, res) => {
     order.payment.paymentSessionId = paymentSessionId;
     await order.save();
 
-    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
-    await recordAuditLog({
-      userId: req.user?._id || null,
-      userName: req.user?.name || resolvedCounterName,
-      role: req.user?.role || 'counter',
-      action: 'PAYMENT_INITIATED',
-      module: 'Payments',
-      targetType: 'Payment',
-      targetId: order._id,
-      targetName: orderShortId,
-      orderId: order._id.toString(),
-      counterId: resolvedCounterId ? resolvedCounterId.toString() : null,
-      counterName: resolvedCounterName,
-      amount: totalAmount,
-      paymentMethod: 'Online',
-      description: `${resolvedCounterName} initiated Online payment of ₹${totalAmount} for Order ${orderShortId}`,
-      status: 'Success',
-      metadata: { cfOrderId, paymentSessionId }
-    }, req);
-
     return res.status(201).json({
       orderId: order._id,
       cfOrderId,
@@ -351,25 +330,6 @@ export const verifyCashfreePayment = async (req, res) => {
       io.emit('newOrder', populatedOrder);
       io.emit('stockUpdated');
 
-      const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
-      await recordAuditLog({
-        userId: req.user?._id || null,
-        userName: order.counterName || 'POS Counter',
-        role: req.user?.role || 'counter',
-        action: 'PAYMENT_SUCCESS',
-        module: 'Payments',
-        targetType: 'Payment',
-        targetId: order._id,
-        targetName: orderShortId,
-        orderId: order._id.toString(),
-        counterId: order.counter ? String(order.counter) : null,
-        counterName: order.counterName || null,
-        amount: order.totalAmount,
-        paymentMethod: 'Online',
-        description: `Online payment of ₹${order.totalAmount} completed successfully for Order ${orderShortId}`,
-        status: 'Success'
-      }, req);
-
       return res.json({ success: true, order: populatedOrder });
     }
 
@@ -404,26 +364,6 @@ export const verifyCashfreePayment = async (req, res) => {
 
     const io = req.app.get('io');
     io.emit('stockUpdated');
-
-    const orderShortId = '#' + order._id.toString().slice(-6).toUpperCase();
-    await recordAuditLog({
-      userId: req.user?._id || null,
-      userName: order.counterName || 'POS Counter',
-      role: req.user?.role || 'counter',
-      action: 'PAYMENT_FAILED',
-      module: 'Payments',
-      targetType: 'Payment',
-      targetId: order._id,
-      targetName: orderShortId,
-      orderId: order._id.toString(),
-      counterId: order.counter ? String(order.counter) : null,
-      counterName: order.counterName || null,
-      amount: order.totalAmount,
-      paymentMethod: 'Online',
-      failureReason: failedPayment?.payment_status || 'Payment dropped or failed',
-      description: `Online payment failed for Order ${orderShortId} (₹${order.totalAmount}) - Reason: ${failedPayment?.payment_status || 'Failed'}`,
-      status: 'Failed'
-    }, req);
 
     return res.json({
       success: false,

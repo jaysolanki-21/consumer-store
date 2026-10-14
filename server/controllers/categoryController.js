@@ -1,7 +1,5 @@
 import Category from '../models/Category.js';
 import Product from '../models/Product.js';
-import { recordAuditLog } from '../utils/auditLogger.js';
-
 const emitCategoriesUpdated = (req) => {
   const io = req.app.get('io');
   if (io) io.emit('categoriesUpdated');
@@ -24,22 +22,6 @@ export const createCategory = async (req, res) => {
     const category = await Category.create({ name });
     emitCategoriesUpdated(req);
 
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'CATEGORY_CREATED',
-        module: 'Categories',
-        targetType: 'Category',
-        targetId: category._id,
-        targetName: category.name,
-        description: `${req.user?.name || 'Admin'} created category "${category.name}"`,
-        status: 'Success',
-      },
-      req
-    );
-
     res.status(201).json(category);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -54,25 +36,6 @@ export const updateCategory = async (req, res) => {
     category.name = req.body.name;
     await category.save();
     emitCategoriesUpdated(req);
-
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'CATEGORY_UPDATED',
-        module: 'Categories',
-        targetType: 'Category',
-        targetId: category._id,
-        targetName: category.name,
-        previousValue: oldName,
-        newValue: category.name,
-        change: `${oldName} → ${category.name}`,
-        description: `${req.user?.name || 'Admin'} renamed category "${oldName}" to "${category.name}"`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.json(category);
   } catch (error) {
@@ -93,25 +56,8 @@ export const deleteCategory = async (req, res) => {
       });
     }
 
-    const catName = category.name;
     await category.deleteOne();
     emitCategoriesUpdated(req);
-
-    await recordAuditLog(
-      {
-        userId: req.user?._id,
-        userName: req.user?.name || 'Admin',
-        role: req.user?.role || 'admin',
-        action: 'CATEGORY_DELETED',
-        module: 'Categories',
-        targetType: 'Category',
-        targetId: category._id,
-        targetName: catName,
-        description: `${req.user?.name || 'Admin'} deleted category "${catName}"`,
-        status: 'Success',
-      },
-      req
-    );
 
     res.json({ message: 'Category deleted' });
   } catch (error) {
