@@ -1,8 +1,8 @@
+import './config/loadEnv.js';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
@@ -23,10 +23,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
-if (!process.env.GROQ_API_KEY && !process.env.VITE_GROQ_API_KEY) {
-  dotenv.config({ path: path.resolve(__dirname, '../client/.env'), override: false });
-}
 connectDB();
 
 const app = express();

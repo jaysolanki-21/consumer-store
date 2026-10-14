@@ -812,10 +812,12 @@ function ConsumerPageContent() {
     } catch (err) {
       console.error("Online checkout error:", err);
 
-      // User-friendly error messages only
-      const errMsg = err?.response?.data?.message || err?.message || "";
+      const serverMsg = err?.response?.data?.message;
+      const errMsg = serverMsg || err?.message || "";
 
-      if (
+      if (serverMsg) {
+        toast.error(serverMsg, { duration: 5000 });
+      } else if (
         errMsg.toLowerCase().includes("unavailable") ||
         errMsg.toLowerCase().includes("temporarily")
       ) {

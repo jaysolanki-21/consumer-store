@@ -4,6 +4,7 @@
  * All Cashfree credentials are used server-side only — never exposed to the frontend.
  */
 
+import '../config/loadEnv.js';
 import { Cashfree, CFEnvironment } from 'cashfree-pg';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
@@ -13,16 +14,42 @@ import Counter from '../models/Counter.js';
 import User from '../models/User.js';
 
 // ─── Cashfree SDK Configuration ───────────────────────────────────────────────
-// Configured once at module load from environment variables.
-const cashfreeEnvironment = process.env.CASHFREE_ENVIRONMENT === 'production'
-  ? CFEnvironment.PRODUCTION
-  : CFEnvironment.SANDBOX;
+let cachedCashfree = null;
+let cachedConfigKey = '';
 
-const cashfree = new Cashfree(
-  cashfreeEnvironment,
-  process.env.CASHFREE_APP_ID,
-  process.env.CASHFREE_SECRET_KEY
-);
+const getCashfree = () => {
+  const appId = process.env.CASHFREE_APP_ID;
+  const secretKey = process.env.CASHFREE_SECRET_KEY;
+  const rawEnv = (process.env.CASHFREE_ENVIRONMENT || '').toLowerCase();
+  const environment = (rawEnv === 'production' || rawEnv === 'prod')
+    ? CFEnvironment.PRODUCTION
+    : CFEnvironment.SANDBOX;
+
+  const configKey = `${appId}:${secretKey}:${rawEnv}`;
+  if (cachedCashfree && cachedConfigKey === configKey) {
+    return cachedCashfree;
+  }
+
+  if (!appId || !secretKey) {
+    console.error('[Cashfree] Missing CASHFREE_APP_ID or CASHFREE_SECRET_KEY in environment.');
+  }
+
+  cachedCashfree = new Cashfree(
+    environment,
+    appId,
+    secretKey
+  );
+  cachedConfigKey = configKey;
+  return cachedCashfree;
+};
+
+// ─── Backend URL Resolver for Webhooks ─────────────────────────────────────────
+const getBackendUrl = () => {
+  if (process.env.BACKEND_URL) return process.env.BACKEND_URL;
+  if (process.env.SERVER_URL) return process.env.SERVER_URL;
+  const port = process.env.PORT || 5000;
+  return `http://localhost:${port}`;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +81,13 @@ export const createCashfreeSession = async (req, res) => {
   try {
     const { items, counter, counterId, counterName, staffId, staffName } = req.body;
 
+    if (!process.env.CASHFREE_APP_ID || !process.env.CASHFREE_SECRET_KEY) {
+      console.error('[Cashfree] Missing CASHFREE_APP_ID or CASHFREE_SECRET_KEY in environment.');
+      return res.status(503).json({
+        message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
+      });
+    }
+
     // ── Validate input ────────────────────────────────────────────────────────
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Cart is empty' });
@@ -71,7 +105,7 @@ export const createCashfreeSession = async (req, res) => {
       if (!product) {
         return res.status(404).json({ message: `Product not found: ${item.productId}` });
       }
-      const available = product.stock - product.reservedStock;
+      const available = product.stock - (product.reservedStock || 0);
       if (available < item.quantity) {
         return res.status(400).json({
           message: `Only ${available} units of "${product.name}" are available`
@@ -131,6 +165,9 @@ export const createCashfreeSession = async (req, res) => {
     const resolvedCounterName = counterDoc 
       ? counterDoc.name 
       : (counterName || (typeof counter === 'object' ? counter.name : null) || 'Counter 1');
+    const sanitizedCounterName = (resolvedCounterName || 'Counter')
+      .replace(/[^a-zA-Z0-9\s._-]/g, '')
+      .trim() || 'Counter';
 
     // ── Generate unique Cashfree order ID ─────────────────────────────────────
     const cfOrderId = generateCfOrderId();
@@ -143,7 +180,7 @@ export const createCashfreeSession = async (req, res) => {
       counter: resolvedCounterId || undefined,
       counterId: resolvedCounterId ? resolvedCounterId.toString() : String(rawCounter),
       counterName: resolvedCounterName,
-      staffId: staffId || null,
+      staffId: (staffId && mongoose.Types.ObjectId.isValid(staffId)) ? staffId : null,
       staffName: staffName || '',
       payment: {
         method: 'Online',
@@ -165,25 +202,28 @@ export const createCashfreeSession = async (req, res) => {
     });
 
     // ── Create Cashfree Order / Payment Session ───────────────────────────────
+    const backendUrl = getBackendUrl();
+    const notifyUrl = `${backendUrl.replace(/\/$/, '')}/api/payments/cashfree/webhook`;
+
     const cfOrderRequest = {
       order_id: cfOrderId,
       order_amount: Number(totalAmount.toFixed(2)),
       order_currency: 'INR',
       customer_details: {
         customer_id: `counter_${resolvedCounterId ? resolvedCounterId.toString().slice(-8) : 'pos'}_${Date.now()}`,
-        customer_name: resolvedCounterName,
+        customer_name: sanitizedCounterName,
         customer_email: `pos_${resolvedCounterId ? resolvedCounterId.toString().slice(-6) : 'pos'}@apcstore.local`,
         customer_phone: '9999999999'
       },
       order_meta: {
-        notify_url: `${process.env.CLIENT_URL?.replace('http://localhost:5173', `http://localhost:${process.env.PORT || 5000}`)}/api/payments/cashfree/webhook`
+        notify_url: notifyUrl
       },
-      order_note: `Counter POS Order — ${resolvedCounterName}`
+      order_note: `Counter POS Order — ${sanitizedCounterName}`
     };
 
     let cfResponse;
     try {
-      cfResponse = await cashfree.PGCreateOrder(cfOrderRequest);
+      cfResponse = await getCashfree().PGCreateOrder(cfOrderRequest);
     } catch (cfErr) {
       // If Cashfree fails, release reserved stock and delete the order
       for (const item of orderItems) {
@@ -287,7 +327,7 @@ export const verifyCashfreePayment = async (req, res) => {
     // ── Verify with Cashfree backend ──────────────────────────────────────────
     let cfPayments;
     try {
-      const cfRes = await cashfree.PGOrderFetchPayments(cfOrderId);
+      const cfRes = await getCashfree().PGOrderFetchPayments(cfOrderId);
       cfPayments = cfRes.data;
     } catch (cfErr) {
       console.error('Cashfree verify error:', cfErr?.response?.data || cfErr.message);
