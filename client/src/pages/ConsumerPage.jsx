@@ -18,7 +18,6 @@ import {
   FiSearch,
   FiPackage,
   FiZap,
-  FiGrid,
   FiTag,
   FiCoffee,
   FiSmartphone,
@@ -933,16 +932,6 @@ function ConsumerPageContent() {
     setSelectedCategory("");
   };
 
-  // Top pill category click handler (seamless two-way sync)
-  const handleSelectPillCategory = (catId) => {
-    setSelectedCategory(catId);
-    if (catId) {
-      setSelectedCategories([catId]);
-    } else {
-      setSelectedCategories([]);
-    }
-  };
-
   const handlePriceChange = (min, max) => {
     setMinPrice(min);
     setMaxPrice(max);
@@ -1068,64 +1057,6 @@ function ConsumerPageContent() {
       </nav>
 
       <main className="container mx-auto px-4 py-6 pb-24 print:hidden">
-        {/* Top Category Navigation Pills Bar */}
-        <div className="mb-6 overflow-x-auto pb-1 scrollbar-none">
-          <div className="flex items-center gap-2 min-w-max">
-            <button
-              onClick={() => handleSelectPillCategory("")}
-              className={`group px-3.5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center gap-2 ${
-                !selectedCategory && selectedCategories.length === 0
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/30"
-                  : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750"
-              }`}
-            >
-              <FiGrid className="w-4 h-4" />
-              All
-              <span
-                className={`text-[11px] px-1.5 py-0.2 rounded-full ${
-                  !selectedCategory && selectedCategories.length === 0
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                }`}
-              >
-                {products.length}
-              </span>
-            </button>
-
-            {categories.map((cat) => {
-              const Icon = getCategoryIcon(cat.name);
-              const count = categoryCounts[cat._id] || 0;
-              const isCatActive =
-                selectedCategory === cat._id ||
-                selectedCategories.includes(cat._id);
-
-              return (
-                <button
-                  key={cat._id}
-                  onClick={() => handleSelectPillCategory(cat._id)}
-                  className={`group px-3.5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center gap-2 ${
-                    isCatActive
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/30"
-                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{cat.name}</span>
-                  <span
-                    className={`text-[11px] px-1.5 py-0.2 rounded-full ${
-                      isCatActive
-                        ? "bg-white/20 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* 2-Column E-Commerce Layout: Permanent Left Sidebar + Right Product Area */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* Permanent Desktop Filter Sidebar (hidden on mobile/tablet < lg) */}
