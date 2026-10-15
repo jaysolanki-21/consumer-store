@@ -104,8 +104,8 @@ export default function AdminSettingsPage() {
     try {
       setIsRefreshing(true);
       const maintRes = await api.get('/settings/maintenance');
-      if (maintRes?.data?.maintenanceMode) {
-        dispatch(setMaintenanceMode(maintRes.data.maintenanceMode));
+      if (maintRes?.data) {
+        dispatch(setMaintenanceMode(maintRes.data));
       }
     } catch (err) {
       console.error('Failed to fetch settings status:', err);
@@ -518,8 +518,8 @@ export default function AdminSettingsPage() {
         message: message.trim(),
       });
 
-      if (data?.maintenanceMode) {
-        dispatch(setMaintenanceMode(data.maintenanceMode));
+      if (data) {
+        dispatch(setMaintenanceMode(data));
       }
 
       toast.success(
@@ -556,8 +556,8 @@ export default function AdminSettingsPage() {
         message: message.trim(),
       });
 
-      if (data?.maintenanceMode) {
-        dispatch(setMaintenanceMode(data.maintenanceMode));
+      if (data) {
+        dispatch(setMaintenanceMode(data));
       }
 
       toast.success('Maintenance message updated successfully', {
@@ -671,7 +671,8 @@ export default function AdminSettingsPage() {
 
       {/* TAB 1: MAINTENANCE MODE */}
       {activeTab === 'maintenance' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="space-y-6 lg:space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* LEFT COLUMN: Main Maintenance Status Card */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
@@ -850,7 +851,7 @@ export default function AdminSettingsPage() {
                   </span>
                 </div>
                 <div className="pt-2 flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Current Status</span>
+                  <span className="text-slate-500 dark:text-slate-400">System Status</span>
                   <span
                     className={`font-bold px-2 py-0.5 rounded-md ${
                       isEnabled
@@ -893,7 +894,8 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* TAB 2: CHANGE MY PASSWORD */}
       {activeTab === 'security' && (
@@ -2258,6 +2260,7 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }

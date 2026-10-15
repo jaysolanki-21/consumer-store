@@ -8,6 +8,7 @@ import api from "./services/api";
 import { setMaintenanceMode } from "./redux/slices/settingsSlice";
 
 import ConsumerPage from "./pages/ConsumerPage";
+import ConsumerCheckoutPage from "./pages/ConsumerCheckoutPage";
 import StaffPage from "./pages/StaffPage";
 import AdminPage from "./pages/AdminPage";
 import AdminProductsPage from "./pages/AdminProductsPage";
@@ -122,8 +123,8 @@ function App() {
     api
       .get('/settings/maintenance')
       .then(({ data }) => {
-        if (data?.maintenanceMode) {
-          dispatch(setMaintenanceMode(data.maintenanceMode));
+        if (data) {
+          dispatch(setMaintenanceMode(data));
         }
       })
       .catch((err) => {
@@ -149,30 +150,29 @@ function App() {
         return;
       }
 
-      // If maintenance enabled and user is staff or counter
-      if (data.enabled) {
-        const isStaff = activeRole === 'staff';
-        const isCounter = counterRole === 'counter' || !!localStorage.getItem('counterToken');
+      // If maintenance enabled (manual or scheduled) and user is staff or counter
+      const isMaintenanceActive = Boolean(
+        data.isEffectiveActive ?? data.effectiveEnabled ?? data.enabled
+      );
 
-        if (isStaff || isCounter) {
-          if (window.location.pathname === '/maintenance') return;
+      if (isMaintenanceActive) {
+        if (window.location.pathname === '/maintenance') return;
 
-          Swal.fire({
-            title: 'System Maintenance Started',
-            text: 'The system is now under maintenance. You will be redirected shortly.',
-            icon: 'warning',
-            timer: 2500,
-            timerProgressBar: true,
-            showConfirmButton: false,
-            background: '#0f172a',
-            color: '#ffffff',
-            customClass: {
-              popup: 'rounded-2xl border border-slate-700',
-            },
-          }).then(() => {
-            window.location.href = '/maintenance';
-          });
-        }
+        Swal.fire({
+          title: 'System Maintenance Started',
+          text: 'The system is now under maintenance. You will be redirected shortly.',
+          icon: 'warning',
+          timer: 2500,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          background: '#0f172a',
+          color: '#ffffff',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-700',
+          },
+        }).then(() => {
+          window.location.href = '/maintenance';
+        });
       }
     };
 
@@ -249,6 +249,20 @@ function App() {
             <MaintenanceGuard>
               {isCounterLoggedIn ? (
                 <ConsumerPage />
+              ) : (
+                <Navigate to="/login" replace />
+              )}
+            </MaintenanceGuard>
+          }
+        />
+
+        {/* ✅ Dedicated Consumer Checkout Page */}
+        <Route
+          path="/consumer/checkout"
+          element={
+            <MaintenanceGuard>
+              {isCounterLoggedIn ? (
+                <ConsumerCheckoutPage />
               ) : (
                 <Navigate to="/login" replace />
               )}

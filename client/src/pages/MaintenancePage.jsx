@@ -55,7 +55,11 @@ export default function MaintenancePage() {
       dispatch(setMaintenanceMode(data));
       setLastCheckedTime(formatLocalTime(new Date()));
 
-      if (!data.enabled) {
+      const isStillActive = Boolean(
+        data.isEffectiveActive ?? data.effectiveEnabled ?? data.enabled
+      );
+
+      if (!isStillActive) {
         toast.success('System is back online! Redirecting...', {
           duration: 2500,
           id: 'maintenance-restored',

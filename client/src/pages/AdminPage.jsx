@@ -622,14 +622,14 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-7">
+    <div className="space-y-6">
       {/* ========================================================= */}
       {/* 1. PAGE HEADER                                             */}
       {/* ========================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-[28px] sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-[#F8FAFC] tracking-tight leading-tight">
               Store Dashboard
             </h1>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">

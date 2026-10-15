@@ -213,6 +213,14 @@ export const getOrders = async (req, res) => {
       andConditions.push(dateCondition);
     }
 
+    // Exclude online orders where payment has not been completed successfully
+    andConditions.push({
+      $or: [
+        { 'payment.method': { $nin: ['Online', 'online', 'Card', 'card', 'UPI', 'upi'] } },
+        { 'payment.status': 'Paid' }
+      ]
+    });
+
     // Base conditions for date & counter stats
     const baseConditions = [...andConditions];
 
@@ -493,6 +501,10 @@ export const confirmOrder = async (req, res) => {
     if (!order) return res.status(404).json({ message: 'Order not found' });
     if (order.status !== 'Pending') {
       return res.status(400).json({ message: 'Order already processed' });
+    }
+
+    if (['Online', 'online', 'Card', 'card', 'UPI', 'upi'].includes(order.payment?.method) && order.payment?.status !== 'Paid') {
+      return res.status(400).json({ message: 'Cannot confirm order: Online payment has not been completed successfully' });
     }
 
     // Check reservedStock before deducting

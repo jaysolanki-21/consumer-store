@@ -1,7 +1,12 @@
 import axios from 'axios';
 import socket from './socket';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+let rawApiUrl = (import.meta.env.VITE_API_URL || '/api').trim();
+if (rawApiUrl.startsWith('http')) {
+  const clean = rawApiUrl.replace(/\/+$/, '');
+  rawApiUrl = clean.endsWith('/api') ? clean : `${clean}/api`;
+}
+const API_URL = rawApiUrl;
 
 // Helper to get or generate persistent session ID per tab/session
 const getSessionId = () => {

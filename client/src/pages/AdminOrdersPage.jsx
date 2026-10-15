@@ -1296,14 +1296,21 @@ export default function AdminOrdersPage() {
                     </div>
 
                     {/* Amount & Chevron */}
-                    <div className="flex items-center justify-between md:justify-end gap-5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between md:justify-end gap-4 sm:gap-5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
                       <div className="text-left md:text-right">
-                        <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 dark:text-slate-500 block leading-none mb-1">
+                        <span className="text-[11px] sm:text-xs font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400 block leading-none mb-1.5">
                           Total Amount
                         </span>
-                        <div className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white flex items-baseline md:justify-end gap-0.5">
-                          <span className="text-base text-slate-500 dark:text-slate-400 font-sans">₹</span>
-                           <span className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white ml-2">{Number(order.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } )}</span>
+                        <div className="font-sans font-bold text-xl sm:text-2xl text-slate-900 dark:text-white flex items-baseline md:justify-end tracking-tight">
+                          <span className="font-bold text-slate-900 dark:text-white mr-1 select-none">
+                            ₹
+                          </span>
+                          <span className="tabular-nums">
+                            {Number(order.totalAmount || 0).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                       </div>
 

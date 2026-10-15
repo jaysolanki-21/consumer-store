@@ -1,11 +1,12 @@
 import Setting from '../models/Setting.js';
+import { evaluateMaintenanceState } from '../services/maintenanceService.js';
 
-let cachedMaintenance = null;
+let cachedEvaluation = null;
 let lastCacheTime = 0;
 const CACHE_TTL = 3000; // 3-second cache
 
 export const invalidateMaintenanceCache = () => {
-  cachedMaintenance = null;
+  cachedEvaluation = null;
   lastCacheTime = 0;
 };
 
@@ -21,25 +22,42 @@ export const checkMaintenanceMode = async (req, res, next) => {
 
   try {
     const now = Date.now();
-    if (!cachedMaintenance || now - lastCacheTime > CACHE_TTL) {
+    if (!cachedEvaluation || now - lastCacheTime > CACHE_TTL) {
       const setting = await Setting.findOne({ key: 'system_settings' });
-      cachedMaintenance = setting?.maintenanceMode || { enabled: false };
+      if (setting) {
+        cachedEvaluation = {
+          evalResult: evaluateMaintenanceState(setting),
+          maintenanceMode: setting.maintenanceMode,
+        };
+      } else {
+        cachedEvaluation = {
+          evalResult: { isEffectiveActive: false, activeReason: 'none' },
+          maintenanceMode: { enabled: false },
+        };
+      }
       lastCacheTime = now;
     }
 
-    if (cachedMaintenance.enabled) {
+    if (cachedEvaluation.evalResult.isEffectiveActive) {
       // If user is admin (verified after auth middleware), let them through
       if (req.user && req.user.role === 'admin') {
         return next();
       }
 
+      const activeNotice = cachedEvaluation.maintenanceMode || {};
+      const activeSched = cachedEvaluation.evalResult.activeSchedule;
+
+      const scheduleMsg = activeSched
+        ? ` Scheduled maintenance (${activeSched.title}) is active until ${activeSched.endTime} IST.`
+        : '';
+
       return res.status(503).json({
         success: false,
         maintenance: true,
-        title: cachedMaintenance.title || 'System Under Maintenance',
-        message:
-          cachedMaintenance.message ||
-          "We're temporarily performing system maintenance. Please try again after some time.",
+        title: activeNotice.title || 'System Under Maintenance',
+        message: (activeNotice.message || "We're temporarily performing system maintenance. Please try again after some time.") + scheduleMsg,
+        activeReason: cachedEvaluation.evalResult.activeReason,
+        activeSchedule: activeSched,
       });
     }
 

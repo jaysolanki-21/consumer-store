@@ -859,12 +859,12 @@ export default function StaffPage() {
   }, [filterDate]);
 
   return (
-    <div className="w-full max-w-[1150px] mx-auto pb-10 sm:pb-12 transition-colors">
+    <div className="w-full space-y-6">
       {/* ── HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-7">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl sm:text-[28px] font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
               Staff Dashboard
             </h1>
             {livePulse && (
@@ -944,8 +944,8 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* ── FILTERS ROW: COUNTERS + PAYMENTS (24–28px below header) ── */}
-      <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap text-xs sm:text-sm mb-5 sm:mb-6">
+      {/* ── FILTERS ROW: COUNTERS + PAYMENTS ── */}
+      <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap text-xs sm:text-sm">
         {/* Counter Filter */}
         <div className="h-9 flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 rounded-xl shadow-2xs">
           <FiMonitor className="text-indigo-500 w-3.5 h-3.5 shrink-0" />
@@ -998,8 +998,8 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* ── SEARCH BAR + STATUS TABS (20–24px below filters) ── */}
-      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-3 sm:p-3.5 mb-5 sm:mb-6">
+      {/* ── SEARCH BAR + STATUS TABS ── */}
+      <div className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-3 sm:p-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1">

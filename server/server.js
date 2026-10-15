@@ -1,8 +1,8 @@
-import './config/loadEnv.js';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
@@ -17,30 +17,65 @@ import backupRoutes from './routes/backupRoutes.js';
 import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './sockets/ioInstance.js';
+import { startMaintenanceScheduler } from './services/maintenanceService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-connectDB();
+dotenv.config();
+if (!process.env.GROQ_API_KEY && !process.env.VITE_GROQ_API_KEY) {
+  dotenv.config({ path: path.resolve(__dirname, '../client/.env'), override: false });
+}
 
 const app = express();
 const httpServer = createServer(app);
 
+// Dynamic CORS configuration supporting Netlify, Render, local development & custom domains
+const corsOriginDelegate = (origin, callback) => {
+  // Allow requests with no origin (e.g. mobile apps, curl, server-to-server webhooks)
+  if (!origin) return callback(null, true);
+
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const configuredOrigins = [
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:5000',
+  ].filter(Boolean).map((u) => u.replace(/\/+$/, ''));
+
+  if (
+    configuredOrigins.includes(cleanOrigin) ||
+    cleanOrigin.endsWith('.netlify.app') ||
+    cleanOrigin.endsWith('.onrender.com') ||
+    cleanOrigin.startsWith('http://localhost:') ||
+    cleanOrigin.startsWith('http://127.0.0.1:')
+  ) {
+    return callback(null, cleanOrigin);
+  }
+
+  // Fallback permissive for deployment flexibility while supporting credentials
+  return callback(null, cleanOrigin);
+};
+
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: corsOriginDelegate,
     credentials: true,
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
 });
 
-app.use(cors({
-  origin: process.env.CLIENT_URL,
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: corsOriginDelegate,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  })
+);
 
 // ── Raw body capture for Cashfree webhook HMAC verification ──────────────────
 // Registered BEFORE express.json() — only applies to the webhook route.
@@ -54,7 +89,6 @@ app.use(express.json());
 app.set('io', io);
 
 // Register IO singleton so the webhook handler can emit Socket.IO events
-// without needing req.app (webhooks arrive without going through app middleware)
 setIO(io);
 
 // Routes
@@ -75,7 +109,21 @@ app.get('/health', (req, res) => {
 
 app.use(errorHandler);
 
-socketHandler(io);
+const startServer = async () => {
+  try {
+    await connectDB();
 
-const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    socketHandler(io);
+
+    // Start background scheduled maintenance evaluator once DB is connected
+    startMaintenanceScheduler(io);
+
+    const PORT = process.env.PORT || 5000;
+    httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  } catch (err) {
+    console.error('Fatal error starting server:', err);
+    process.exit(1);
+  }
+};
+
+startServer();

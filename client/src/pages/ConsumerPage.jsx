@@ -6,7 +6,6 @@ import { clearCart } from "../redux/slices/cartSlice";
 import api from "../services/api";
 import socket from "../services/socket";
 import ProductCard from "../components/ProductCard";
-import CartDrawer from "../components/CartDrawer";
 import ThermalReceipt from "../components/ThermalReceipt";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { logout } from "../redux/slices/authSlice";
@@ -470,7 +469,6 @@ function ConsumerPageContent() {
   const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "relevance");
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [showCart, setShowCart] = useState(false);
   const [isOrderConfirming, setIsOrderConfirming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -494,13 +492,6 @@ function ConsumerPageContent() {
 
     setSearchParams(params, { replace: true });
   }, [search, selectedCategories, minPrice, maxPrice, stockAvailability, sortBy, setSearchParams]);
-
-  useEffect(() => {
-    document.body.style.overflow = showCart ? "hidden" : "auto";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [showCart]);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -674,7 +665,6 @@ function ConsumerPageContent() {
       );
 
       dispatch(clearCart());
-      setShowCart(false);
 
       // Silent print — no popup
       setTimeout(() => {
@@ -796,7 +786,6 @@ function ConsumerPageContent() {
         toast.success("Payment successful! Order placed 🎉", { duration: 4000 });
 
         dispatch(clearCart());
-        setShowCart(false);
 
         // Silent print
         setTimeout(() => {
@@ -1050,38 +1039,28 @@ function ConsumerPageContent() {
                 )}
               </button>
 
-              {/* Today's Orders Button */}
+              {/* My Orders Button */}
               <button
+                type="button"
                 onClick={() => setShowTodayOrders(true)}
-                className="h-10 px-3 sm:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-slate-800 dark:text-slate-100 font-semibold text-xs sm:text-sm flex items-center gap-1.5 border border-slate-200/80 dark:border-gray-700 transition-all shadow-xs active:scale-95"
-                title="View Today's Orders (IST)"
+                className="h-10 px-3 sm:px-3.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm flex items-center gap-2 border border-slate-200 dark:border-slate-800 transition-all shadow-xs active:scale-95 cursor-pointer"
+                title="View My Orders"
+                aria-label="View My Orders"
               >
-               
-                <span className="hidden sm:inline">Today&apos;s Orders</span>
-                {/* <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[11px] font-bold leading-none min-w-[20px] text-center">
-                  {todayOrdersCount}
-                </span> */}
+                <FiPackage className="text-base text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span className="hidden sm:inline">My Orders</span>
               </button>
 
+              {/* Logout Button */}
               <button
+                type="button"
                 onClick={handleLogout}
-                className="h-10 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold flex items-center gap-1 transition-all"
+                className="h-10 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Logout"
+                aria-label="Logout"
               >
                 <FiLogOut className="text-base" />
                 <span className="hidden sm:inline text-sm">Logout</span>
-              </button>
-
-              <button
-                onClick={() => setShowCart(true)}
-                className="relative h-10 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
-              >
-                <FiShoppingCart className="text-base" />
-                <span className="hidden sm:inline text-sm">Cart</span>
-                {cartCount > 0 && (
-                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 border-2 border-white dark:border-gray-900 text-[10px] flex items-center justify-center font-bold">
-                    {cartCount}
-                  </span>
-                )}
               </button>
             </div>
           </div>
@@ -1409,16 +1388,23 @@ function ConsumerPageContent() {
         matchingProductsCount={filteredProducts.length}
       />
 
-      <CartDrawer
-        open={showCart}
-        onClose={() => setShowCart(false)}
-        onCheckout={handlePlaceOrder}
-        onOnlineCheckout={handleOnlineCheckout}
-        isProcessing={isOrderConfirming}
-      />
+      {/* Floating Cart Button */}
+      <button
+        onClick={() => navigate("/consumer/checkout")}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white flex items-center justify-center shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer border-2 border-white/20 print:hidden focus:outline-none focus:ring-4 focus:ring-indigo-500/30"
+        aria-label={`View cart with ${cartCount} items`}
+        title={`View cart (${cartCount} items)`}
+      >
+        <FiShoppingCart className="text-xl" />
+        {cartCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[24px] h-6 px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-md">
+            {cartCount}
+          </span>
+        )}
+      </button>
 
       {/* ────────────────────────────────────────────────────────────────── */}
-      {/* 🥈 TODAY'S ORDERS MODAL                                             */}
+      {/* 🥈 MY ORDERS MODAL                                                 */}
       {/* ────────────────────────────────────────────────────────────────── */}
       <AnimatePresence>
         {showTodayOrders && (
@@ -1441,12 +1427,12 @@ function ConsumerPageContent() {
               <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/90">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-2xs border border-indigo-100 dark:border-indigo-900/80 flex-shrink-0">
-                    🥈
+                    <FiPackage className="text-xl" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        Today&apos;s Orders
+                        My Orders
                         <span className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                           ({todayOrdersCount} {todayOrdersCount === 1 ? "Order" : "Orders"})
                         </span>

@@ -8,6 +8,7 @@ export default function MaintenanceGuard({ children }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const maintenance = useSelector((state) => state.settings?.maintenanceMode);
+  const isEffectiveActive = useSelector((state) => state.settings?.isEffectiveActive);
   const lastChecked = useSelector((state) => state.settings?.lastChecked);
 
   const [hasVerified, setHasVerified] = useState(!!lastChecked);
@@ -36,8 +37,8 @@ export default function MaintenanceGuard({ children }) {
       api
         .get('/settings/maintenance')
         .then(({ data }) => {
-          if (isMounted && data?.maintenanceMode) {
-            dispatch(setMaintenanceMode(data.maintenanceMode));
+          if (isMounted && (data?.maintenanceMode || data?.isEffectiveActive !== undefined)) {
+            dispatch(setMaintenanceMode(data));
             setHasVerified(true);
           }
         })
@@ -59,8 +60,15 @@ export default function MaintenanceGuard({ children }) {
     return null;
   }
 
-  // 4. If maintenance is active and role is STAFF or COUNTER, redirect to /maintenance
-  if (maintenance?.enabled) {
+  // 4. If maintenance is active (manual or scheduled) and role is STAFF, COUNTER, or CONSUMER, redirect to /maintenance
+  const isMaintenanceActive = Boolean(
+    isEffectiveActive ||
+    maintenance?.isEffectiveActive ||
+    maintenance?.effectiveEnabled ||
+    maintenance?.enabled
+  );
+
+  if (isMaintenanceActive) {
     return <Navigate to="/maintenance" replace />;
   }
 

@@ -18,9 +18,9 @@ let cachedCashfree = null;
 let cachedConfigKey = '';
 
 const getCashfree = () => {
-  const appId = process.env.CASHFREE_APP_ID;
-  const secretKey = process.env.CASHFREE_SECRET_KEY;
-  const rawEnv = (process.env.CASHFREE_ENVIRONMENT || '').toLowerCase();
+  const appId = process.env.CASHFREE_APP_ID || process.env.CASHFREE_CLIENT_ID;
+  const secretKey = process.env.CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET;
+  const rawEnv = (process.env.CASHFREE_ENVIRONMENT || process.env.CASHFREE_ENV || process.env.VITE_CASHFREE_ENV || process.env.VITE_CASHFREE_MODE || '').toLowerCase();
   const environment = (rawEnv === 'production' || rawEnv === 'prod')
     ? CFEnvironment.PRODUCTION
     : CFEnvironment.SANDBOX;
@@ -31,7 +31,7 @@ const getCashfree = () => {
   }
 
   if (!appId || !secretKey) {
-    console.error('[Cashfree] Missing CASHFREE_APP_ID or CASHFREE_SECRET_KEY in environment.');
+    console.error('[Cashfree] Missing CASHFREE_APP_ID/CASHFREE_CLIENT_ID or CASHFREE_SECRET_KEY/CASHFREE_CLIENT_SECRET in environment.');
   }
 
   cachedCashfree = new Cashfree(
@@ -45,8 +45,9 @@ const getCashfree = () => {
 
 // ─── Backend URL Resolver for Webhooks ─────────────────────────────────────────
 const getBackendUrl = () => {
-  if (process.env.BACKEND_URL) return process.env.BACKEND_URL;
-  if (process.env.SERVER_URL) return process.env.SERVER_URL;
+  if (process.env.BACKEND_URL) return process.env.BACKEND_URL.replace(/\/+$/, '');
+  if (process.env.SERVER_URL) return process.env.SERVER_URL.replace(/\/+$/, '');
+  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL.replace(/\/+$/, '');
   const port = process.env.PORT || 5000;
   return `http://localhost:${port}`;
 };
@@ -81,8 +82,11 @@ export const createCashfreeSession = async (req, res) => {
   try {
     const { items, counter, counterId, counterName, staffId, staffName } = req.body;
 
-    if (!process.env.CASHFREE_APP_ID || !process.env.CASHFREE_SECRET_KEY) {
-      console.error('[Cashfree] Missing CASHFREE_APP_ID or CASHFREE_SECRET_KEY in environment.');
+    const appId = process.env.CASHFREE_APP_ID || process.env.CASHFREE_CLIENT_ID;
+    const secretKey = process.env.CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET;
+
+    if (!appId || !secretKey) {
+      console.error('[Cashfree] Missing CASHFREE_APP_ID/CASHFREE_CLIENT_ID or CASHFREE_SECRET_KEY/CASHFREE_CLIENT_SECRET in environment.');
       return res.status(503).json({
         message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
       });
@@ -374,17 +378,18 @@ export const verifyCashfreePayment = async (req, res) => {
     }
 
     // ── Payment not successful ────────────────────────────────────────────────
-    // Could be pending, failed, or cancelled — mark order accordingly.
+    // Mark order as Cancelled and payment as Failed
     const failedPayment = Array.isArray(cfPayments)
       ? cfPayments.find((p) => ['FAILED', 'CANCELLED', 'USER_DROPPED'].includes(p.payment_status))
       : null;
 
-    const newPaymentStatus = failedPayment?.payment_status === 'CANCELLED' ? 'Failed' : 'Failed';
-    order.payment.status = newPaymentStatus;
+    const failureReason = failedPayment?.payment_status ? failedPayment.payment_status.toLowerCase() : 'unsuccessful';
+    order.payment.status = 'Failed';
+    order.status = 'Cancelled';
 
     order.timeline.push({
-      status: order.status,
-      message: `Online payment ${newPaymentStatus.toLowerCase()}`,
+      status: 'Cancelled',
+      message: `Online payment ${failureReason}`,
       at: new Date()
     });
 
@@ -403,7 +408,10 @@ export const verifyCashfreePayment = async (req, res) => {
     }
 
     const io = req.app.get('io');
-    io.emit('stockUpdated');
+    if (io) {
+      io.emit('stockUpdated');
+      io.emit('orderUpdated', order);
+    }
 
     return res.json({
       success: false,
@@ -444,8 +452,18 @@ export const cashfreeWebhook = async (req, res) => {
       return;
     }
 
+    const webhookSecret =
+      process.env.CASHFREE_WEBHOOK_SECRET ||
+      process.env.CASHFREE_SECRET_KEY ||
+      process.env.CASHFREE_CLIENT_SECRET;
+
+    if (!webhookSecret) {
+      console.warn('[Webhook] No CASHFREE_WEBHOOK_SECRET or CASHFREE_SECRET_KEY configured — skipping verification');
+      return;
+    }
+
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
+      .createHmac('sha256', webhookSecret)
       .update(timestamp + rawBody)
       .digest('base64');
 
@@ -515,10 +533,11 @@ export const cashfreeWebhook = async (req, res) => {
       }
     } else if (['FAILED', 'CANCELLED', 'USER_DROPPED'].includes(paymentStatus)) {
       // ── Payment failed/cancelled — release stock ──────────────────────────
-      if (order.payment.status !== 'Failed') {
+      if (order.payment.status !== 'Failed' && order.payment.status !== 'Paid') {
         order.payment.status = 'Failed';
+        order.status = 'Cancelled';
         order.timeline.push({
-          status: order.status,
+          status: 'Cancelled',
           message: `[Webhook] Online payment ${paymentStatus.toLowerCase()}`,
           at: new Date()
         });
@@ -539,10 +558,69 @@ export const cashfreeWebhook = async (req, res) => {
         const io = getIO();
         if (io) {
           io.emit('stockUpdated');
+          io.emit('orderUpdated', order);
         }
       }
     }
   } catch (err) {
     console.error('[Webhook] Processing error:', err);
+  }
+};
+
+/**
+ * POST /api/payments/cashfree/cancel-session
+ *
+ * Explicitly cancels an unpaid session when customer closes payment popup
+ * or abandons payment.
+ */
+export const cancelCashfreeSession = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order ID is required' });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.payment?.status === 'Paid') {
+      return res.status(400).json({ message: 'Cannot cancel an order that has already been paid' });
+    }
+
+    if (order.status !== 'Cancelled') {
+      order.status = 'Cancelled';
+      order.payment.status = 'Failed';
+      order.timeline.push({
+        status: 'Cancelled',
+        message: 'Online payment cancelled / session closed',
+        at: new Date()
+      });
+      await order.save();
+
+      // Release reserved stock
+      for (const item of order.items) {
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
+        const actualDeduct = Math.min(product.reservedStock, item.quantity);
+        if (actualDeduct > 0) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { reservedStock: -actualDeduct }
+          });
+        }
+      }
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('stockUpdated');
+        io.emit('orderUpdated', order);
+      }
+    }
+
+    return res.json({ success: true, message: 'Session cancelled' });
+  } catch (error) {
+    console.error('cancelCashfreeSession error:', error);
+    return res.status(500).json({ message: 'Failed to cancel session' });
   }
 };

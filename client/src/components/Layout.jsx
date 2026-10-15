@@ -210,7 +210,7 @@ export default function Layout({ children }) {
   // =========================
   // ADMIN SIDEBAR
   // =========================
-  const AdminSidebar = () => (
+  const renderAdminSidebar = () => (
     <>
       {mobileSidebarOpen && (
         <div
@@ -225,10 +225,11 @@ export default function Layout({ children }) {
           bg-white dark:bg-[#0B1220]
           border-r border-slate-200 dark:border-slate-800/80
           shadow-xl
-          transition-transform duration-300
+          w-64
+          transition-[width,transform] duration-300 ease-in-out
           lg:translate-x-0
           ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          ${sidebarCollapsed ? "lg:w-16" : "lg:w-60"}
+          ${sidebarCollapsed ? "lg:w-20" : "lg:w-64"}
         `}
       >
         {/* SIDEBAR HEADER */}
@@ -239,16 +240,16 @@ export default function Layout({ children }) {
               sidebarCollapsed ? "lg:justify-center lg:w-full" : ""
             }`}
           >
-            <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-md">
-              <FiShoppingBag className="text-white" />
+            <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-md">
+              <FiShoppingBag className="text-white text-lg" />
             </div>
 
             {!sidebarCollapsed && (
-              <div className="leading-tight">
-                <h1 className="text-base font-bold text-slate-900 dark:text-white">
+              <div className="leading-tight overflow-hidden">
+                <h1 className="text-base font-bold text-slate-900 dark:text-white truncate">
                   APC Store
                 </h1>
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold truncate">
                   Admin Panel
                 </p>
               </div>
@@ -258,7 +259,7 @@ export default function Layout({ children }) {
           {/* DESKTOP COLLAPSE BUTTON */}
           <button
             onClick={() => setSidebarCollapsed((prev) => !prev)}
-            className="hidden lg:flex absolute -right-3 top-5 w-7 h-7 rounded-full items-center justify-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="hidden lg:flex absolute -right-3 top-5 w-7 h-7 rounded-full items-center justify-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-md hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer z-10"
             title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -280,29 +281,29 @@ export default function Layout({ children }) {
         </div>
 
         {/* NAVIGATION */}
-        <div className="p-4 overflow-y-auto max-h-[calc(100vh-140px)]">
+        <div className={`p-4 overflow-y-auto max-h-[calc(100vh-140px)] ${sidebarCollapsed ? "lg:px-2" : "lg:px-4"}`}>
           {!sidebarCollapsed && (
             <p className="px-3 mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
               Management
             </p>
           )}
 
-          <nav className="space-y-1">
+          <nav className="space-y-1.5">
             {adminNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
-
 
               return (
                 <Link
                   key={item.path}
                   to={item.path}
+                  title={item.label}
                   className={`
                     group flex items-center gap-3
                     px-3 py-2.5 rounded-xl
                     text-sm font-medium
                     transition-all duration-200
-                    ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}
+                    ${sidebarCollapsed ? "lg:justify-center lg:px-0 lg:w-12 lg:h-12 lg:mx-auto" : ""}
                     ${
                       active
                         ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
@@ -312,15 +313,15 @@ export default function Layout({ children }) {
                 >
                   <Icon
                     className={`
-                      text-lg flex-shrink-0
+                      text-xl flex-shrink-0
                       ${
                         active
                           ? "text-white"
-                          : "text-slate-500 dark:text-slate-400 group-hover:text-indigo-600"
+                          : "text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
                       }
                     `}
                   />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
+                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
                   {!sidebarCollapsed && item.badge > 0 && (
                     <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
                       {item.badge}
@@ -333,20 +334,20 @@ export default function Layout({ children }) {
         </div>
 
         {/* SIDEBAR USER */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800">
+        <div className={`absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800 ${sidebarCollapsed ? "lg:p-2" : "lg:p-4"}`}>
           <div className={`flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 ${
             sidebarCollapsed ? "lg:justify-center lg:p-2" : ""
           }`}>
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-sm font-semibold">
+            <div className="w-9 h-9 flex-shrink-0 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-sm font-semibold shadow-xs">
               {user?.name?.charAt(0)?.toUpperCase() || "A"}
             </div>
 
             {!sidebarCollapsed && (
-              <div className="min-w-0">
+              <div className="min-w-0 overflow-hidden">
                 <p className="text-sm font-medium text-slate-800 dark:text-white truncate">
                   {user?.name}
                 </p>
-                <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold truncate">
                   Administrator
                 </p>
               </div>
@@ -360,9 +361,9 @@ export default function Layout({ children }) {
   // =========================
   // TOP HEADER
   // =========================
-  const TopHeader = () => (
+  const renderTopHeader = () => (
     <nav className="sticky top-0 z-30 backdrop-blur-md bg-white/90 dark:bg-[#0B1220]/90 border-b border-slate-200 dark:border-slate-800/80 shadow-xs">
-      <div className="h-16 px-4 lg:px-8 flex items-center justify-between gap-4">
+      <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
         {/* LEFT */}
         <div className="flex items-center gap-3">
           {user?.role === "admin" && (
@@ -489,25 +490,27 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#080D1A] text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* ADMIN SIDEBAR */}
-      {user?.role === "admin" && <AdminSidebar />}
+      {user?.role === "admin" && renderAdminSidebar()}
 
       {/* PAGE AREA */}
       <div
-        className={
-          user?.role === "admin"
-            ? sidebarCollapsed
-              ? "lg:pl-16"
-              : "lg:pl-60"
-            : ""
-        }
+        className={`
+          transition-[padding-left] duration-300 ease-in-out min-h-screen flex flex-col
+          ${
+            user?.role === "admin"
+              ? sidebarCollapsed
+                ? "lg:pl-20"
+                : "lg:pl-64"
+              : ""
+          }
+        `}
       >
-        <TopHeader />
+        {renderTopHeader()}
 
-        <main className="max-w-[1650px] mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-8">
+        <main className="w-full flex-1 max-w-[1650px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {children}
         </main>
       </div>
     </div>
   );
-
 }

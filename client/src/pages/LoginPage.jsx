@@ -90,7 +90,12 @@ export default function LoginPage() {
       let isMaintenanceActive = false;
       try {
         const { data: maintData } = await api.get('/settings/maintenance');
-        isMaintenanceActive = !!maintData?.maintenanceMode?.enabled;
+        isMaintenanceActive = Boolean(
+          maintData?.isEffectiveActive ??
+          maintData?.effectiveEnabled ??
+          maintData?.maintenanceMode?.effectiveEnabled ??
+          maintData?.maintenanceMode?.enabled
+        );
       } catch (e) {}
 
       // ✅ Handle redirect based on role
