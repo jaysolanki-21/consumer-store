@@ -348,6 +348,7 @@ export default function InsightsPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState(new Date());
+  const [livePulse, setLivePulse] = useState(false);
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -362,7 +363,11 @@ export default function InsightsPage() {
           api.get("/counters").catch(() => ({ data: [] })),
         ]);
 
-      setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : []);
+      const ordersData = Array.isArray(ordersRes.data)
+        ? ordersRes.data
+        : (Array.isArray(ordersRes.data?.orders) ? ordersRes.data.orders : []);
+
+      setOrders(ordersData);
       setProducts(Array.isArray(productsRes.data) ? productsRes.data : []);
       setCategories(
         Array.isArray(categoriesRes.data) ? categoriesRes.data : [],
@@ -377,94 +382,8 @@ export default function InsightsPage() {
     }
   }, []);
 
-  // Real-time socket sync without full page reload or flashing spinners
   useEffect(() => {
     loadData();
-
-    const handleOrderUpdate = (order) => {
-      if (!order?._id) return;
-      setOrders((prev) => {
-        const idx = prev.findIndex((o) => o._id === order._id);
-        if (idx !== -1) {
-          const next = [...prev];
-          next[idx] = order;
-          return next;
-        }
-        return [order, ...prev];
-      });
-      setLastSync(new Date());
-    };
-
-    const handleOrderDelete = (id) => {
-      if (!id) return;
-      setOrders((prev) => prev.filter((o) => o._id !== id));
-      setLastSync(new Date());
-    };
-
-    const handleBulkDelete = () => loadData(true);
-
-    const handleStockUpdate = (prod) => {
-      if (prod?._id) {
-        setProducts((prev) =>
-          prev.map((p) => (p._id === prod._id ? { ...p, ...prod } : p)),
-        );
-      } else {
-        api
-          .get("/products")
-          .then((r) => setProducts(r.data))
-          .catch(() => {});
-      }
-      setLastSync(new Date());
-    };
-
-    const handleProductCreate = (p) => {
-      if (p?._id) setProducts((prev) => [p, ...prev]);
-    };
-
-    const handleProductDelete = ({ _id }) => {
-      if (_id) setProducts((prev) => prev.filter((p) => p._id !== _id));
-    };
-
-    const handleCountersRefresh = () => {
-      api
-        .get("/counters")
-        .then((r) => setCounters(r.data))
-        .catch(() => {});
-    };
-
-    socket.on("newOrder", handleOrderUpdate);
-    socket.on("orderCreated", handleOrderUpdate);
-    socket.on("orderConfirmed", handleOrderUpdate);
-    socket.on("orderCancelled", handleOrderUpdate);
-    socket.on("orderReverted", handleOrderUpdate);
-    socket.on("orderUpdated", handleOrderUpdate);
-    socket.on("orderDeleted", handleOrderDelete);
-    socket.on("ordersBulkDeleted", handleBulkDelete);
-
-    socket.on("stockUpdated", handleStockUpdate);
-    socket.on("productUpdated", handleStockUpdate);
-    socket.on("stockRefilled", handleStockUpdate);
-    socket.on("productCreated", handleProductCreate);
-    socket.on("productDeleted", handleProductDelete);
-    socket.on("countersUpdated", handleCountersRefresh);
-
-    return () => {
-      socket.off("newOrder", handleOrderUpdate);
-      socket.off("orderCreated", handleOrderUpdate);
-      socket.off("orderConfirmed", handleOrderUpdate);
-      socket.off("orderCancelled", handleOrderUpdate);
-      socket.off("orderReverted", handleOrderUpdate);
-      socket.off("orderUpdated", handleOrderUpdate);
-      socket.off("orderDeleted", handleOrderDelete);
-      socket.off("ordersBulkDeleted", handleBulkDelete);
-
-      socket.off("stockUpdated", handleStockUpdate);
-      socket.off("productUpdated", handleStockUpdate);
-      socket.off("stockRefilled", handleStockUpdate);
-      socket.off("productCreated", handleProductCreate);
-      socket.off("productDeleted", handleProductDelete);
-      socket.off("countersUpdated", handleCountersRefresh);
-    };
   }, [loadData]);
 
   // Lookup Maps for bulletproof Category & Product resolution
@@ -584,12 +503,159 @@ export default function InsightsPage() {
     }
   }, [currentRange]);
 
+  // Real-time socket sync, debounced canonical analytics sync, and fallback polling
   useEffect(() => {
     fetchCanonicalAnalytics();
-  }, [fetchCanonicalAnalytics]);
+
+    let debounceTimer = null;
+    const triggerDebouncedAnalytics = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchCanonicalAnalytics();
+      }, 500);
+    };
+
+    const handleOrderUpdate = (order) => {
+      if (!order?._id) return;
+      setOrders((prev) => {
+        const orderIdStr = String(order._id);
+        const idx = prev.findIndex((o) => String(o._id) === orderIdStr);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...order };
+          return next;
+        }
+        return [order, ...prev];
+      });
+      setLastSync(new Date());
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1200);
+      triggerDebouncedAnalytics();
+    };
+
+    const handleOrderDelete = (id) => {
+      if (!id) return;
+      const targetId = String(id?.orderId || id?._id || id);
+      setOrders((prev) => prev.filter((o) => String(o._id) !== targetId));
+      setLastSync(new Date());
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1200);
+      triggerDebouncedAnalytics();
+    };
+
+    const handleBulkDelete = () => {
+      loadData(true);
+      triggerDebouncedAnalytics();
+    };
+
+    const handleStockUpdate = (prod) => {
+      if (prod?._id) {
+        const prodIdStr = String(prod._id);
+        setProducts((prev) =>
+          prev.map((p) => (String(p._id) === prodIdStr ? { ...p, ...prod } : p)),
+        );
+      } else {
+        api
+          .get("/products")
+          .then((r) => setProducts(Array.isArray(r.data) ? r.data : []))
+          .catch(() => {});
+      }
+      setLastSync(new Date());
+      setLivePulse(true);
+      setTimeout(() => setLivePulse(false), 1200);
+      triggerDebouncedAnalytics();
+    };
+
+    const handleProductCreate = (p) => {
+      if (p?._id) setProducts((prev) => [p, ...prev]);
+      setLastSync(new Date());
+      triggerDebouncedAnalytics();
+    };
+
+    const handleProductDelete = (data) => {
+      const id = String(data?._id || data?.productId || data);
+      if (id) setProducts((prev) => prev.filter((p) => String(p._id) !== id));
+      setLastSync(new Date());
+      triggerDebouncedAnalytics();
+    };
+
+    const handleCategoriesRefresh = () => {
+      api
+        .get("/categories")
+        .then((r) => setCategories(Array.isArray(r.data) ? r.data : []))
+        .catch(() => {});
+    };
+
+    const handleCountersRefresh = () => {
+      api
+        .get("/counters")
+        .then((r) => setCounters(Array.isArray(r.data) ? r.data : []))
+        .catch(() => {});
+    };
+
+    const handleSocketConnect = () => {
+      loadData(true);
+      fetchCanonicalAnalytics();
+    };
+
+    socket.on("connect", handleSocketConnect);
+    socket.on("reconnect", handleSocketConnect);
+
+    socket.on("newOrder", handleOrderUpdate);
+    socket.on("orderCreated", handleOrderUpdate);
+    socket.on("orderConfirmed", handleOrderUpdate);
+    socket.on("orderCancelled", handleOrderUpdate);
+    socket.on("orderReverted", handleOrderUpdate);
+    socket.on("orderUpdated", handleOrderUpdate);
+    socket.on("orderDeleted", handleOrderDelete);
+    socket.on("ordersBulkDeleted", handleBulkDelete);
+
+    socket.on("stockUpdated", handleStockUpdate);
+    socket.on("productUpdated", handleStockUpdate);
+    socket.on("stockRefilled", handleStockUpdate);
+    socket.on("productCreated", handleProductCreate);
+    socket.on("productDeleted", handleProductDelete);
+    socket.on("productsUpdated", handleStockUpdate);
+    socket.on("productsBulkUpdated", handleStockUpdate);
+    socket.on("categoriesUpdated", handleCategoriesRefresh);
+    socket.on("countersUpdated", handleCountersRefresh);
+
+    // Fallback polling every 20 seconds to guarantee freshness even on flaky networks
+    const pollInterval = setInterval(() => {
+      loadData(true);
+      fetchCanonicalAnalytics();
+    }, 20000);
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      clearInterval(pollInterval);
+
+      socket.off("connect", handleSocketConnect);
+      socket.off("reconnect", handleSocketConnect);
+
+      socket.off("newOrder", handleOrderUpdate);
+      socket.off("orderCreated", handleOrderUpdate);
+      socket.off("orderConfirmed", handleOrderUpdate);
+      socket.off("orderCancelled", handleOrderUpdate);
+      socket.off("orderReverted", handleOrderUpdate);
+      socket.off("orderUpdated", handleOrderUpdate);
+      socket.off("orderDeleted", handleOrderDelete);
+      socket.off("ordersBulkDeleted", handleBulkDelete);
+
+      socket.off("stockUpdated", handleStockUpdate);
+      socket.off("productUpdated", handleStockUpdate);
+      socket.off("stockRefilled", handleStockUpdate);
+      socket.off("productCreated", handleProductCreate);
+      socket.off("productDeleted", handleProductDelete);
+      socket.off("productsUpdated", handleStockUpdate);
+      socket.off("productsBulkUpdated", handleStockUpdate);
+      socket.off("categoriesUpdated", handleCategoriesRefresh);
+      socket.off("countersUpdated", handleCountersRefresh);
+    };
+  }, [loadData, fetchCanonicalAnalytics]);
 
   // ==========================================
-  // 1. KPIs
+  // 1. KPIs (Real-time computed directly from live orders)
   // ==========================================
 
   const kpis = useMemo(() => {
@@ -597,58 +663,49 @@ export default function InsightsPage() {
       canonicalAnalytics?.period?.from === formatDateKeyIST(currentRange.start) &&
       canonicalAnalytics?.period?.to === formatDateKeyIST(currentRange.end);
 
-    const curRevenue =
-      isPeriodMatched && canonicalAnalytics?.metrics?.revenue != null
-        ? canonicalAnalytics.metrics.revenue
-        : currentPeriodOrders.reduce(
-            (sum, o) => sum + (Number(o.totalAmount) || 0),
-            0
-          );
+    const hasLiveOrders = currentPeriodOrders.length > 0;
 
-    const curProfit =
-      isPeriodMatched && canonicalAnalytics?.metrics?.profit != null
-        ? canonicalAnalytics.metrics.profit
-        : currentPeriodOrders.reduce(
-            (sum, o) => sum + calculateOrderProfit(o),
-            0
-          );
+    const curRevenue = hasLiveOrders || !isPeriodMatched
+      ? currentPeriodOrders.reduce(
+          (sum, o) => sum + (Number(o.totalAmount) || 0),
+          0
+        )
+      : (canonicalAnalytics?.metrics?.revenue ?? 0);
 
-    const curCost =
-      isPeriodMatched && canonicalAnalytics?.metrics?.cogs != null
-        ? canonicalAnalytics.metrics.cogs
-        : curRevenue - curProfit;
+    const curProfit = hasLiveOrders || !isPeriodMatched
+      ? currentPeriodOrders.reduce(
+          (sum, o) => sum + calculateOrderProfit(o),
+          0
+        )
+      : (canonicalAnalytics?.metrics?.profit ?? 0);
+
+    const curCost = curRevenue - curProfit;
 
     const curMargin =
-      isPeriodMatched && canonicalAnalytics?.metrics?.margin != null
-        ? canonicalAnalytics.metrics.margin
-        : curRevenue > 0
+      curRevenue > 0
         ? Math.round((curProfit / curRevenue) * 1000) / 10
-        : 0;
+        : (isPeriodMatched ? (canonicalAnalytics?.metrics?.margin ?? 0) : 0);
 
-    const curOrdersCount =
-      isPeriodMatched && canonicalAnalytics?.metrics?.orders != null
-        ? canonicalAnalytics.metrics.orders
-        : currentPeriodOrders.length;
+    const curOrdersCount = hasLiveOrders || !isPeriodMatched
+      ? currentPeriodOrders.length
+      : (canonicalAnalytics?.metrics?.orders ?? 0);
 
     const curAOV =
-      isPeriodMatched && canonicalAnalytics?.metrics?.averageOrderValue != null
-        ? canonicalAnalytics.metrics.averageOrderValue
-        : curOrdersCount > 0
+      curOrdersCount > 0
         ? Math.round(curRevenue / curOrdersCount)
-        : 0;
+        : (isPeriodMatched ? (canonicalAnalytics?.metrics?.averageOrderValue ?? 0) : 0);
 
-    const curItemsSold =
-      isPeriodMatched && canonicalAnalytics?.metrics?.itemsSold != null
-        ? canonicalAnalytics.metrics.itemsSold
-        : currentPeriodOrders.reduce(
-            (sum, o) =>
-              sum +
-              (o.items || []).reduce(
-                (s, it) => s + (Number(it.quantity) || 1),
-                0
-              ),
-            0
-          );
+    const curItemsSold = hasLiveOrders || !isPeriodMatched
+      ? currentPeriodOrders.reduce(
+          (sum, o) =>
+            sum +
+            (o.items || []).reduce(
+              (s, it) => s + (Number(it.quantity) || 1),
+              0
+            ),
+          0
+        )
+      : (canonicalAnalytics?.metrics?.itemsSold ?? 0);
 
     const compRevenue = comparePeriodOrders.reduce(
       (sum, o) => sum + (Number(o.totalAmount) || 0),
@@ -677,12 +734,6 @@ export default function InsightsPage() {
     const marginDiff = Math.round((curMargin - compMargin) * 10) / 10;
     const hasCompData = comparePeriodOrders.length > 0;
 
-    // Use canonical deltas if available
-    const canonicalDeltas =
-      isPeriodMatched && canonicalAnalytics?.comparison?.deltas
-        ? canonicalAnalytics.comparison.deltas
-        : null;
-
     return {
       revenue: curRevenue,
       profit: curProfit,
@@ -693,24 +744,22 @@ export default function InsightsPage() {
       itemsSold: curItemsSold,
       hasCompData,
 
-      revenueDelta: canonicalDeltas?.revenue || computeDelta(curRevenue, compRevenue),
-      profitDelta: canonicalDeltas?.profit || computeDelta(curProfit, compProfit),
-      marginDelta:
-        canonicalDeltas?.margin || {
-          hasPrev: hasCompData && compRevenue > 0,
-          rawDiff: marginDiff,
-          percent: Math.abs(marginDiff),
-          direction:
-            marginDiff > 0.05 ? "up" : marginDiff < -0.05 ? "down" : "neutral",
-          label:
-            hasCompData && compRevenue > 0
-              ? `${marginDiff >= 0 ? "+" : ""}${marginDiff}% pts vs previous`
-              : "No previous-period data",
-        },
-      ordersDelta: canonicalDeltas?.orders || computeDelta(curOrdersCount, compOrdersCount),
-      aovDelta: canonicalDeltas?.aov || computeDelta(curAOV, compAOV),
-      itemsSoldDelta:
-        canonicalDeltas?.itemsSold || computeDelta(curItemsSold, compItemsSold),
+      revenueDelta: computeDelta(curRevenue, compRevenue),
+      profitDelta: computeDelta(curProfit, compProfit),
+      marginDelta: {
+        hasPrev: hasCompData && compRevenue > 0,
+        rawDiff: marginDiff,
+        percent: Math.abs(marginDiff),
+        direction:
+          marginDiff > 0.05 ? "up" : marginDiff < -0.05 ? "down" : "neutral",
+        label:
+          hasCompData && compRevenue > 0
+            ? `${marginDiff >= 0 ? "+" : ""}${marginDiff}% pts vs previous`
+            : "No previous-period data",
+      },
+      ordersDelta: computeDelta(curOrdersCount, compOrdersCount),
+      aovDelta: computeDelta(curAOV, compAOV),
+      itemsSoldDelta: computeDelta(curItemsSold, compItemsSold),
     };
   }, [currentPeriodOrders, comparePeriodOrders, canonicalAnalytics, currentRange]);
 
@@ -1434,8 +1483,8 @@ export default function InsightsPage() {
               Analytics & Patterns
             </span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Realtime Active
+              <span className={`w-1.5 h-1.5 rounded-full bg-emerald-500 ${livePulse ? "scale-150 animate-ping" : "animate-pulse"}`} />
+              {livePulse ? "Live Update..." : "Realtime Active"}
             </span>
           </div>
           <p className="text-sm text-slate-500 dark:text-[#94A3B8] mt-1 font-normal">
@@ -1477,21 +1526,29 @@ export default function InsightsPage() {
             <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#64748B] pointer-events-none text-xs" />
           </div>
 
-          <button
-            onClick={() => loadData(true)}
-            disabled={isRefreshing}
-            className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#0F172A] dark:hover:bg-[#172033] border border-transparent dark:border-slate-800 text-slate-700 dark:text-[#CBD5E1] transition flex items-center gap-2 text-xs font-semibold"
-            title="Refresh analytics data"
-          >
-            <FiRefreshCw
-              className={`text-xs ${
-                isRefreshing ? "animate-spin text-indigo-500" : ""
-              }`}
-            />
-            <span>
-              {isRefreshing ? "Syncing..." : "Sync"}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 dark:text-[#64748B] hidden sm:inline-block font-mono">
+              Synced {lastSync ? lastSync.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : ""}
             </span>
-          </button>
+            <button
+              onClick={() => {
+                loadData(true);
+                fetchCanonicalAnalytics();
+              }}
+              disabled={isRefreshing}
+              className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#0F172A] dark:hover:bg-[#172033] border border-transparent dark:border-slate-800 text-slate-700 dark:text-[#CBD5E1] transition flex items-center gap-2 text-xs font-semibold"
+              title="Refresh analytics data"
+            >
+              <FiRefreshCw
+                className={`text-xs ${
+                  isRefreshing ? "animate-spin text-indigo-500" : ""
+                }`}
+              />
+              <span>
+                {isRefreshing ? "Syncing..." : "Sync"}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
