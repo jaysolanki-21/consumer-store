@@ -1,6 +1,7 @@
 /**
  * cashfreeController.js
  * Handles Cashfree payment session creation, verification, and webhook processing.
+ * Supports both Localhost (Sandbox) and Production (Render + Netlify).
  * All Cashfree credentials are used server-side only — never exposed to the frontend.
  */
 
@@ -13,25 +14,52 @@ import Product from '../models/Product.js';
 import Counter from '../models/Counter.js';
 import User from '../models/User.js';
 
-// ─── Cashfree SDK Configuration ───────────────────────────────────────────────
+// ─── Cashfree Configuration Resolver ──────────────────────────────────────────
+export const getCashfreeConfig = () => {
+  const appId = (
+    process.env.CASHFREE_CLIENT_ID ||
+    process.env.CASHFREE_APP_ID ||
+    ''
+  ).trim();
+
+  const secretKey = (
+    process.env.CASHFREE_CLIENT_SECRET ||
+    process.env.CASHFREE_SECRET_KEY ||
+    ''
+  ).trim();
+
+  const rawEnv = (
+    process.env.CASHFREE_ENV ||
+    process.env.CASHFREE_ENVIRONMENT ||
+    process.env.VITE_CASHFREE_ENV ||
+    process.env.VITE_CASHFREE_MODE ||
+    'SANDBOX'
+  ).trim().toLowerCase();
+
+  const isProduction = rawEnv === 'production' || rawEnv === 'prod';
+  const environment = isProduction ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
+  const environmentName = isProduction ? 'production' : 'sandbox';
+
+  // Cashfree API version (defaults to stable 2025-01-01, also supports 2023-08-01 / 2026-01-01)
+  const apiVersion = (process.env.CASHFREE_API_VERSION || '2025-01-01').trim();
+
+  return { appId, secretKey, environment, environmentName, apiVersion };
+};
+
+// ─── Cashfree SDK Instance Cache ──────────────────────────────────────────────
 let cachedCashfree = null;
 let cachedConfigKey = '';
 
-const getCashfree = () => {
-  const appId = process.env.CASHFREE_APP_ID || process.env.CASHFREE_CLIENT_ID;
-  const secretKey = process.env.CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET;
-  const rawEnv = (process.env.CASHFREE_ENVIRONMENT || process.env.CASHFREE_ENV || process.env.VITE_CASHFREE_ENV || process.env.VITE_CASHFREE_MODE || '').toLowerCase();
-  const environment = (rawEnv === 'production' || rawEnv === 'prod')
-    ? CFEnvironment.PRODUCTION
-    : CFEnvironment.SANDBOX;
+export const getCashfree = () => {
+  const { appId, secretKey, environment, environmentName, apiVersion } = getCashfreeConfig();
 
-  const configKey = `${appId}:${secretKey}:${rawEnv}`;
+  const configKey = `${appId}:${secretKey}:${environmentName}:${apiVersion}`;
   if (cachedCashfree && cachedConfigKey === configKey) {
     return cachedCashfree;
   }
 
   if (!appId || !secretKey) {
-    console.error('[Cashfree] Missing CASHFREE_APP_ID/CASHFREE_CLIENT_ID or CASHFREE_SECRET_KEY/CASHFREE_CLIENT_SECRET in environment.');
+    console.error('[Cashfree] Missing CASHFREE_CLIENT_ID / CASHFREE_APP_ID or CASHFREE_CLIENT_SECRET / CASHFREE_SECRET_KEY in environment.');
   }
 
   cachedCashfree = new Cashfree(
@@ -39,6 +67,10 @@ const getCashfree = () => {
     appId,
     secretKey
   );
+
+  // Explicitly configure API Version on the Cashfree instance
+  cachedCashfree.XApiVersion = apiVersion;
+
   cachedConfigKey = configKey;
   return cachedCashfree;
 };
@@ -52,8 +84,62 @@ const getBackendUrl = () => {
   return `http://localhost:${port}`;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Automatic Retry for Transient Gateway Errors (502 / 503 / 504) ────────────
+const executeWithRetry = async (fn, maxRetries = 2, baseDelay = 600) => {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const isHtml502 = typeof data === 'string' && data.includes('502 Bad Gateway');
+      const isTransient =
+        status === 502 ||
+        status === 503 ||
+        status === 504 ||
+        isHtml502 ||
+        err.code === 'ECONNRESET' ||
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'ERR_NETWORK';
 
+      if (!isTransient || attempt === maxRetries) {
+        throw err;
+      }
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.warn(`[Cashfree] Transient gateway error (${status || (isHtml502 ? 502 : err.code)}). Retrying attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastErr;
+};
+
+// ─── Sanitized Error Parser ───────────────────────────────────────────────────
+const parseCashfreeError = (err) => {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  let message = err.message || 'Payment gateway error';
+  let isBadGateway = false;
+
+  if (status === 502 || (typeof data === 'string' && data.includes('502 Bad Gateway'))) {
+    isBadGateway = true;
+    message = 'Cashfree Payment Gateway is currently experiencing intermittent downtime (502 Bad Gateway from APISIX). Please try again in a few moments or choose Cash.';
+  } else if (typeof data === 'object' && data !== null) {
+    message = data.message || data.error || JSON.stringify(data);
+  } else if (typeof data === 'string' && data.length > 0) {
+    message = data.length > 250 ? `${data.substring(0, 250)}...` : data;
+  }
+
+  return {
+    status: isBadGateway ? 502 : (status || 500),
+    isBadGateway,
+    message,
+    code: data?.code || (isBadGateway ? '502_BAD_GATEWAY' : 'GATEWAY_ERROR')
+  };
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 /**
  * Generates a unique, short order-reference ID for Cashfree.
  * Format: CF-<timestamp_ms>-<4-random-hex-chars>
@@ -66,52 +152,51 @@ const generateCfOrderId = () => {
 };
 
 // ─── Create Cashfree Payment Session ──────────────────────────────────────────
-
 /**
  * POST /api/payments/cashfree/create-session
  *
  * Accepts: { items, counter, counterId, counterName, staffId, staffName }
- * Returns: { orderId (MongoDB), cfOrderId, paymentSessionId, amount }
+ * Returns: { orderId (MongoDB), cfOrderId, paymentSessionId, amount, environment }
  *
  * Security:
  *  - Cart total is re-calculated server-side from current product prices.
  *  - Frontend-provided amount is IGNORED.
- *  - Duplicate protection via gatewayOrderId uniqueness.
+ *  - Stock is reserved with rollback on failure.
+ *  - Transient 502/503/504 gateway errors are retried automatically.
  */
 export const createCashfreeSession = async (req, res) => {
   try {
     const { items, counter, counterId, counterName, staffId, staffName } = req.body;
-
-    const appId = process.env.CASHFREE_APP_ID || process.env.CASHFREE_CLIENT_ID;
-    const secretKey = process.env.CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET;
+    const { appId, secretKey, environmentName } = getCashfreeConfig();
 
     if (!appId || !secretKey) {
-      console.error('[Cashfree] Missing CASHFREE_APP_ID/CASHFREE_CLIENT_ID or CASHFREE_SECRET_KEY/CASHFREE_CLIENT_SECRET in environment.');
+      console.error('[Cashfree] Missing CASHFREE_CLIENT_ID / CASHFREE_APP_ID or CASHFREE_CLIENT_SECRET / CASHFREE_SECRET_KEY in environment.');
       return res.status(503).json({
+        success: false,
         message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
       });
     }
 
     // ── Validate input ────────────────────────────────────────────────────────
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'Cart is empty' });
+      return res.status(400).json({ success: false, message: 'Cart is empty' });
     }
 
     const rawCounter = (typeof counter === 'object' && counter?._id) ? counter._id : (counter || counterId);
-
     if (!rawCounter) {
-      return res.status(400).json({ message: 'Counter is required' });
+      return res.status(400).json({ success: false, message: 'Counter is required' });
     }
 
     // ── Verify stock availability ─────────────────────────────────────────────
     for (const item of items) {
       const product = await Product.findById(item.productId);
       if (!product) {
-        return res.status(404).json({ message: `Product not found: ${item.productId}` });
+        return res.status(404).json({ success: false, message: `Product not found: ${item.productId}` });
       }
       const available = product.stock - (product.reservedStock || 0);
       if (available < item.quantity) {
         return res.status(400).json({
+          success: false,
           message: `Only ${available} units of "${product.name}" are available`
         });
       }
@@ -137,7 +222,7 @@ export const createCashfreeSession = async (req, res) => {
 
     // Cashfree requires amount ≥ 1
     if (totalAmount < 1) {
-      return res.status(400).json({ message: 'Order total is too low for online payment' });
+      return res.status(400).json({ success: false, message: 'Order total is too low for online payment' });
     }
 
     // ── Reserve stock ─────────────────────────────────────────────────────────
@@ -205,31 +290,45 @@ export const createCashfreeSession = async (req, res) => {
       }]
     });
 
-    // ── Create Cashfree Order / Payment Session ───────────────────────────────
+    // ── Build Cashfree Order Request ──────────────────────────────────────────
     const backendUrl = getBackendUrl();
-    const notifyUrl = `${backendUrl.replace(/\/$/, '')}/api/payments/cashfree/webhook`;
+    const isPublicHttps = backendUrl.startsWith('https://');
 
+    // Only set notify_url if backend is public HTTPS (e.g. Render).
+    // On localhost, Cashfree cannot dispatch webhooks, and passing localhost can trigger gateway rejection.
+    const notifyUrl = isPublicHttps
+      ? `${backendUrl}/api/payments/cashfree/webhook`
+      : undefined;
+
+    const orderMeta = {};
+    if (notifyUrl) {
+      orderMeta.notify_url = notifyUrl;
+    }
+    if (process.env.CLIENT_URL) {
+      orderMeta.return_url = `${process.env.CLIENT_URL.replace(/\/+$/, '')}/consumer/checkout?order_id={order_id}`;
+    }
+
+    const counterSuffix = resolvedCounterId ? resolvedCounterId.toString().slice(-6) : 'pos';
     const cfOrderRequest = {
       order_id: cfOrderId,
       order_amount: Number(totalAmount.toFixed(2)),
       order_currency: 'INR',
       customer_details: {
-        customer_id: `counter_${resolvedCounterId ? resolvedCounterId.toString().slice(-8) : 'pos'}_${Date.now()}`,
+        customer_id: `cust_${counterSuffix}_${Date.now()}`,
         customer_name: sanitizedCounterName,
-        customer_email: `pos_${resolvedCounterId ? resolvedCounterId.toString().slice(-6) : 'pos'}@apcstore.local`,
+        customer_email: `pos_${counterSuffix}@apcstore.com`,
         customer_phone: '9999999999'
       },
-      order_meta: {
-        notify_url: notifyUrl
-      },
-      order_note: `Counter POS Order — ${sanitizedCounterName}`
+      order_meta: orderMeta,
+      order_note: `POS Order — ${sanitizedCounterName}`
     };
 
+    // ── Create Cashfree Order / Payment Session with Retry ────────────────────
     let cfResponse;
     try {
-      cfResponse = await getCashfree().PGCreateOrder(cfOrderRequest);
+      cfResponse = await executeWithRetry(() => getCashfree().PGCreateOrder(cfOrderRequest));
     } catch (cfErr) {
-      // If Cashfree fails, release reserved stock and delete the order
+      // Release reserved stock upon Cashfree failure
       for (const item of orderItems) {
         const product = await Product.findById(item.productId);
         if (product) {
@@ -243,9 +342,19 @@ export const createCashfreeSession = async (req, res) => {
       }
       await order.deleteOne();
 
-      console.error('Cashfree create-order error:', cfErr?.response?.data || cfErr.message);
-      return res.status(503).json({
-        message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
+      const parsedError = parseCashfreeError(cfErr);
+      console.error('[Cashfree create-order error]:', {
+        status: parsedError.status,
+        code: parsedError.code,
+        message: parsedError.message,
+        environment: environmentName
+      });
+
+      return res.status(parsedError.status >= 500 ? 503 : parsedError.status).json({
+        success: false,
+        message: parsedError.message,
+        code: parsedError.code,
+        isBadGateway: parsedError.isBadGateway
       });
     }
 
@@ -266,7 +375,8 @@ export const createCashfreeSession = async (req, res) => {
       }
       await order.deleteOne();
       return res.status(503).json({
-        message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
+        success: false,
+        message: 'Could not obtain payment session from Cashfree. Please try again or choose Cash.'
       });
     }
 
@@ -275,21 +385,23 @@ export const createCashfreeSession = async (req, res) => {
     await order.save();
 
     return res.status(201).json({
+      success: true,
       orderId: order._id,
       cfOrderId,
       paymentSessionId,
-      amount: totalAmount
+      amount: totalAmount,
+      environment: environmentName // 'sandbox' or 'production' for frontend SDK alignment
     });
   } catch (error) {
     console.error('createCashfreeSession error:', error);
     return res.status(500).json({
+      success: false,
       message: 'Online payment is temporarily unavailable. Please try again or choose Cash.'
     });
   }
 };
 
 // ─── Verify Payment After Checkout ────────────────────────────────────────────
-
 /**
  * POST /api/payments/cashfree/verify
  *
@@ -297,25 +409,25 @@ export const createCashfreeSession = async (req, res) => {
  * Accepts: { orderId (MongoDB _id), cfOrderId }
  * Returns: { success, order }
  *
- * Always verifies with Cashfree backend — never trusts frontend status.
+ * Authoritatively verifies with Cashfree backend — never trusts frontend status alone.
  */
 export const verifyCashfreePayment = async (req, res) => {
   try {
     const { orderId, cfOrderId } = req.body;
 
     if (!orderId || !cfOrderId) {
-      return res.status(400).json({ message: 'Order ID and Cashfree Order ID are required' });
+      return res.status(400).json({ success: false, message: 'Order ID and Cashfree Order ID are required' });
     }
 
-    // ── Fetch the order from DB ───────────────────────────────────────────────
+    // ── Fetch order from DB ───────────────────────────────────────────────────
     const order = await Order.findById(orderId);
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // ── Guard: ensure cfOrderId matches what we stored ────────────────────────
+    // ── Guard: ensure cfOrderId matches stored gatewayOrderId ─────────────────
     if (order.payment.gatewayOrderId !== cfOrderId) {
-      return res.status(400).json({ message: 'Order ID mismatch' });
+      return res.status(400).json({ success: false, message: 'Order ID mismatch' });
     }
 
     // ── Idempotency: already verified successfully ────────────────────────────
@@ -328,42 +440,51 @@ export const verifyCashfreePayment = async (req, res) => {
       return res.json({ success: true, order: populatedOrder });
     }
 
-    // ── Verify with Cashfree backend ──────────────────────────────────────────
-    let cfPayments;
+    // ── Verify with Cashfree backend (with retry) ─────────────────────────────
+    let cfPayments = [];
+    let cfOrder = null;
+
     try {
-      const cfRes = await getCashfree().PGOrderFetchPayments(cfOrderId);
-      cfPayments = cfRes.data;
-    } catch (cfErr) {
-      console.error('Cashfree verify error:', cfErr?.response?.data || cfErr.message);
-      return res.status(503).json({
-        message: 'Could not verify payment with gateway. Please try again or contact support.'
-      });
+      const paymentsRes = await executeWithRetry(() => getCashfree().PGOrderFetchPayments(cfOrderId));
+      cfPayments = paymentsRes?.data || [];
+    } catch (payErr) {
+      console.warn('[Cashfree] PGOrderFetchPayments query error:', payErr?.response?.data || payErr.message);
     }
 
-    // ── Find the successful payment in the list ───────────────────────────────
+    // Also fetch order details from Cashfree as resilient fallback
+    try {
+      const orderRes = await executeWithRetry(() => getCashfree().PGFetchOrder(cfOrderId));
+      cfOrder = orderRes?.data;
+    } catch (ordErr) {
+      console.warn('[Cashfree] PGFetchOrder query error:', ordErr?.response?.data || ordErr.message);
+    }
+
+    // ── Check for successful payment ──────────────────────────────────────────
     const successPayment = Array.isArray(cfPayments)
       ? cfPayments.find((p) => p.payment_status === 'SUCCESS')
       : null;
 
-    if (successPayment) {
-      // ── Mark payment as Paid ──────────────────────────────────────────────
+    const isOrderPaid = cfOrder?.order_status === 'PAID';
+
+    if (successPayment || isOrderPaid) {
+      // ── Mark payment as Paid ────────────────────────────────────────────────
       order.payment.status = 'Paid';
-      order.payment.paidAt = new Date(successPayment.payment_completion_time || Date.now());
-      order.payment.gatewayPaymentId = successPayment.cf_payment_id
+      order.payment.paidAt = new Date(successPayment?.payment_completion_time || Date.now());
+      order.payment.gatewayPaymentId = successPayment?.cf_payment_id
         ? String(successPayment.cf_payment_id)
-        : '';
-      order.payment.transactionId = successPayment.bank_reference || '';
+        : (order.payment.gatewayPaymentId || '');
+      order.payment.transactionId = successPayment?.bank_reference || '';
       order.payment.receivedAmount = order.totalAmount;
 
       order.timeline.push({
         status: 'Pending',
-        message: `Online payment verified — Payment ID: ${order.payment.gatewayPaymentId}`,
+        message: `Online payment verified — Payment ID: ${order.payment.gatewayPaymentId || cfOrderId}`,
         at: new Date()
       });
 
       await order.save();
 
-      // ── Emit socket events (same as cash order creation) ─────────────────
+      // ── Emit socket events ──────────────────────────────────────────────────
       const populatedOrder = await Order.findById(order._id)
         .populate('items.productId')
         .populate('confirmedBy', 'name')
@@ -371,19 +492,23 @@ export const verifyCashfreePayment = async (req, res) => {
         .populate('counter', 'name');
 
       const io = req.app.get('io');
-      io.emit('newOrder', populatedOrder);
-      io.emit('stockUpdated');
+      if (io) {
+        io.emit('newOrder', populatedOrder);
+        io.emit('stockUpdated');
+      }
 
       return res.json({ success: true, order: populatedOrder });
     }
 
-    // ── Payment not successful ────────────────────────────────────────────────
-    // Mark order as Cancelled and payment as Failed
+    // ── Payment not successful: Mark order Cancelled and release stock ─────────
     const failedPayment = Array.isArray(cfPayments)
       ? cfPayments.find((p) => ['FAILED', 'CANCELLED', 'USER_DROPPED'].includes(p.payment_status))
       : null;
 
-    const failureReason = failedPayment?.payment_status ? failedPayment.payment_status.toLowerCase() : 'unsuccessful';
+    const failureReason = failedPayment?.payment_status
+      ? failedPayment.payment_status.toLowerCase()
+      : (cfOrder?.order_status ? cfOrder.order_status.toLowerCase() : 'unsuccessful');
+
     order.payment.status = 'Failed';
     order.status = 'Cancelled';
 
@@ -395,7 +520,7 @@ export const verifyCashfreePayment = async (req, res) => {
 
     await order.save();
 
-    // Release reserved stock since payment failed
+    // Release reserved stock since payment was not completed
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
       if (!product) continue;
@@ -415,91 +540,86 @@ export const verifyCashfreePayment = async (req, res) => {
 
     return res.json({
       success: false,
-      message: 'Payment failed. Please try again or choose Cash.'
+      message: 'Payment was not completed. Please try again or choose Cash.'
     });
   } catch (error) {
     console.error('verifyCashfreePayment error:', error);
     return res.status(500).json({
+      success: false,
       message: 'Payment verification failed. Please contact support.'
     });
   }
 };
 
 // ─── Webhook Handler ───────────────────────────────────────────────────────────
-
 /**
  * POST /api/payments/cashfree/webhook
  *
  * Cashfree sends signed webhook events here.
- * Must be idempotent — same event arriving twice must not double-process.
+ * Idempotent: repeated events will not process twice.
  *
- * Cashfree Webhook Signature Verification (2023-08-01 API):
+ * Cashfree Webhook Signature Verification:
  *   Signature = HMAC-SHA256( timestamp + rawBody, secret )
- *   Header: x-webhook-signature, x-webhook-timestamp
+ *   Headers: x-webhook-signature, x-webhook-timestamp
  */
 export const cashfreeWebhook = async (req, res) => {
-  // ── Acknowledge immediately (Cashfree expects quick 200) ─────────────────
+  // Acknowledge immediately to satisfy Cashfree SLA
   res.status(200).json({ received: true });
 
   try {
-    // ── Signature verification ────────────────────────────────────────────────
     const signature = req.headers['x-webhook-signature'];
     const timestamp = req.headers['x-webhook-timestamp'];
-    const rawBody = req.rawBody; // set by express.raw() middleware on this route
+    const rawBody = req.rawBody; // set by express.raw() middleware
 
-    if (!signature || !timestamp) {
-      console.warn('[Webhook] Missing signature/timestamp headers — ignoring');
+    if (!signature || !timestamp || !rawBody) {
+      console.warn('[Cashfree Webhook] Missing signature, timestamp, or raw body — ignoring');
       return;
     }
 
-    const webhookSecret =
-      process.env.CASHFREE_WEBHOOK_SECRET ||
-      process.env.CASHFREE_SECRET_KEY ||
-      process.env.CASHFREE_CLIENT_SECRET;
+    const { secretKey } = getCashfreeConfig();
+    const webhookSecret = process.env.CASHFREE_WEBHOOK_SECRET || secretKey;
 
     if (!webhookSecret) {
-      console.warn('[Webhook] No CASHFREE_WEBHOOK_SECRET or CASHFREE_SECRET_KEY configured — skipping verification');
+      console.warn('[Cashfree Webhook] No webhook secret or client secret configured — skipping');
       return;
     }
 
+    // Verify HMAC-SHA256 signature
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(timestamp + rawBody)
       .digest('base64');
 
     if (signature !== expectedSignature) {
-      console.warn('[Webhook] Invalid signature — ignoring event');
+      console.warn('[Cashfree Webhook] Invalid signature — ignoring event');
       return;
     }
 
     const event = JSON.parse(rawBody);
-    const eventType = event?.type;
     const orderData = event?.data?.order;
     const paymentData = event?.data?.payment;
 
     if (!orderData || !paymentData) {
-      console.warn('[Webhook] Missing order/payment data in event');
+      console.warn('[Cashfree Webhook] Missing order/payment payload');
       return;
     }
 
     const cfOrderId = orderData.order_id;
     const paymentStatus = paymentData.payment_status;
 
-    // ── Find order by gateway order ID ───────────────────────────────────────
     const order = await Order.findOne({ 'payment.gatewayOrderId': cfOrderId });
     if (!order) {
-      console.warn(`[Webhook] No order found for cfOrderId: ${cfOrderId}`);
+      console.warn(`[Cashfree Webhook] No order found for cfOrderId: ${cfOrderId}`);
       return;
     }
 
-    // ── Idempotency check ─────────────────────────────────────────────────────
+    // Idempotency check: already paid
     if (order.payment.status === 'Paid' && paymentStatus === 'SUCCESS') {
-      console.log(`[Webhook] Already paid — skipping duplicate event for ${cfOrderId}`);
+      console.log(`[Cashfree Webhook] Already paid — skipping duplicate for ${cfOrderId}`);
       return;
     }
 
     if (paymentStatus === 'SUCCESS') {
-      // ── Payment successful ────────────────────────────────────────────────
       order.payment.status = 'Paid';
       order.payment.paidAt = new Date(paymentData.payment_completion_time || Date.now());
       order.payment.gatewayPaymentId = paymentData.cf_payment_id
@@ -522,9 +642,6 @@ export const cashfreeWebhook = async (req, res) => {
         .populate('staffId', 'name')
         .populate('counter', 'name');
 
-      // Emit socket event
-      // Note: io is not on req here (webhook hits before any middleware that sets it)
-      // We store io on the app globally — access via a shared module pattern.
       const { getIO } = await import('../sockets/ioInstance.js');
       const io = getIO();
       if (io) {
@@ -532,7 +649,6 @@ export const cashfreeWebhook = async (req, res) => {
         io.emit('stockUpdated');
       }
     } else if (['FAILED', 'CANCELLED', 'USER_DROPPED'].includes(paymentStatus)) {
-      // ── Payment failed/cancelled — release stock ──────────────────────────
       if (order.payment.status !== 'Failed' && order.payment.status !== 'Paid') {
         order.payment.status = 'Failed';
         order.status = 'Cancelled';
@@ -563,30 +679,31 @@ export const cashfreeWebhook = async (req, res) => {
       }
     }
   } catch (err) {
-    console.error('[Webhook] Processing error:', err);
+    console.error('[Cashfree Webhook] Processing error:', err);
   }
 };
 
+// ─── Cancel Session / Checkout Abandonment ─────────────────────────────────────
 /**
  * POST /api/payments/cashfree/cancel-session
  *
- * Explicitly cancels an unpaid session when customer closes payment popup
- * or abandons payment.
+ * Called when the customer closes the Cashfree checkout modal or abandons payment.
+ * Releases reserved stock and marks order status as Cancelled.
  */
 export const cancelCashfreeSession = async (req, res) => {
   try {
     const { orderId } = req.body;
     if (!orderId) {
-      return res.status(400).json({ message: 'Order ID is required' });
+      return res.status(400).json({ success: false, message: 'Order ID is required' });
     }
 
     const order = await Order.findById(orderId);
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
     if (order.payment?.status === 'Paid') {
-      return res.status(400).json({ message: 'Cannot cancel an order that has already been paid' });
+      return res.status(400).json({ success: false, message: 'Cannot cancel an order that has already been paid' });
     }
 
     if (order.status !== 'Cancelled') {
@@ -618,9 +735,9 @@ export const cancelCashfreeSession = async (req, res) => {
       }
     }
 
-    return res.json({ success: true, message: 'Session cancelled' });
+    return res.json({ success: true, message: 'Session cancelled and stock released' });
   } catch (error) {
     console.error('cancelCashfreeSession error:', error);
-    return res.status(500).json({ message: 'Failed to cancel session' });
+    return res.status(500).json({ success: false, message: 'Failed to cancel session' });
   }
 };

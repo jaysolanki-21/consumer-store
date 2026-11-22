@@ -34,29 +34,39 @@ const httpServer = createServer(app);
 
 // Dynamic CORS configuration supporting Netlify, Render, local development & custom domains
 const corsOriginDelegate = (origin, callback) => {
-  // Allow requests with no origin (e.g. mobile apps, curl, server-to-server webhooks)
+  // Allow requests with no origin (e.g. mobile apps, curl, server-to-server webhooks like Cashfree)
   if (!origin) return callback(null, true);
 
   const cleanOrigin = origin.replace(/\/+$/, '');
   const configuredOrigins = [
     process.env.CLIENT_URL,
     process.env.FRONTEND_URL,
+    ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
     'http://localhost:5173',
     'http://localhost:3000',
     'http://localhost:5000',
-  ].filter(Boolean).map((u) => u.replace(/\/+$/, ''));
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5000',
+  ].filter(Boolean).map((u) => u.trim().replace(/\/+$/, ''));
 
-  if (
+  const isAllowed =
     configuredOrigins.includes(cleanOrigin) ||
     cleanOrigin.endsWith('.netlify.app') ||
     cleanOrigin.endsWith('.onrender.com') ||
     cleanOrigin.startsWith('http://localhost:') ||
-    cleanOrigin.startsWith('http://127.0.0.1:')
-  ) {
+    cleanOrigin.startsWith('http://127.0.0.1:');
+
+  if (isAllowed) {
     return callback(null, cleanOrigin);
   }
 
-  // Fallback permissive for deployment flexibility while supporting credentials
+  // In production, reject unauthorized origins; in development, warn and allow
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(`[CORS Blocked] Origin not allowed in production: ${cleanOrigin}`);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  }
+
   return callback(null, cleanOrigin);
 };
 

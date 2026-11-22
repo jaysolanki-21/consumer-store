@@ -689,6 +689,9 @@ function ConsumerPageContent() {
       return;
     }
 
+    let createdOrderId = null;
+    let createdCfOrderId = null;
+
     try {
       setIsOrderConfirming(true);
 
@@ -714,17 +717,20 @@ function ConsumerPageContent() {
         }
       );
 
-      const { orderId, cfOrderId, paymentSessionId } = sessionData;
+      const { orderId, cfOrderId, paymentSessionId, environment } = sessionData;
+      createdOrderId = orderId;
+      createdCfOrderId = cfOrderId;
 
-      // Step 2: Load Cashfree JS SDK and open checkout
+      // Step 2: Load Cashfree JS SDK and open checkout (aligned with backend environment)
       const { load } = await import("@cashfreepayments/cashfree-js");
+      const configuredMode = (
+        import.meta.env.VITE_CASHFREE_MODE ||
+        import.meta.env.VITE_CASHFREE_ENV ||
+        ""
+      ).toLowerCase();
+      const mode = environment || (configuredMode === "production" ? "production" : "sandbox");
 
-      const cashfree = await load({
-        mode:
-          import.meta.env.VITE_CASHFREE_ENV === "production"
-            ? "production"
-            : "sandbox",
-      });
+      const cashfree = await load({ mode });
 
       // Step 3: Open Cashfree checkout
       await new Promise((resolve, reject) => {
@@ -799,6 +805,17 @@ function ConsumerPageContent() {
       }
     } catch (err) {
       console.error("Online checkout error:", err);
+
+      if (createdOrderId) {
+        try {
+          await api.post("/payments/cashfree/cancel-session", {
+            orderId: createdOrderId,
+            cfOrderId: createdCfOrderId,
+          });
+        } catch (cancelErr) {
+          console.warn("Failed to cancel Cashfree session on backend:", cancelErr);
+        }
+      }
 
       const serverMsg = err?.response?.data?.message;
       const errMsg = serverMsg || err?.message || "";

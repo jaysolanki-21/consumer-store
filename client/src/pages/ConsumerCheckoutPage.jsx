@@ -265,17 +265,18 @@ export default function ConsumerCheckoutPage() {
         }
       );
 
-      const { orderId, cfOrderId, paymentSessionId } = sessionData;
+      const { orderId, cfOrderId, paymentSessionId, environment } = sessionData;
       createdOrderId = orderId;
       createdCfOrderId = cfOrderId;
 
-      // Step 2: Initialize Cashfree SDK
+      // Step 2: Initialize Cashfree SDK (aligned with backend environment)
       const { load } = await import("@cashfreepayments/cashfree-js");
-      const mode =
-        (import.meta.env.VITE_CASHFREE_MODE || import.meta.env.VITE_CASHFREE_ENV || "")
-          .toLowerCase() === "production"
-          ? "production"
-          : "sandbox";
+      const configuredMode = (
+        import.meta.env.VITE_CASHFREE_MODE ||
+        import.meta.env.VITE_CASHFREE_ENV ||
+        ""
+      ).toLowerCase();
+      const mode = environment || (configuredMode === "production" ? "production" : "sandbox");
 
       const cashfree = await load({ mode });
 
