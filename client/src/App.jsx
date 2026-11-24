@@ -27,6 +27,32 @@ import AdminCountersPage from "./pages/AdminCountersPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 
+// Dynamic Root Redirect Component — evaluates active role reliably at mount time
+function RootRedirect() {
+  const { user, token } = useSelector((state) => state.auth);
+
+  let activeRole = user?.role;
+  let activeToken = token;
+
+  if (!activeToken || !activeRole) {
+    activeToken = localStorage.getItem('token') || localStorage.getItem('counterToken');
+    const uStr = localStorage.getItem('user') || localStorage.getItem('counterUser');
+    if (uStr) {
+      try {
+        activeRole = JSON.parse(uStr)?.role;
+      } catch (e) {}
+    }
+  }
+
+  if (activeToken && activeRole) {
+    if (activeRole === 'admin') return <Navigate to="/admin" replace />;
+    if (activeRole === 'staff') return <Navigate to="/staff" replace />;
+    if (activeRole === 'counter') return <Navigate to="/consumer" replace />;
+  }
+
+  return <Navigate to="/login" replace />;
+}
+
 function App() {
   const { user, token } = useSelector((state) => state.auth);
   const isAuthenticated = !!token && !!user;
@@ -182,9 +208,6 @@ function App() {
     };
   }, [user, dispatch]);
 
-  // ✅ Check if counter user is logged in
-  const isCounterLoggedIn = !!localStorage.getItem('counterToken');
-
   return (
     <BrowserRouter>
       <Toaster
@@ -217,41 +240,20 @@ function App() {
         }}
       />
       <Routes>
-        {/* ✅ Root Route */}
-        <Route
-          path="/"
-          element={
-            isAuthenticated ? (
-              user?.role === 'admin' ? (
-                <Navigate to="/admin" replace />
-              ) : user?.role === 'staff' ? (
-                <Navigate to="/staff" replace />
-              ) : isCounterLoggedIn ? (
-                <Navigate to="/consumer" replace />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            ) : isCounterLoggedIn ? (
-              <Navigate to="/consumer" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        {/* ✅ Root Route — Dynamic Role-Based Redirect */}
+        <Route path="/" element={<RootRedirect />} />
 
         {/* ✅ Maintenance Page */}
         <Route path="/maintenance" element={<MaintenancePage />} />
 
-        {/* ✅ Consumer Page - Protected with counter token & MaintenanceGuard */}
+        {/* ✅ Consumer Page — Protected with Counter Role & MaintenanceGuard */}
         <Route
           path="/consumer"
           element={
             <MaintenanceGuard>
-              {isCounterLoggedIn ? (
+              <ProtectedRoute roles={["counter"]}>
                 <ConsumerPage />
-              ) : (
-                <Navigate to="/login" replace />
-              )}
+              </ProtectedRoute>
             </MaintenanceGuard>
           }
         />
@@ -261,11 +263,9 @@ function App() {
           path="/consumer/checkout"
           element={
             <MaintenanceGuard>
-              {isCounterLoggedIn ? (
+              <ProtectedRoute roles={["counter"]}>
                 <ConsumerCheckoutPage />
-              ) : (
-                <Navigate to="/login" replace />
-              )}
+              </ProtectedRoute>
             </MaintenanceGuard>
           }
         />

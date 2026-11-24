@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -30,6 +30,33 @@ export default function LoginPage() {
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { user, token } = useSelector((state) => state.auth);
+
+  // If already logged in, redirect directly to the appropriate dashboard
+  useEffect(() => {
+    let activeRole = user?.role;
+    let activeToken = token;
+
+    if (!activeToken || !activeRole) {
+      activeToken = localStorage.getItem('token') || localStorage.getItem('counterToken');
+      const uStr = localStorage.getItem('user') || localStorage.getItem('counterUser');
+      if (uStr) {
+        try {
+          activeRole = JSON.parse(uStr)?.role;
+        } catch (e) {}
+      }
+    }
+
+    if (activeToken && activeRole) {
+      if (activeRole === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (activeRole === 'staff') {
+        navigate('/staff', { replace: true });
+      } else if (activeRole === 'counter') {
+        navigate('/consumer', { replace: true });
+      }
+    }
+  }, [user, token, navigate]);
 
   // Load saved email if available
   useEffect(() => {
@@ -101,7 +128,7 @@ export default function LoginPage() {
       // ✅ Handle redirect based on role
       if (data.role === 'admin') {
         toast.success(`Welcome back, ${data.name}!`);
-        navigate('/admin');
+        navigate('/admin', { replace: true });
       } else if (isMaintenanceActive) {
         if (data.role === 'counter') {
           localStorage.setItem('counterToken', data.token);
@@ -114,26 +141,20 @@ export default function LoginPage() {
             duration: 4000,
           }
         );
-        navigate('/maintenance');
+        navigate('/maintenance', { replace: true });
       } else if (data.role === 'staff') {
         toast.success(`Welcome back, ${data.name}!`);
-        navigate('/staff');
+        navigate('/staff', { replace: true });
       } else if (data.role === 'counter') {
-        toast.success(`Welcome back, ${data.name}!`);
-        // ✅ Save counter token separately for consumer page
+        // ✅ Save counter token and user details synchronously
         localStorage.setItem('counterToken', data.token);
         localStorage.setItem('counterUser', JSON.stringify(data));
 
-        console.log('🔄 Counter user detected, counterId:', data.counterId);
-        console.log('📋 Full user data:', data);
-
-        // ✅ Small delay to ensure localStorage is set
-        setTimeout(() => {
-          navigate('/consumer');
-        }, 100);
+        toast.success(`Welcome back, ${data.name}!`);
+        navigate('/consumer', { replace: true });
       } else {
         toast.error('Unknown role. Please contact admin.');
-        navigate('/');
+        navigate('/', { replace: true });
       }
     } catch (err) {
       console.error('❌ Login error:', err);

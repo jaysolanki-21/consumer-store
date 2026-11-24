@@ -7,12 +7,26 @@
 
 import '../config/loadEnv.js';
 import { Cashfree, CFEnvironment } from 'cashfree-pg';
+import axios from 'axios';
+import https from 'https';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Counter from '../models/Counter.js';
 import User from '../models/User.js';
+
+// Dedicated HTTPS Agent with connection pooling and keepAlive for low-latency, resilient Cashfree calls
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  timeout: 15000,
+  maxSockets: 50,
+});
+
+const cashfreeHttpClient = axios.create({
+  timeout: 15000,
+  httpsAgent,
+});
 
 // ─── Cashfree Configuration Resolver ──────────────────────────────────────────
 export const getCashfreeConfig = () => {
@@ -39,11 +53,12 @@ export const getCashfreeConfig = () => {
   const isProduction = rawEnv === 'production' || rawEnv === 'prod';
   const environment = isProduction ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
   const environmentName = isProduction ? 'production' : 'sandbox';
+  const baseUrl = isProduction ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
 
   // Cashfree API version (defaults to stable 2025-01-01, also supports 2023-08-01 / 2026-01-01)
   const apiVersion = (process.env.CASHFREE_API_VERSION || '2025-01-01').trim();
 
-  return { appId, secretKey, environment, environmentName, apiVersion };
+  return { appId, secretKey, environment, environmentName, baseUrl, apiVersion };
 };
 
 // ─── Cashfree SDK Instance Cache ──────────────────────────────────────────────
@@ -84,8 +99,8 @@ const getBackendUrl = () => {
   return `http://localhost:${port}`;
 };
 
-// ─── Automatic Retry for Transient Gateway Errors (502 / 503 / 504) ────────────
-const executeWithRetry = async (fn, maxRetries = 2, baseDelay = 600) => {
+// ─── Automatic Retry for Transient Gateway Errors (502 / 503 / 504 / APISIX / Network) ───
+const executeWithRetry = async (fn, maxRetries = 3, baseDelay = 800) => {
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -94,7 +109,7 @@ const executeWithRetry = async (fn, maxRetries = 2, baseDelay = 600) => {
       lastErr = err;
       const status = err?.response?.status;
       const data = err?.response?.data;
-      const isHtml502 = typeof data === 'string' && data.includes('502 Bad Gateway');
+      const isHtml502 = typeof data === 'string' && (data.includes('502 Bad Gateway') || data.includes('APISIX'));
       const isTransient =
         status === 502 ||
         status === 503 ||
@@ -102,17 +117,104 @@ const executeWithRetry = async (fn, maxRetries = 2, baseDelay = 600) => {
         isHtml502 ||
         err.code === 'ECONNRESET' ||
         err.code === 'ETIMEDOUT' ||
-        err.code === 'ERR_NETWORK';
+        err.code === 'ERR_NETWORK' ||
+        err.code === 'ENOTFOUND';
 
       if (!isTransient || attempt === maxRetries) {
         throw err;
       }
-      const delay = baseDelay * Math.pow(2, attempt);
+      const jitter = Math.floor(Math.random() * 300);
+      const delay = baseDelay * Math.pow(2, attempt) + jitter;
       console.warn(`[Cashfree] Transient gateway error (${status || (isHtml502 ? 502 : err.code)}). Retrying attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw lastErr;
+};
+
+// ─── Unified Resilient Order Creator (SDK with Direct REST fallback) ─────────
+export const createCfOrderSession = async (cfOrderRequest) => {
+  const { appId, secretKey, baseUrl, apiVersion } = getCashfreeConfig();
+
+  // Try official SDK first with retry
+  try {
+    const res = await executeWithRetry(() => getCashfree().PGCreateOrder(cfOrderRequest));
+    if (res?.data?.payment_session_id) {
+      return res.data;
+    }
+  } catch (sdkErr) {
+    console.warn('[Cashfree] SDK PGCreateOrder attempt failed, trying Direct REST fallback...', sdkErr?.message || sdkErr);
+  }
+
+  // Direct REST API Fallback with explicit timeout and headers
+  const restRes = await executeWithRetry(async () => {
+    return await cashfreeHttpClient.post(`${baseUrl}/orders`, cfOrderRequest, {
+      headers: {
+        'x-client-id': appId,
+        'x-client-secret': secretKey,
+        'x-api-version': apiVersion,
+        'Content-Type': 'application/json'
+      }
+    });
+  });
+
+  return restRes.data;
+};
+
+// ─── Unified Resilient Payment Fetcher ─────────────────────────────────────────
+export const fetchCfOrderPaymentsResilient = async (cfOrderId) => {
+  const { appId, secretKey, baseUrl, apiVersion } = getCashfreeConfig();
+
+  try {
+    const res = await executeWithRetry(() => getCashfree().PGOrderFetchPayments(cfOrderId));
+    if (Array.isArray(res?.data)) return res.data;
+  } catch (sdkErr) {
+    console.warn('[Cashfree] SDK PGOrderFetchPayments failed, attempting Direct REST fallback...', sdkErr?.message || sdkErr);
+  }
+
+  try {
+    const restRes = await executeWithRetry(async () => {
+      return await cashfreeHttpClient.get(`${baseUrl}/orders/${encodeURIComponent(cfOrderId)}/payments`, {
+        headers: {
+          'x-client-id': appId,
+          'x-client-secret': secretKey,
+          'x-api-version': apiVersion
+        }
+      });
+    });
+    return Array.isArray(restRes?.data) ? restRes.data : [];
+  } catch (restErr) {
+    console.warn('[Cashfree] Direct REST fetch payments failed:', restErr?.message || restErr);
+    return [];
+  }
+};
+
+// ─── Unified Resilient Order Status Fetcher ───────────────────────────────────
+export const fetchCfOrderResilient = async (cfOrderId) => {
+  const { appId, secretKey, baseUrl, apiVersion } = getCashfreeConfig();
+
+  try {
+    const res = await executeWithRetry(() => getCashfree().PGFetchOrder(cfOrderId));
+    if (res?.data) return res.data;
+  } catch (sdkErr) {
+    console.warn('[Cashfree] SDK PGFetchOrder failed, attempting Direct REST fallback...', sdkErr?.message || sdkErr);
+  }
+
+  try {
+    const restRes = await executeWithRetry(async () => {
+      return await cashfreeHttpClient.get(`${baseUrl}/orders/${encodeURIComponent(cfOrderId)}`, {
+        headers: {
+          'x-client-id': appId,
+          'x-client-secret': secretKey,
+          'x-api-version': apiVersion
+        }
+      });
+    });
+    return restRes?.data || null;
+  } catch (restErr) {
+    console.warn('[Cashfree] Direct REST fetch order failed:', restErr?.message || restErr);
+    return null;
+  }
 };
 
 // ─── Sanitized Error Parser ───────────────────────────────────────────────────
@@ -323,10 +425,10 @@ export const createCashfreeSession = async (req, res) => {
       order_note: `POS Order — ${sanitizedCounterName}`
     };
 
-    // ── Create Cashfree Order / Payment Session with Retry ────────────────────
-    let cfResponse;
+    // ── Create Cashfree Order / Payment Session with Resilience ───────────────
+    let cfData;
     try {
-      cfResponse = await executeWithRetry(() => getCashfree().PGCreateOrder(cfOrderRequest));
+      cfData = await createCfOrderSession(cfOrderRequest);
     } catch (cfErr) {
       // Release reserved stock upon Cashfree failure
       for (const item of orderItems) {
@@ -358,7 +460,7 @@ export const createCashfreeSession = async (req, res) => {
       });
     }
 
-    const paymentSessionId = cfResponse.data?.payment_session_id;
+    const paymentSessionId = cfData?.payment_session_id;
 
     if (!paymentSessionId) {
       // Release stock and order if no session ID returned
@@ -440,24 +542,11 @@ export const verifyCashfreePayment = async (req, res) => {
       return res.json({ success: true, order: populatedOrder });
     }
 
-    // ── Verify with Cashfree backend (with retry) ─────────────────────────────
-    let cfPayments = [];
-    let cfOrder = null;
-
-    try {
-      const paymentsRes = await executeWithRetry(() => getCashfree().PGOrderFetchPayments(cfOrderId));
-      cfPayments = paymentsRes?.data || [];
-    } catch (payErr) {
-      console.warn('[Cashfree] PGOrderFetchPayments query error:', payErr?.response?.data || payErr.message);
-    }
-
-    // Also fetch order details from Cashfree as resilient fallback
-    try {
-      const orderRes = await executeWithRetry(() => getCashfree().PGFetchOrder(cfOrderId));
-      cfOrder = orderRes?.data;
-    } catch (ordErr) {
-      console.warn('[Cashfree] PGFetchOrder query error:', ordErr?.response?.data || ordErr.message);
-    }
+    // ── Verify with Cashfree backend (with resilient SDK & direct REST fallback) ──
+    const [cfPayments, cfOrder] = await Promise.all([
+      fetchCfOrderPaymentsResilient(cfOrderId),
+      fetchCfOrderResilient(cfOrderId)
+    ]);
 
     // ── Check for successful payment ──────────────────────────────────────────
     const successPayment = Array.isArray(cfPayments)
@@ -704,6 +793,22 @@ export const cancelCashfreeSession = async (req, res) => {
 
     if (order.payment?.status === 'Paid') {
       return res.status(400).json({ success: false, message: 'Cannot cancel an order that has already been paid' });
+    }
+
+    // Safety check with gateway before cancelling: confirm not paid on Cashfree
+    if (order.payment?.gatewayOrderId) {
+      const cfOrder = await fetchCfOrderResilient(order.payment.gatewayOrderId);
+      if (cfOrder?.order_status === 'PAID') {
+        order.payment.status = 'Paid';
+        order.payment.paidAt = new Date();
+        order.timeline.push({
+          status: 'Pending',
+          message: 'Online payment confirmed during cancellation check',
+          at: new Date()
+        });
+        await order.save();
+        return res.json({ success: true, message: 'Order was already verified as paid' });
+      }
     }
 
     if (order.status !== 'Cancelled') {

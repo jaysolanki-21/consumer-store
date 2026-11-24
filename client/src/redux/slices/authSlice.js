@@ -57,10 +57,12 @@ const authSlice = createSlice({
       state.token = null;
       state.rememberMe = false;
       
-      // Clear both storages
+      // Clear both storages and role-specific tokens
       localStorage.removeItem('user');
       localStorage.removeItem('token');
       localStorage.removeItem('rememberMe');
+      localStorage.removeItem('counterToken');
+      localStorage.removeItem('counterUser');
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('token');
     },
