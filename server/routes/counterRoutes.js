@@ -7,12 +7,12 @@ import {
   setCounterStatus,
   updateCounter
 } from '../controllers/counterController.js';
-import { adminOnly, protect, staffOrAdmin } from '../middleware/authMiddleware.js';
+import { adminOnly, protect, counterStaffOrAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .get(protect, staffOrAdmin, getCounters)
+  .get(protect, counterStaffOrAdmin, getCounters)
   .post(protect, adminOnly, createCounter);
 
 router.route('/:id')
