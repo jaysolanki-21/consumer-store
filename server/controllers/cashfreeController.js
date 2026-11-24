@@ -33,18 +33,23 @@ export const getCashfreeConfig = () => {
   const appId = (
     process.env.CASHFREE_CLIENT_ID ||
     process.env.CASHFREE_APP_ID ||
+    process.env.CF_CLIENT_ID ||
+    process.env.CF_APP_ID ||
     ''
   ).trim();
 
   const secretKey = (
     process.env.CASHFREE_CLIENT_SECRET ||
     process.env.CASHFREE_SECRET_KEY ||
+    process.env.CF_CLIENT_SECRET ||
+    process.env.CF_SECRET_KEY ||
     ''
   ).trim();
 
   const rawEnv = (
     process.env.CASHFREE_ENV ||
     process.env.CASHFREE_ENVIRONMENT ||
+    process.env.CF_ENV ||
     process.env.VITE_CASHFREE_ENV ||
     process.env.VITE_CASHFREE_MODE ||
     'SANDBOX'
@@ -95,6 +100,7 @@ const getBackendUrl = () => {
   if (process.env.BACKEND_URL) return process.env.BACKEND_URL.replace(/\/+$/, '');
   if (process.env.SERVER_URL) return process.env.SERVER_URL.replace(/\/+$/, '');
   if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL.replace(/\/+$/, '');
+  if (process.env.NODE_ENV === 'production') return 'https://consumer-store.onrender.com';
   const port = process.env.PORT || 5000;
   return `http://localhost:${port}`;
 };
@@ -402,12 +408,18 @@ export const createCashfreeSession = async (req, res) => {
       ? `${backendUrl}/api/payments/cashfree/webhook`
       : undefined;
 
+    const clientUrl = (
+      process.env.CLIENT_URL ||
+      process.env.FRONTEND_URL ||
+      'https://apc-consumer-store.netlify.app'
+    ).replace(/\/+$/, '');
+
     const orderMeta = {};
     if (notifyUrl) {
       orderMeta.notify_url = notifyUrl;
     }
-    if (process.env.CLIENT_URL) {
-      orderMeta.return_url = `${process.env.CLIENT_URL.replace(/\/+$/, '')}/consumer/checkout?order_id={order_id}`;
+    if (clientUrl) {
+      orderMeta.return_url = `${clientUrl}/consumer/checkout?order_id={order_id}`;
     }
 
     const counterSuffix = resolvedCounterId ? resolvedCounterId.toString().slice(-6) : 'pos';
