@@ -18,6 +18,7 @@ import { socketHandler } from './sockets/socketHandler.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './sockets/ioInstance.js';
 import { startMaintenanceScheduler } from './services/maintenanceService.js';
+import { getCashfreeConfig } from './controllers/cashfreeController.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -114,7 +115,19 @@ app.use('/api/settings', settingRoutes);
 app.use('/api/backup', backupRoutes);
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date() });
+  const { appId, secretKey, environmentName, apiVersion } = getCashfreeConfig();
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date(),
+    environment: process.env.NODE_ENV || 'development',
+    cashfree: {
+      configured: Boolean(appId && secretKey),
+      hasClientId: Boolean(appId),
+      hasClientSecret: Boolean(secretKey),
+      environment: environmentName,
+      apiVersion,
+    },
+  });
 });
 
 app.use(errorHandler);
