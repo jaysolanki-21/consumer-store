@@ -184,12 +184,10 @@ export default function LoginPage() {
           {theme === 'dark' ? (
             <>
               <FiSun className="text-amber-400 text-base transition-transform group-hover:rotate-45" />
-              <span className="font-medium">Light</span>
             </>
           ) : (
             <>
               <FiMoon className="text-indigo-600 text-base transition-transform group-hover:-rotate-12" />
-              <span className="font-medium">Dark</span>
             </>
           )}
         </button>
